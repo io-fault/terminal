@@ -19,7 +19,7 @@ from ..io import library as libio
 
 from . import libfields
 from . import libquery
-from . import lines as lineslib
+from . import lines as liblines
 
 from . import core
 from . import palette
@@ -123,7 +123,7 @@ class Fields(core.Refraction):
 		return (vi, unit, path, field)
 
 	def new(self,
-		Class = lineslib.profile('text')[0],
+		Class = liblines.profile('text')[0],
 		indentation = libfields.Indentation.acquire(0),
 		Sequence = libfields.Sequence,
 		String = libfields.String
@@ -2407,7 +2407,7 @@ class Lines(Fields):
 	Fields based line editor.
 	"""
 
-	def __init__(self, line_class=lineslib.profile('text')[0]):
+	def __init__(self, line_class=liblines.profile('text')[0]):
 		super().__init__()
 		self.keyboard.set('control')
 		self.source = None
@@ -2626,11 +2626,11 @@ class Prompt(Lines):
 		console = self.controller
 
 		if type is None:
-			profile = lineslib.profile_from_filename(source)
+			profile = liblines.profile_from_filename(source)
 		else:
 			profile = type
 
-		Line, mod = lineslib.profile(profile)
+		Line, mod = liblines.profile(profile)
 
 		i = []
 		new = Lines(Line)
