@@ -84,6 +84,7 @@ extensions = {
 	'.c': 'c',
 	'.h': 'c',
 	'.m': 'objectivec',
+	'.swift': 'swift',
 	'.java': 'java',
 
 	'.hh': 'cxx',
