@@ -1,11 +1,11 @@
 """
-fault.io interactive console
+Editor console.
 """
 from .. import library as libconsole
+from ...io import library as libio
 
-name = 'console'
-initialize = libconsole.initialize
+def main():
+	libio.execute(console = (libconsole.initialize,))
 
 if __name__ == '__main__':
-	from ...io import library as libio
-	libio.execute(console = (libconsole.initialize,))
+	main()

@@ -3267,7 +3267,8 @@ class Console(libio.Reactor):
 
 		for x in args:
 			self.prompt.command_open(x)
-		self.transcript.write("opened by: " + sys.executable + " " + name + " " + " ".join(args) + "\n")
+
+		self.transcript.write("opened by: [" + sys.executable + "] " + name + " " + " ".join(args) + "\n")
 
 	def focus(self, refraction):
 		"Focus the given refraction, blurring the current. Does nothing if already focused."
