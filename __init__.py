@@ -1,2 +1,1 @@
-__type__ = 'project'
-__pkg_bottom__ = True
+__factor_type__ = 'project'
