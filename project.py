@@ -1,9 +1,9 @@
+identity = 'https://fault.io/project/python/fault.console'
 name = 'console'
-fork = 'xterm'
-identity = 'https://fault.io/project/python/console'
 abstract = 'fault.io based editor and shell'
 icon = '💻'
-release = None
+
+fork = 'xterm'
 
 controller = 'fault.io'
 contact = 'mailto:critical@fault.io'
