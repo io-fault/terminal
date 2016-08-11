@@ -4,6 +4,7 @@ abstract = 'fault.io based editor and shell'
 icon = '💻'
 
 fork = 'xterm'
+status = 'flux'
 
 controller = 'fault.io'
 contact = 'mailto:critical@fault.io'
