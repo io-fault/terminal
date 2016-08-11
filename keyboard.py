@@ -1,5 +1,27 @@
 """
 Provides common mappings for keyboard based navigation and control.
+
+Modifying the mappings is not recommended, but is possible. Interacting
+with these mappings is the only way to modify the keyboard mappings used
+by &.console.
+
+! FUTURE:
+	The (system:file)`~/.fault/console.py` script can be used to customize
+	the mappings. When a Session is created in an application, the callbacks
+	defined in the module can be used to do further initialization.
+
+[ Properties ]
+/trap
+	Console level events. Key events mapped here are trapped and are
+	not propagated to Refractions. This is the "global" mapping.
+/control
+	Control mode mapping is for navigation and high-level manipulation.
+/edit
+	Mode used to manage the insertion and removal of characters from fields.
+/capture
+	...
+/types
+	Mode used to select field types for custom interactions.
 """
 from ..terminal import library as libterminal
 
@@ -245,7 +267,9 @@ class Selection(object):
 
 	@property
 	def mapping(self):
-		'Get the currently selected mapping by the defined name.'
+		"""
+		Get the currently selected mapping by the defined name.
+		"""
 		return self.current[0]
 
 	def __init__(self, index):

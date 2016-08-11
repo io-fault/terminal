@@ -765,7 +765,7 @@ def indentation_block(direction, initial, level = None, level_adjustment = 0):
 		il = indentation(initial)
 	else:
 		il = level
-	
+
 	if il == 0:
 		# document-level; that is all units
 		return None

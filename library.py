@@ -103,7 +103,9 @@ class Fields(core.Refraction):
 
 	@property
 	def current_vertical(self):
-		'The curent vertical index as a single IRange instance.'
+		"""
+		The curent vertical index as a single IRange instance.
+		"""
 		return IRange((self.vertical_index, self.vertical_index))
 
 	def log(self, message):
@@ -134,7 +136,9 @@ class Fields(core.Refraction):
 		return Sequence((indentation, Class(String(""))))
 
 	def open_vertical(self, il, position, quantity, temporary=False, len=len):
-		"Create a quantity of new lines at the cursor &position."
+		"""
+		Create a quantity of new lines at the cursor &position.
+		"""
 
 		vi = self.vertical_index
 		nunits = len(self.units)
@@ -2622,6 +2626,7 @@ class Prompt(Lines):
 		Open a new refraction using the identified source.
 
 		The implementation will be selected based on the file type.
+		File type being determined by the dot-extension of the filename.
 		"""
 		console = self.controller
 
@@ -3333,7 +3338,10 @@ class Console(libio.Reactor):
 
 	def event_prepare_open(self, event):
 		prompt = self.prompt
-		prompt.prepare(libfields.String("open"), libfields.String(""))
+
+		fs = libfields.String("")
+		prompt.prepare(libfields.String("open"), fs)
+
 		prompt.event_select_horizontal_line(None)
 		prompt.horizontal.move(0, -1)
 		prompt.keyboard.set('edit')
