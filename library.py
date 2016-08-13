@@ -587,7 +587,7 @@ class Fields(core.Refraction):
 		if isinstance(x, Indent):
 			if x > 0:
 				if has_content(unit):
-					yield (self.tab(x), (), None)
+					yield (self.tab(x, size=x.size), (), None)
 				else:
 					yield (self.visible_tab(x), (), 0x222222)
 
@@ -2324,15 +2324,14 @@ class Fields(core.Refraction):
 		self.update_vertical_state()
 		self.movement = True
 
-	def indent(self, sequence, quantity = 1, ignore_empty = False,
-			IClass = libfields.Indentation.acquire
-		):
+	def indent(self, sequence, quantity = 1, ignore_empty = False):
 		"""
 		Increase or decrease the indentation level of the given sequence.
 
 		The sequence is prefixed with a constant corresponding to the tab-level,
 		and replaced when increased.
 		"""
+		IClass = self.Indentation.acquire
 		h = self.vector.horizontal
 
 		l = 0
@@ -2410,12 +2409,23 @@ class Lines(Fields):
 	"""
 	Fields based line editor.
 	"""
+	@staticmethod
+	@functools.lru_cache(4)
+	def _lindent(lsize):
+		# Cache custom indentation classes.
+		if lsize == libfields.Indentation.size:
+			return libfields.Indentation
+
+		class LIndentation(libfields.Indentation):
+			size = lsize
+		return LIndentation
 
 	def __init__(self, line_class=liblines.profile('text')[0]):
 		super().__init__()
 		self.keyboard.set('control')
 		self.source = None
 		self.document_line_class = line_class
+		self.Indentation = self._lindent(line_class.indentation)
 
 		initial = self.new(line_class)
 		self.units = libc.Segments([initial])
@@ -2538,6 +2548,9 @@ class Prompt(Lines):
 	margin = 0
 
 	def execute(self, event):
+		"""
+		Execute the command entered on the prompt.
+		"""
 		command = list(self.sequence(self.horizontal_focus))
 		cname = command[0]
 
