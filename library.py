@@ -7,6 +7,7 @@ import codecs
 import keyword
 import itertools
 import weakref
+import subprocess
 
 from ..chronometry import library as libtime
 from ..filesystem import library as fslib # autosave/session persistence
@@ -2491,7 +2492,7 @@ class Fields(core.Refraction):
 
 		paste = []
 		for x in sl:
-			ind, *line = parse(x, Indentation=self.Indentation.acquire)
+			ind, *line = parse(x)
 			seq = Sequence((self.Indentation.acquire(ind), Class.from_sequence(line)))
 			paste.append(seq)
 
@@ -2576,55 +2577,6 @@ class Lines(Fields):
 	def event_edit_return(self, event):
 		"Splits the line at the cursor position."
 		return self.event_delta_split(event)
-
-import subprocess
-class Shell(Lines):
-	"""
-	Fault Shell
-	"""
-
-	def __init__(self):
-		super().__init__()
-
-		self.command_history = []
-		self.command_history_position = None
-		self.current_prompt = 0
-
-	def execute(self, event):
-		command = list(self.sequence(self.horizontal_focus))
-		self.command_history.append(command)
-
-		#cname = command[0]
-		#result = method(*command[1:])
-		sp = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=None)
-		stdout, stderr = sp.communicate(timeout=5)
-		self.append("")
-		if stdout:
-			self.append(stdout.decode())
-
-		self.seek(len(self.units)-1)
-		self.event_open_ahead(event)
-		self.current_prompt = self.vertical.get()
-		self.scrolled()
-
-	event_edit_return = execute
-	event_control_return = execute
-
-	def event_delta_edit_insert_space(self, event):
-		self.insert_characters(self.separator)
-
-	def prepare(self, *fields):
-		"""
-		Set the command line to a sequence of fields.
-		"""
-		self.clear_horizontal_indicators()
-		l = list(itertools.chain.from_iterable(
-			zip(fields, itertools.repeat(self.separator, len(fields)))
-		))
-		# remove additional field separator
-		del l[-1]
-		self.horizontal_focus[1].sequences = l
-		self.controller.emit(self.refresh())
 
 class Status(Fields):
 	"""
@@ -2714,9 +2666,6 @@ class Prompt(Lines):
 	def event_edit_shift_tab(self, event):
 		pass
 
-	def command_system(self, command, *args, **environ):
-		pass
-
 	def command_exit(self):
 		"""
 		Immediately exit the process. Unsaved files will not be saved.
@@ -2729,9 +2678,7 @@ class Prompt(Lines):
 		"""
 		pass
 
-	def command_search(self,
-		term : 'string',
-	):
+	def command_search(self, term:str):
 		console = self.controller
 		p = console.visible[console.pane]
 		p.find(term)
@@ -2848,6 +2795,21 @@ class Prompt(Lines):
 		console = self.controller
 		p = console.visible[console.pane]
 		p.source = target
+
+	def command_system(self, *command):
+		"""
+		Execute a system command sending the standard error and standard out to the
+		Transcript.
+		"""
+		#command = list(self.sequence(self.horizontal_focus))
+		transcript = self.controller.transcript
+
+		sp = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=None)
+		stdout, stderr = sp.communicate(timeout=5)
+		if stdout:
+			transcript.write(stdout.decode())
+		if stderr:
+			transcript.write(stderr.decode())
 
 	def command(self, event):
 		pass
