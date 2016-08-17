@@ -11,6 +11,7 @@ by &.console.
 	defined in the module can be used to do further initialization.
 
 [ Properties ]
+
 /trap
 	Console level events. Key events mapped here are trapped and are
 	not propagated to Refractions. This is the "global" mapping.
@@ -32,6 +33,7 @@ class Mapping(object):
 	A mapping "context" is a reference to a target. For instance, a field, line, or
 	container.
 	"""
+
 	def __init__(self, default = None):
 		self.default = default
 		self.mapping = dict()
@@ -39,6 +41,7 @@ class Mapping(object):
 
 	def assign(self, character, context, action, parameters = ()):
 		"""
+		Assign the character sequence to action.
 		"""
 		key = (context, action, parameters)
 		if key not in self.mapping:
@@ -49,6 +52,9 @@ class Mapping(object):
 		self.reverse[value] = key
 
 	def event(self, key):
+		"""
+		Return the action associated with the given keystroke.
+		"""
 		index = (key.type, key.identity, key.modifiers)
 		return self.reverse.get(index, self.default)
 
