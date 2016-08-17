@@ -592,7 +592,7 @@ class Fields(core.Refraction):
 
 		for r in ranges:
 			for x in self.units[r.start:r.stop]:
-				x[1].reformat(Indentation=self.Indentation)
+				x[1].reformat()
 			self.display(*r.exclusive()) # filters out-of-sight lines
 
 		self.update_unit()
@@ -1331,7 +1331,7 @@ class Fields(core.Refraction):
 
 		r = IRange.single(index)
 		self.log(unit[1].insert(target, libfields.String(seq)), r)
-		unit[1].reformat(Indentation=self.Indentation)
+		unit[1].reformat()
 		self.display(*r.exclusive())
 
 	def event_delta_translocate(self, event):
@@ -1440,7 +1440,7 @@ class Fields(core.Refraction):
 			inverse = s1_unit[1].set([replacement])
 			ir = IRange.single(self.vertical_index)
 			self.log(inverse, ir)
-			s1_unit[1].reformat(Indentation=self.Indentation)
+			s1_unit[1].reformat()
 
 			adjust = - ((s1_range[1] - s1_range[0]) - (s2_range[1] - s2_range[0]))
 			self.movement = True
@@ -1461,8 +1461,8 @@ class Fields(core.Refraction):
 			inverse = s2_unit[1].insert(s2_range[0], s1_text)
 			self.log(inverse, s2_changelines)
 
-			s1_unit[1].reformat(Indentation=self.Indentation)
-			s2_unit[1].reformat(Indentation=self.Indentation)
+			s1_unit[1].reformat()
+			s2_unit[1].reformat()
 
 			self.movement = True
 			self.display(*s1_changelines.exclusive())
@@ -2059,7 +2059,7 @@ class Fields(core.Refraction):
 		nr = IRange.single(self.vertical_index+1)
 
 		self.log(new.insert(0, remainder), nr)
-		new.reformat(Indentation=self.Indentation)
+		new.reformat()
 
 		self.display(self.vertical_index-1, None)
 		self.movement = True
@@ -2105,7 +2105,7 @@ class Fields(core.Refraction):
 		self.horizontal_focus[1].delete(start, stop)
 		le = self.last_edit
 		self.horizontal_focus[1].insert(start, le)
-		self.horizontal_focus[1].reformat(Indentation=self.Indentation)
+		self.horizontal_focus[1].reformat()
 
 		self.horizontal.configure(start+adjustments, len(le))
 		self.display(*self.current_vertical.exclusive())
@@ -2399,7 +2399,7 @@ class Fields(core.Refraction):
 		nr = IRange.single(self.vertical_index)
 
 		self.log(new.insert(0, remainder), nr)
-		new.reformat(Indentation=self.Indentation)
+		new.reformat()
 
 		self.display(self.vertical_index-1, None)
 		self.movement = True
@@ -2412,7 +2412,7 @@ class Fields(core.Refraction):
 
 		joinlen = len(join.value())
 		self.log(join.insert(joinlen, following), IRange.single(self.vertical_index))
-		join.reformat(Indentation=self.Indentation)
+		join.reformat()
 
 		self.log(self.truncate_vertical(collapse, collapse+1), IRange.single(collapse))
 
@@ -2632,8 +2632,12 @@ class Prompt(Lines):
 		command = list(self.sequence(self.horizontal_focus))
 		cname = command[0]
 
-		method = getattr(self, 'command_' + cname)
-		result = method(*command[1:])
+		method = getattr(self, 'command_' + cname, None)
+		if method is None:
+			self.controller.transcript.write('command not found: ' + cname + '\n')
+		else:
+			result = method(*command[1:])
+
 		self.event_open_ahead(event)
 		self.window.vertical.move(1)
 		self.scrolled()
@@ -2693,6 +2697,7 @@ class Prompt(Lines):
 		"""
 		Open a new shell in the current focus pane.
 		"""
+		return
 		console = self.controller
 		new = Shell()
 		new.source = "<memory>"
@@ -2780,13 +2785,18 @@ class Prompt(Lines):
 		Close the current working pane.
 		"""
 		console = self.controller
+
 		p = console.visible[console.pane]
-		if len(console.visible) == len(console.panes):
-			return
+		if len(console.visible) <= len(console.panes):
+			# No other panes to take its place, so create an Empty().
+			ep = Empty()
+			ep.subresource(console)
+			console.panes.append(ep)
 
 		console.event_pane_rotate_refraction(None)
-		if p is not console.transcript:
-			del console.panes[console.panes.index(p)]
+		if p is not console.transcript and p in console.panes:
+			# Transcript is eternal.
+			console.panes.remove(p)
 
 	def command_chsrc(self, target : 'path'):
 		"""
@@ -2798,8 +2808,8 @@ class Prompt(Lines):
 
 	def command_system(self, *command):
 		"""
-		Execute a system command sending the standard error and standard out to the
-		Transcript.
+		Execute a system command buffering standard out and error in order to
+		write it to the &Transcript. Currently blocks the process.
 		"""
 		#command = list(self.sequence(self.horizontal_focus))
 		transcript = self.controller.transcript
@@ -2819,6 +2829,10 @@ class Transcript(core.Refraction):
 	A trivial line buffer. While &Log refractions are usually preferred, a single
 	transcript is always available for critical messages.
 	"""
+
+	@property
+	def source(self):
+		return str(libtime.now().select('iso'))
 
 	@staticmethod
 	def system():
@@ -2944,6 +2958,12 @@ def input(transformer, queue, tty, partial=functools.partial):
 		enqueue(partial(emit, (now(), events)))
 		chars = ""
 
+class Empty(Lines):
+	"""
+	Space holder for empty panes.
+	"""
+	pass
+
 class Console(libio.Reactor):
 	"""
 	The application that responds to keyboard input in order to make display changes.
@@ -2977,7 +2997,7 @@ class Console(libio.Reactor):
 			'panes': (libterminal.Area(), libterminal.Area(), libterminal.Area()),
 		}
 
-		self.panes = [self.transcript, Lines(), Lines()]
+		self.panes = [Empty(), Empty(), self.transcript]
 		self.rotation = 0
 		self.visible = list(self.panes[:3])
 
@@ -3002,7 +3022,7 @@ class Console(libio.Reactor):
 
 	def display_refraction(self, pane, refraction):
 		"""
-		Display the &refraction on the designated pane index.
+		Display the &refraction on the designated visible pane index.
 		"""
 		if refraction in self.visible:
 			# already displayed; focus?
@@ -3029,9 +3049,9 @@ class Console(libio.Reactor):
 		self.emit([self.set_position_indicators(refraction)])
 		self.emit(refraction.refresh())
 
-		if False and isinstance(current, Lines):
-			# remove hidden empty refractions
-			del self.panes[self.panes.index(current)]
+		if isinstance(current, Empty):
+			# Remove the empty refraction.
+			self.panes.remove(current)
 
 	def pane_verticals(self, index):
 		"Calculate the vertical offsets of the pane."
@@ -3466,7 +3486,7 @@ class Console(libio.Reactor):
 			start = npanes - 1
 			stop = -1
 
-		rotation = self.rotation + direction
+		rotation = min(self.rotation + direction, npanes)
 		i = itertools.chain(range(rotation, stop, direction), range(start, rotation, direction))
 
 		for r in i:

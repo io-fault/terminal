@@ -67,11 +67,11 @@ class Line(libfields.Text):
 	'Base class for profiled text lines.'
 	__slots__ = libfields.Text.__slots__
 
-	def reformat(self, Indentation=None, str=str):
+	def reformat(self, str=str):
 		"""
 		Rebuild the Line contents.
 		"""
-		ind, *self.sequences = parse(self.__class__, str(self), Indentation=Indentation)
+		ind, *self.sequences = parse(self.__class__, str(self))
 
 # Cache of profile -> Line subclass
 cache = {}
