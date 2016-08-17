@@ -202,7 +202,7 @@ class Fields(core.Refraction):
 				return True
 		return False
 
-	def block(self, sequence, index, minimum, maximum, condition_constructor, *parameters):
+	def scan_block(self, sequence, index, minimum, maximum, condition_constructor, *parameters):
 		"""
 		Identify the range where the given condition remains true.
 		"""
@@ -273,11 +273,11 @@ class Fields(core.Refraction):
 		if the initial item is not empty, only populated items will be selected.
 		"""
 		if level is None:
-			il = indentation(initial)
+			il = self.indentation(initial)
 		else:
 			il = self.Indentation(level)
 
-		if has_content(initial):
+		if self.has_content(initial):
 			def contiguous_content(item, ilevel = il + level_adjustment):
 				nonlocal self
 				if self.indentation(item) != il or not self.has_content(item):
@@ -307,7 +307,7 @@ class Fields(core.Refraction):
 		else:
 			self.level = ilevel
 
-		start, stop = self.block(
+		start, stop = self.scan_block(
 			self.units, index, minimum, maximum,
 			self.indentation_block, self.level
 		)
@@ -345,9 +345,8 @@ class Fields(core.Refraction):
 			if minimum is None:
 				minimum = vs[0]
 
-		start, stop = self.block(
-			self.units, index, minimum, maximum,
-			self.contiguous_block
+		start, stop = self.scan_block(
+			self.units, index, minimum, maximum, self.contiguous_block
 		)
 
 		stop += 1 # positions are exclusive on the end
@@ -2484,6 +2483,9 @@ class Fields(core.Refraction):
 		Create new lines to write the string into.
 		"""
 
+		if index is None:
+			index = self.vector.vertical.snapshot()[1]
+
 		sl = str(string).split(line_separator)
 		nl = len(sl)
 
@@ -2811,15 +2813,25 @@ class Prompt(Lines):
 		Execute a system command buffering standard out and error in order to
 		write it to the &Transcript. Currently blocks the process.
 		"""
-		#command = list(self.sequence(self.horizontal_focus))
-		transcript = self.controller.transcript
+		console = self.controller
+		transcript = console.transcript
+		re = console.visible[console.pane]
 
 		sp = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=None)
 		stdout, stderr = sp.communicate(timeout=5)
-		if stdout:
-			transcript.write(stdout.decode())
-		if stderr:
-			transcript.write(stderr.decode())
+
+		if re is transcript:
+			if stdout:
+				transcript.write(stdout.decode())
+			elif stderr:
+				transcript.write(stderr.decode())
+		else:
+			if stdout:
+				re.write(None, stdout.decode())
+			elif stderr:
+				re.write(None, stderr.decode())
+
+		console.focus_pane()
 
 	def command(self, event):
 		pass
