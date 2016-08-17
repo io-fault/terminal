@@ -5,7 +5,6 @@ import importlib
 from .. import libfields
 
 def parse(Class, line,
-		Indentation = libfields.Indentation.acquire,
 		len = len,
 		space = libfields.space,
 		String = libfields.String
@@ -22,7 +21,7 @@ def parse(Class, line,
 	xline = line.lstrip('\t')
 	l = len(xline)
 	indent = len(line) - l
-	yield Indentation(indent)
+	yield indent
 
 	primaries = xline.rstrip('\n').split(' ')
 	spaces = len(primaries) - 1
@@ -68,11 +67,11 @@ class Line(libfields.Text):
 	'Base class for profiled text lines.'
 	__slots__ = libfields.Text.__slots__
 
-	def reformat(self, list = list, str = str):
+	def reformat(self, Indentation=None, str=str):
 		"""
 		Rebuild the Line contents.
 		"""
-		ind, *self.sequences = parse(self.__class__, str(self))
+		ind, *self.sequences = parse(self.__class__, str(self), Indentation=Indentation)
 
 # Cache of profile -> Line subclass
 cache = {}

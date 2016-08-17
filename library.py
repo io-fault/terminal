@@ -100,6 +100,7 @@ class Fields(core.Refraction):
 	"""
 	A &fields based refraction that maintains focus and field selection state.
 	"""
+	Indentation = libfields.Indentation
 	separator = libfields.field_separator
 
 	delete_across_units = False
@@ -130,15 +131,15 @@ class Fields(core.Refraction):
 		return (vi, unit, path, field)
 
 	def new(self,
-		Class = liblines.profile('text')[0],
-		indentation = libfields.Indentation.acquire(0),
-		Sequence = libfields.Sequence,
-		String = libfields.String
-	):
+			indentation=None,
+			Class=liblines.profile('text')[0],
+			Sequence=libfields.Sequence,
+			String=libfields.String
+		):
 		"""
 		Create and return new Field Sequence.
 		"""
-		return Sequence((indentation, Class(String(""))))
+		return Sequence((indentation or self.Indentation.acquire(0), Class(String(""))))
 
 	def open_vertical(self, il, position, quantity, temporary=False, len=len):
 		"""
@@ -159,7 +160,7 @@ class Fields(core.Refraction):
 		else:
 			relation = self.document_line_class
 
-		self.units[new:new] = [self.new(relation, il) for x in range(quantity)]
+		self.units[new:new] = [self.new(Class=relation, indentation=il) for x in range(quantity)]
 		start = new
 
 		v = self.vertical
@@ -176,6 +177,122 @@ class Fields(core.Refraction):
 
 		return ((self.truncate_vertical, (new, new+quantity)), IRange((new, new+quantity-1)))
 
+	def indentation(self, seq):
+		"""
+		Return the indentation level of the sequence, &seq, or zero if none.
+		"""
+		if seq is None:
+			return None
+
+		if not seq.empty:
+			if isinstance(seq[0], self.Indentation):
+				return seq[0]
+
+		return self.Indentation(0)
+
+	def has_content(self, line):
+		"""
+		Whether or not the non-formatting fields have content.
+		"""
+		for path, x in line.subfields():
+			if isinstance(x, libfields.Formatting):
+				continue
+			if x.length() > 0:
+				return True
+		return False
+
+	def block(self, sequence, index, minimum, maximum, condition_constructor, *parameters):
+		"""
+		Identify the range where the given condition remains true.
+		"""
+		l = []
+		start, pos, stop = index # position is reference point
+
+		ranges = ((-1, minimum, range(start, minimum-1, -1)), (1, maximum, range(stop, maximum+1)))
+
+		for direction, default, r in ranges:
+			condition = condition_constructor(direction, sequence[pos], *parameters)
+			if condition is None:
+				# all
+				l.append(default)
+			else:
+				r = iter(r)
+
+				for i in r:
+					offset = condition(sequence[i])
+					if offset is not None:
+						l.append(i - (offset * direction))
+						break
+				else:
+					l.append(default)
+					continue
+
+		return tuple(l)
+
+	def indentation_block(self, direction, initial, level = None, level_adjustment = 0):
+		"""
+		Detect indentation blocks.
+		"""
+		# if there's no indentation and it's not empty, check contiguous lines
+		if level is None:
+			il = self.indentation(initial)
+		else:
+			il = level
+
+		if il == 0:
+			# document-level; that is all units
+			return None
+
+		ilevel = il + level_adjustment
+
+		def indentation_condition(item, ilevel=ilevel, cstate=list((0,None))):
+			nonlocal self
+
+			iil = self.indentation(item)
+
+			if iil < ilevel:
+				if self.has_content(item):
+					# non-empty decrease in indentation
+					return 1 + cstate[0]
+				else:
+					# track empty line
+					cstate[0] += 1
+			else:
+				if cstate[0]:
+					cstate[0] = 0
+
+			return None
+
+		return indentation_condition
+
+	def contiguous_block(self, direction, initial, level = None, level_adjustment = 0):
+		"""
+		Detect a contiguous block at the designated indentation level.
+		If the initial item is empty, the adjacent empty items will be selected,
+		if the initial item is not empty, only populated items will be selected.
+		"""
+		if level is None:
+			il = indentation(initial)
+		else:
+			il = self.Indentation(level)
+
+		if has_content(initial):
+			def contiguous_content(item, ilevel = il + level_adjustment):
+				nonlocal self
+				if self.indentation(item) != il or not self.has_content(item):
+					# the item was empty or the indentation didn't match
+					return 1
+				return None
+			return contiguous_content
+		else:
+			def contiguous_empty(item, ilevel = il + level_adjustment):
+				nonlocal self
+				if self.indentation(item) != il or self.has_content(item):
+					# the item was empty or the indentation didn't match
+					return 1
+				return None
+			return contiguous_empty
+
 	def block(self, index, ilevel = None, minimum = 0, maximum = None):
 		"""
 		Indentation block ranges.
@@ -185,13 +302,13 @@ class Fields(core.Refraction):
 			maximum = len(self.units) - 1
 
 		if ilevel is None:
-			self.level = libfields.indentation(self.units[index[1]])
+			self.level = self.Indentation(self.indentation(self.units[index[1]]))
 		else:
 			self.level = ilevel
 
-		start, stop = libfields.block(
+		start, stop = self.block(
 			self.units, index, minimum, maximum,
-			libfields.indentation_block, self.level
+			self.indentation_block, self.level
 		)
 
 		stop += 1 # positions are exclusive on the end
@@ -227,9 +344,9 @@ class Fields(core.Refraction):
 			if minimum is None:
 				minimum = vs[0]
 
-		start, stop = libfields.block(
+		start, stop = self.block(
 			self.units, index, minimum, maximum,
-			libfields.contiguous_block
+			self.contiguous_block
 		)
 
 		stop += 1 # positions are exclusive on the end
@@ -474,7 +591,7 @@ class Fields(core.Refraction):
 
 		for r in ranges:
 			for x in self.units[r.start:r.stop]:
-				x[1].reformat()
+				x[1].reformat(Indentation=self.Indentation)
 			self.display(*r.exclusive()) # filters out-of-sight lines
 
 		self.update_unit()
@@ -537,18 +654,24 @@ class Fields(core.Refraction):
 	@staticmethod
 	@functools.lru_cache(16)
 	def tab(v, size = 4):
+		"""
+		Draw a tab for display.
+		"""
 		return (' ' * size) * v
 
 	@staticmethod
 	@functools.lru_cache(16)
 	def visible_tab(v, size = 4):
+		"""
+		Draw a visible tab for display. Used to construct the characters
+		for an indented line that does not have content.
+		"""
 		return (('-' * (size-1)) + '|') * v
 
 	def comment(self, q, iterator, color = palette.theme['comment']):
 		"""
 		Draw the comment.
 		"""
-
 		yield (q.value(), (), color)
 		for path, x in iterator:
 			yield (x.value(), (), color)
@@ -557,7 +680,6 @@ class Fields(core.Refraction):
 		"""
 		Draw the quotation.
 		"""
-
 		yield (q.value(), (), color)
 		for path, x in iterator:
 			yield (x.value(), (), color)
@@ -567,7 +689,6 @@ class Fields(core.Refraction):
 	def draw(self, unit,
 			Indent=libfields.Indentation,
 			Constant=libfields.Constant,
-			has_content=libfields.has_content,
 			quotation=palette.theme['quotation'],
 			isinstance=isinstance,
 			len=len, hasattr=hasattr,
@@ -591,10 +712,10 @@ class Fields(core.Refraction):
 
 		if isinstance(x, Indent):
 			if x > 0:
-				if has_content(unit):
+				if self.has_content(unit):
 					yield (self.tab(x, size=x.size), (), None)
 				else:
-					yield (self.visible_tab(x), (), 0x222222)
+					yield (self.visible_tab(x, size=x.size), (), 0x222222)
 
 		spaces = 0
 
@@ -1209,7 +1330,7 @@ class Fields(core.Refraction):
 
 		r = IRange.single(index)
 		self.log(unit[1].insert(target, libfields.String(seq)), r)
-		unit[1].reformat()
+		unit[1].reformat(Indentation=self.Indentation)
 		self.display(*r.exclusive())
 
 	def event_delta_translocate(self, event):
@@ -1318,7 +1439,7 @@ class Fields(core.Refraction):
 			inverse = s1_unit[1].set([replacement])
 			ir = IRange.single(self.vertical_index)
 			self.log(inverse, ir)
-			s1_unit[1].reformat()
+			s1_unit[1].reformat(Indentation=self.Indentation)
 
 			adjust = - ((s1_range[1] - s1_range[0]) - (s2_range[1] - s2_range[0]))
 			self.movement = True
@@ -1339,8 +1460,8 @@ class Fields(core.Refraction):
 			inverse = s2_unit[1].insert(s2_range[0], s1_text)
 			self.log(inverse, s2_changelines)
 
-			s1_unit[1].reformat()
-			s2_unit[1].reformat()
+			s1_unit[1].reformat(Indentation=self.Indentation)
+			s2_unit[1].reformat(Indentation=self.Indentation)
 
 			self.movement = True
 			self.display(*s1_changelines.exclusive())
@@ -1642,7 +1763,7 @@ class Fields(core.Refraction):
 				break
 
 			if index > -1:
-				adj = libfields.indentation(u).characters()
+				adj = self.indentation(u).characters()
 				self.horizontal.configure(adj + index, len(self.pattern))
 				v.set(i)
 		else:
@@ -1788,7 +1909,7 @@ class Fields(core.Refraction):
 	event_control_backspace = event_navigation_forward_character
 
 	def indentation_adjustments(self, unit):
-		return libfields.indentation(self.horizontal_focus).characters()
+		return self.indentation(self.horizontal_focus).characters()
 
 	def event_navigation_jump_character(self, event, quantity = 1):
 		h = self.vector.horizontal
@@ -1796,7 +1917,7 @@ class Fields(core.Refraction):
 
 		character = event.string
 
-		il = libfields.indentation(self.horizontal_focus).characters()
+		il = self.indentation(self.horizontal_focus).characters()
 		line = str(self.horizontal_focus[1])
 		start = max(h.get() - il, 0)
 
@@ -1811,13 +1932,13 @@ class Fields(core.Refraction):
 		if offset > -1:
 			h.set(offset + il)
 
-	def select_void(self, linerange, ind = libfields.indentation):
+	def select_void(self, linerange):
 		v = self.vector.vertical
 		self.vector_last_axis = v
 
 		for i in linerange:
 			u = self.units[i]
-			if ind(u) == 0 and u.length() == 0:
+			if self.indentation(u) == 0 and u.length() == 0:
 				self.clear_horizontal_indicators()
 				v.move(i-v.get())
 				self.horizontal.configure(0, 0, 0)
@@ -1889,7 +2010,7 @@ class Fields(core.Refraction):
 		"""
 		Get the indentation level of the line at the current vertical position.
 		"""
-		return libfields.indentation(self.horizontal_focus)
+		return self.indentation(self.horizontal_focus)
 
 	def event_open_behind(self, event, quantity = 1):
 		"""
@@ -1929,7 +2050,7 @@ class Fields(core.Refraction):
 		r = IRange.single(self.vertical_index)
 		self.log(self.horizontal_focus[1].delete(position, position+len(remainder)), r)
 
-		ind = libfields.Indentation.acquire(self.get_indentation_level() + 1)
+		ind = self.Indentation.acquire(self.get_indentation_level() + 1)
 		inverse = self.open_vertical(ind, 1, 2)
 		self.log(*inverse)
 
@@ -1937,7 +2058,7 @@ class Fields(core.Refraction):
 		nr = IRange.single(self.vertical_index+1)
 
 		self.log(new.insert(0, remainder), nr)
-		new.reformat()
+		new.reformat(Indentation=self.Indentation)
 
 		self.display(self.vertical_index-1, None)
 		self.movement = True
@@ -1983,7 +2104,7 @@ class Fields(core.Refraction):
 		self.horizontal_focus[1].delete(start, stop)
 		le = self.last_edit
 		self.horizontal_focus[1].insert(start, le)
-		self.horizontal_focus[1].reformat()
+		self.horizontal_focus[1].reformat(Indentation=self.Indentation)
 
 		self.horizontal.configure(start+adjustments, len(le))
 		self.display(*self.current_vertical.exclusive())
@@ -2195,7 +2316,7 @@ class Fields(core.Refraction):
 		self.insert_characterslibfields.Delimiter((' '))
 
 	def event_delta_indent_increment(self, event, quantity = 1):
-		if self.distributing and not libfields.has_content(self.horizontal_focus):
+		if self.distributing and not self.has_content(self.horizontal_focus):
 			# ignore indent if the line is empty and deltas are being distributed
 			return
 
@@ -2209,7 +2330,7 @@ class Fields(core.Refraction):
 		self.constrain_horizontal_range()
 
 	def event_delta_indent_decrement(self, event, quantity = 1):
-		if self.distributing and not libfields.has_content(self.horizontal_focus):
+		if self.distributing and not self.has_content(self.horizontal_focus):
 			# ignore indent if the line is empty and deltas are being distributed
 			return
 
@@ -2277,7 +2398,7 @@ class Fields(core.Refraction):
 		nr = IRange.single(self.vertical_index)
 
 		self.log(new.insert(0, remainder), nr)
-		new.reformat()
+		new.reformat(Indentation=self.Indentation)
 
 		self.display(self.vertical_index-1, None)
 		self.movement = True
@@ -2290,7 +2411,7 @@ class Fields(core.Refraction):
 
 		joinlen = len(join.value())
 		self.log(join.insert(joinlen, following), IRange.single(self.vertical_index))
-		join.reformat()
+		join.reformat(Indentation=self.Indentation)
 
 		self.log(self.truncate_vertical(collapse, collapse+1), IRange.single(collapse))
 
@@ -2357,7 +2478,7 @@ class Fields(core.Refraction):
 			h.datum = 0
 		h.constrain()
 
-	def write(self, index, string, line_separator = '\n', Sequence = libfields.Sequence):
+	def write(self, index, string, line_separator='\n', Sequence=libfields.Sequence):
 		"""
 		Create new lines to write the string into.
 		"""
@@ -2370,8 +2491,8 @@ class Fields(core.Refraction):
 
 		paste = []
 		for x in sl:
-			ind, *line = parse(x)
-			seq = Sequence((ind, Class.from_sequence(line)))
+			ind, *line = parse(x, Indentation=self.Indentation.acquire)
+			seq = Sequence((self.Indentation.acquire(ind), Class.from_sequence(line)))
 			paste.append(seq)
 
 		r = (index, index+nl)
@@ -2432,7 +2553,7 @@ class Lines(Fields):
 		self.document_line_class = line_class
 		self.Indentation = self._lindent(line_class.indentation)
 
-		initial = self.new(line_class)
+		initial = self.new(Class=line_class)
 		self.units = libc.Segments([initial])
 		self.horizontal_focus = initial
 		nunits = len(self.units)
@@ -2670,7 +2791,7 @@ class Prompt(Lines):
 
 				for x in f.readlines():
 					indentation, *line = parse(x)
-					append(seq((indentation, txt(line))))
+					append(seq((new.Indentation.acquire(indentation), txt(line))))
 
 		new.source = path
 		new.units = libc.Segments(i)
