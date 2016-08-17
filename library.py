@@ -24,6 +24,11 @@ from . import lines as liblines
 from . import core
 from . import palette
 
+def print_except_with_crlf(exc, val, tb):
+	import traceback
+	sys.stderr.write('\n\r')
+	sys.stderr.writelines([x[:-1] + '    \n\r' for x in traceback.format_exception(exc, val, tb)])
+
 IRange = core.IRange
 
 contexts = (
@@ -3259,6 +3264,7 @@ class Console(libio.Reactor):
 		process.system_event_connect(('signal', 'terminal.delta'), self, self.delta)
 
 		libterminal.device.set_raw(self.tty.fileno())
+		sys.excepthook = print_except_with_crlf
 		self.emit(initialize)
 
 		initial = \
