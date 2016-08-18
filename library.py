@@ -2110,25 +2110,13 @@ class Fields(core.Refraction):
 		self.horizontal.configure(start+adjustments, len(le))
 		self.display(*self.current_vertical.exclusive())
 
-	def empty(self, unit):
-		"""
-		Determine whether or not the given unit is empty.
-		"""
-		ul = len(unit)
-		if ul == 0:
-			return True
-		if isinstance(unit[0], libfields.Indentation):
-			return ul < 2
-		return False
-
 	def insert_characters(self, characters,
 			isinstance=isinstance, StringField=libfields.String
 		):
 		"""
 		Insert characters into the focus.
 		"""
-		v = self.vector.vertical
-		h = self.vector.horizontal
+		h, v = self.vector
 
 		text = self.horizontal_focus[1]
 
@@ -2154,8 +2142,7 @@ class Fields(core.Refraction):
 		self.display(*r.exclusive())
 
 	def delete_characters(self, quantity):
-		v = self.vector.vertical
-		h = self.vector.horizontal
+		h, v = self.vector
 
 		adjustments = self.indentation_adjustments(self.horizontal_focus)
 		offset = h.get() - adjustments
