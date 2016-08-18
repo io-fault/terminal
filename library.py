@@ -2673,6 +2673,9 @@ class Prompt(Lines):
 		pass
 
 	def command_search(self, term:str):
+		"""
+		Search the current working pane for the designated term.
+		"""
 		console = self.controller
 		p = console.visible[console.pane]
 		p.find(term)
@@ -2788,7 +2791,7 @@ class Prompt(Lines):
 			# Transcript is eternal.
 			console.panes.remove(p)
 
-	def command_chsrc(self, target : 'path'):
+	def command_chsrc(self, target:libroutes.File):
 		"""
 		Change the source of the current working pane.
 		"""
@@ -2806,20 +2809,58 @@ class Prompt(Lines):
 		re = console.visible[console.pane]
 
 		sp = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=None)
-		stdout, stderr = sp.communicate(timeout=5)
+		stdout, stderr = sp.communicate(timeout=8)
 
-		if re is transcript:
-			if stdout:
+		if stdout:
+			if re is transcript:
 				transcript.write(stdout.decode())
-			elif stderr:
-				transcript.write(stderr.decode())
-		else:
-			if stdout:
+			else:
 				re.write(None, stdout.decode())
-			elif stderr:
-				re.write(None, stderr.decode())
+
+		if stderr:
+			transcript.write(stderr.decode())
 
 		console.focus_pane()
+
+	def command_cwd(self):
+		"""
+		Print the current working directory.
+		"""
+		echo = self.controller.transcript.write
+		echo(os.getcwd()+'\n')
+
+	def command_insert(self, *characters):
+		"""
+		Insert characters using their ordinal value.
+		"""
+		basemap = {'0x':16, '0o':8, '0b':2}
+
+		console = self.controller
+		re = console.visible[console.pane]
+		chars = ''.join(chr(int(x, basemap.get(x[:2], 10))) for x in characters)
+		re.write(None, chars)
+
+	def command_index(self, *parameters):
+		"""
+		List command index.
+		"""
+		import inspect
+		echo = self.controller.transcript.write
+
+		cmds = [
+			(name[len('command_'):], obj)
+			for name, obj in self.__class__.__dict__.items()
+			if name.startswith('command_')
+		]
+
+		for name, obj in cmds:
+			doc = inspect.getdoc(obj)
+			if doc:
+				echo(name + ':\n')
+				echo('\n'.join(['  ' + x for x in doc.split('\n')]))
+				echo('\n')
+			else:
+				echo(name + '[undocumented]\n')
 
 	def command(self, event):
 		pass
