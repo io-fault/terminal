@@ -3002,6 +3002,10 @@ def input(transformer, queue, tty, partial=functools.partial):
 class Empty(Lines):
 	"""
 	Space holder for empty panes.
+
+	! DEVELOPMENT:
+		This class will manage the display of random usage tips, and
+		likely recently used files display.
 	"""
 	pass
 
@@ -3016,16 +3020,18 @@ class Console(libio.Reactor):
 	def __init__(self):
 		super().__init__()
 
+		self.display = libterminal.Display() # used to draw the frame.
 		self.tty = None
+
+		# In memory database for simple transfers (copy/paste).
 		self.cache = core.Cache() # user cache / clipboard index
 		self.cache.allocate(None)
-		self.display = libterminal.Display() # used to draw the frame.
 
 		# Session refractions.
 		self.session = Session(None) # connected session
-		self.transcript = Transcript() # the always available in memory buffer
 
 		# Per-console refractions
+		self.transcript = Transcript() # the always available in memory buffer
 		self.status = Status() # the status line
 		self.prompt = Prompt() # prompt below status
 
@@ -3042,8 +3048,8 @@ class Console(libio.Reactor):
 		self.rotation = 0
 		self.visible = list(self.panes[:3])
 
-		self.pane = 1 # focus pane (visible)
-		self.refraction = self.panes[1] # focus refraction; receives events
+		self.pane = 0 # focus pane (visible)
+		self.refraction = self.panes[0] # focus refraction; receives events
 
 	def requisite(self, tty):
 		self.tty = tty
@@ -3393,7 +3399,7 @@ class Console(libio.Reactor):
 			self.display.enable_mouse()
 		]
 
-		initialize.extend(self.status.refraction_changed(self.transcript))
+		initialize.extend(self.status.refraction_changed(self.panes[0]))
 
 		for x in self.visible:
 			initialize.extend(x.refresh())
@@ -3431,7 +3437,7 @@ class Console(libio.Reactor):
 			("\nThis refraction is the console's Transcript; the in-memory log of the process.\n\n")
 
 		self.transcript.write(initial)
-		self.panes[1].focus()
+		self.panes[0].focus()
 
 		for x in args:
 			self.prompt.command_open(x)
