@@ -9,8 +9,9 @@ import itertools
 import weakref
 import subprocess
 
+from ..routes import library as libroutes
 from ..chronometry import library as libtime
-from ..filesystem import library as fslib # autosave/session persistence
+from ..filesystem import library as libfs # autosave/session persistence
 
 from ..terminal import library as libterminal # terminal display
 from ..terminal import symbols
