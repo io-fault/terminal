@@ -36,6 +36,6 @@ cores = {}
 terminators = {y: y for y in map(libfields.Constant, "<>")}
 separators = {}
 routers = {':': libfields.Constant(":")}
-operators = {y: y for y in map(libfields.Constant, ";@!&^*%+=\\/<>?~")}
+operators = {y: y for y in map(libfields.Constant, ";@!&^*%+=\\/<>?~|")}
 groupings = {y: y for y in map(libfields.Constant, "()[]{}")}
 quotations = {y: y for y in map(libfields.Constant, ("'", '"',))}
