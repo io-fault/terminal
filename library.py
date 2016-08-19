@@ -27,6 +27,7 @@ from . import core
 from . import palette
 
 def print_except_with_crlf(exc, val, tb):
+	# Used to allow reasonable exception displays.
 	import traceback
 	sys.stderr.write('\n\r')
 	sys.stderr.writelines([x[:-1] + '    \n\r' for x in traceback.format_exception(exc, val, tb)])
@@ -1814,7 +1815,7 @@ class Fields(core.Refraction):
 				break
 
 			if index > -1:
-				adj = libfields.indentation(u).characters()
+				adj = self.indentation(u).characters()
 				self.horizontal.configure(adj + index, len(self.pattern))
 				v.set(i)
 		else:
