@@ -1,6 +1,6 @@
-identity = 'https://fault.io/project/python/fault.console'
+identity = 'http://fault.io/python/fault.console'
 name = 'console'
-abstract = 'fault.io based editor and shell'
+abstract = 'Interactive shell and editor environment'
 icon = '💻'
 
 fork = 'xterm'
@@ -9,5 +9,4 @@ status = 'flux'
 controller = 'fault.io'
 contact = 'mailto:critical@fault.io'
 
-version_info = (0, 0, 0)
-version = '.'.join(map(str, version_info))
+versioning = 'continuous'
