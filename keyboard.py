@@ -196,7 +196,7 @@ ca(caps('r'), 'refraction', ('delta', 'replace'),)
 
 ca(('control', 'tab', 0), 'refraction', ('delta', 'indent', 'increment'))
 ca(('control', 'tab', shift), 'refraction', ('delta', 'indent', 'decrement'))
-ca(controlk('v'), 'refraction', ('delta', 'indent', 'null'))
+ca(controlk('v'), 'refraction', ('delta', 'indent', 'void'))
 
 ca(('control', 'c', 1), 'control', ('navigation', 'console')) # focus control console
 del ca

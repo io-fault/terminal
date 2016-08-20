@@ -2379,7 +2379,7 @@ class Fields(core.Refraction):
 		self.display(*r.exclusive())
 		self.constrain_horizontal_range()
 
-	def event_delta_indent_null(self, event, quantity = None):
+	def event_delta_indent_void(self, event, quantity = None):
 		"""
 		Remove all indentation from the line.
 		"""
