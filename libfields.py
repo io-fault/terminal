@@ -55,7 +55,7 @@ class Field(metaclass = abc.ABCMeta):
 
 		Returns an iterator producing a triple:
 
-			(path, relative_offset, field)
+			(path, field)
 
 		Where path is a tuple containing the sequence of containing fields
 		and the corresponding index:
@@ -134,10 +134,11 @@ def address(seq, start, stop, len = len, range = range):
 		(stop_index, stop_roffset),
 	)
 
-def delete(seq, start, stop, empty = "", len = len, range = range):
+def delete(seq, start, stop, empty="", len=len, range=range):
 	starts, stops = address(seq, start, stop)
 	start_index, start_roffset = starts
 	stop_index, stop_roffset = stops
+	check_merge = None
 
 	sl = len(seq)
 
@@ -145,21 +146,40 @@ def delete(seq, start, stop, empty = "", len = len, range = range):
 		# removing a substring
 		s = seq[start_index]
 		# overwrite the index
-		seq[start_index] = s.__class__(s[:start_roffset] + s[stop_roffset:])
+		overwrite = s.__class__(s[:start_roffset] + s[stop_roffset:])
+		if overwrite == empty:
+			overwrite = empty
+		seq[start_index] = overwrite
 	else:
 		s = seq[start_index]
-		seq[start_index] = s.__class__(s[:start_roffset])
+		overwrite = s.__class__(s[:start_roffset])
+		seq[start_index] = overwrite
+		if not overwrite:
+			# Remove empty entry.
+			start_index -= 1
+			check_merge = True
 
 		if stop_index < sl:
 			# assign stop as well given its inside the seq
 			s = seq[stop_index]
-			seq[stop_index] = s.__class__(s[stop_roffset:])
+			overwrite = s.__class__(s[stop_roffset:])
+			seq[stop_index] = overwrite
+			if overwrite == empty:
+				stop_index += 1
+				check_merge = True
 
 		# clear everything between start+1 and stop
 		del seq[start_index+1:stop_index]
-		#for i in range(start_index+1, stop_index):
-		#	seq[i] = empty
 
+		if check_merge and seq:
+			end = start_index + 2
+			pair = seq[start_index:end]
+			for x in pair:
+				if not getattr(x, 'merge', False):
+					break
+			else:
+				# merge
+				seq[start_index:end] = (pair[0].__class__(''.join(pair)),)
 	return seq
 
 def insert(seq, offset, insertion, empty = "", len = len):
@@ -395,6 +415,8 @@ class Text(object):
 
 	def delete(self, start, stop):
 		# normalize and restrict slice size as needed.
+		global delete
+
 		l = len(self)
 		stop = max(stop, 0)
 		start = max(start, 0)
