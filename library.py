@@ -2190,15 +2190,44 @@ class Fields(core.Refraction):
 
 		u = v.get()
 		r = IRange.single(u)
+		# field after indentation.
 		inverse = self.horizontal_focus[1].delete(start, stop)
 		self.log(inverse, r)
 
-		h.contract(h.offset, l)
+		# Update horizontal cursor.
+		h.contract(h.offset+quantity, l)
 		if quantity > 0:
 			h.move(quantity)
 
 		self.clear_horizontal_indicators()
 		self.display(*r.exclusive())
+
+	def insert_lines(self, index, lines, Sequence=libfields.Sequence):
+		"""
+		Insert the given &lines at the absolute vertical &index.
+
+		[ Parameters ]
+		/index
+			The absolute vertical index in the document in memory.
+		/lines
+			The sequence of lines to insert *without* line terminators.
+		"""
+		sl = lines
+		nl = len(sl)
+
+		Class = self.unit_class(index)
+		parse = Class.parse
+
+		paste = []
+		for x in sl:
+			ind, *line = parse(x)
+			seq = Sequence((self.Indentation.acquire(ind), Class.from_sequence(line)))
+			paste.append(seq)
+
+		r = (index, index+nl)
+		self.units[r[0]:r[0]] = paste
+		self.display(r[0], None)
+		self.log((self.truncate_vertical, r), IRange((r[0], r[1]-1)))
 
 	def event_delta_insert_character(self, event):
 		"""
@@ -2390,8 +2419,17 @@ class Fields(core.Refraction):
 	event_edit_shift_tab = event_delta_indent_decrement
 
 	def print_unit(self):
-		self.controller.transcript.write(repr(self.horizontal_focus)+'\n')
-		self.controller.transcript.write(repr(self.controller.cache.storage))
+		"""
+		Display the structure of the current unit to the transcript.
+		"""
+		hf = self.horizontal_focus
+		l = [hf[1].__class__.__name__ + ': ' + str(len(hf[1]))]
+		l.extend(
+			x.__class__.__name__ + ': ' + repr(x) + ' [' + str(path[1:]) + ']'
+			for (path, x) in hf.subfields()
+		)
+		l.append('')
+		self.transcript_write('\n'.join(l))
 
 	def event_delta_delete_backward(self, event, quantity = 1):
 		self.delete_characters(-1*quantity)
@@ -2479,21 +2517,13 @@ class Fields(core.Refraction):
 		self.paste(self.vertical_index+1)
 
 	def event_paste_before(self, event):
-		self.paste(self.vertical_index)
-
-	def event_paste_into(self, event):
-		pass
-
-	def seek(self, vertical_index):
 		"""
 		Paste cache contents before the current vertical position.
 		"""
-		v = self.vector.vertical
-		d, o, m = v.snapshot()
-		self.clear_horizontal_indicators()
-		v.restore((d, vertical_index, m))
-		self.update_vertical_state()
-		self.movement = True
+		self.paste(self.vertical_index)
+
+	def event_paste_between(self, event):
+		raise libdev.PendingImplementation("paste into horizontal and vertical position")
 
 	def indent(self, sequence, quantity = 1, ignore_empty = False):
 		"""
@@ -2523,37 +2553,44 @@ class Fields(core.Refraction):
 			h.datum = 0
 		h.constrain()
 
-	def write(self, index, string, line_separator='\n', Sequence=libfields.Sequence):
+	def seek(self, vertical_index):
 		"""
 		Go to a specific vertical index.
 		"""
+		v = self.vector.vertical
+		d, o, m = v.snapshot()
+		self.clear_horizontal_indicators()
+		v.restore((d, vertical_index, m))
+		self.update_vertical_state()
+		self.movement = True
 
-		if index is None:
-			index = self.vector.vertical.snapshot()[1]
+	def read(self, quantity=None, whence=1, line_separator='\n'):
+		"""
+		Read string data from the refraction relative to its cursor position
+		and selected vertical range.
+		"""
+		raise libdev.PendingImplementation("range reads")
 
-		sl = str(string).split(line_separator)
-		nl = len(sl)
+	def write(self, string, line_separator='\n', Sequence=libfields.Sequence):
+		"""
+		Write the given string at the current position. The string will be split
+		by the &line_separator and processed independently
 
-		Class = self.unit_class(index)
-		parse = Class.parse
-
-		paste = []
-		for x in sl:
-			ind, *line = parse(x)
-			seq = Sequence((self.Indentation.acquire(ind), Class.from_sequence(line)))
-			paste.append(seq)
-
-		r = (index, index+nl)
-		self.units[r[0]:r[0]] = paste
-		self.display(r[0], None)
-		self.log((self.truncate_vertical, r), IRange((r[0], r[1]-1)))
+		[ Parameters ]
+		/string
+			The data to write.
+		/line_separator
+			The line terminator to split on.
+		"""
+		index = self.vector.vertical.snapshot()[1]
+		return self.insert_lines(string.split(line_separator))
 
 	def append(self, string):
-		self.write(len(self.units), string)
+		self.insert_lines(len(self.units), string)
 
 	def paste(self, index, cache = None):
 		typ, s = self.controller.cache.get(cache)
-		return self.write(index, s)
+		return self.insert_lines(index, s)
 
 	def focus(self):
 		super().focus()
@@ -2869,10 +2906,7 @@ class Prompt(Lines):
 		stdout, stderr = sp.communicate(timeout=8)
 
 		if stdout:
-			if re is transcript:
-				transcript.write(stdout.decode())
-			else:
-				re.write(None, stdout.decode())
+			re.write(stdout.decode())
 
 		if stderr:
 			transcript.write(stderr.decode())
@@ -2895,7 +2929,7 @@ class Prompt(Lines):
 		console = self.controller
 		re = console.visible[console.pane]
 		chars = ''.join(chr(int(x, basemap.get(x[:2], 10))) for x in characters)
-		re.write(None, chars)
+		re.write(chars)
 
 	def command_index(self, *parameters):
 		"""
