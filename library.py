@@ -777,16 +777,16 @@ class Fields(core.Refraction):
 		return (text or ' ',) + style
 
 	def calculate_horizontal_stop_indicator(self, empty, text, style, positions,
-		combining_wedge = symbols.combining['low']['wedge-left'],
-	):
+			combining_wedge = symbols.combining['low']['wedge-left'],
+		):
 		return (text or ' ',) + style
 
 	def calculate_horizontal_position_indicator(self, empty, text, style, positions,
-		vc = symbols.combining['right']['vertical-line'],
-		fs = symbols.combining['full']['forward-slash'],
-		xc = symbols.combining['high']['wedge-right'],
-		range_color_palette = palette.range_colors,
-	):
+			vc = symbols.combining['right']['vertical-line'],
+			fs = symbols.combining['full']['forward-slash'],
+			xc = symbols.combining['high']['wedge-right'],
+			range_color_palette = palette.range_colors,
+		):
 		invert = True
 		mode = self.keyboard.current[0]
 		if not text:
@@ -828,11 +828,11 @@ class Fields(core.Refraction):
 	}
 
 	def collect_horizontal_range(self,
-		line, positions,
-		len=len,
-		whole=slice(None,None),
-		address=libfields.address,
-	):
+			line, positions,
+			len=len,
+			whole=slice(None,None),
+			address=libfields.address,
+		):
 		"""
 		Collect the fragments of the horizontal range from the rendered unit.
 
@@ -886,9 +886,9 @@ class Fields(core.Refraction):
 		return ((astart, astop, hrange), prefix, suffix)
 
 	def collect_horizontal_positions(self, line, positions,
-		len=len, list=list, set=set,
-		iter=iter, range=range, tuple=tuple,
-	):
+			len=len, list=list, set=set,
+			iter=iter, range=range, tuple=tuple,
+		):
 		"""
 		Collect the style information and characters at the requested positions
 		of the rendered unit.
@@ -1705,6 +1705,9 @@ class Fields(core.Refraction):
 		self.movement = True
 
 	def event_navigation_vertical_paging(self, event, quantity = 1):
+		"""
+		Modify the vertical range query for paging.
+		"""
 		v = self.vector.vertical
 		win = self.window.vertical.snapshot()
 		v.restore((win[0], v.get(), win[2]))
@@ -1727,12 +1730,20 @@ class Fields(core.Refraction):
 
 	# line [history] forward/backward
 	def event_window_vertical_forward(self, event, quantity=1, point=None):
+		"""
+		Adjust the vertical position of the window forward by the
+		given quantity. (Moves view port).
+		"""
 		self.clear_horizontal_indicators()
 		self.window.vertical.move(quantity)
 		self.movement = True
 		self.scrolled()
 
 	def event_window_vertical_backward(self, event, quantity=1, point=None):
+		"""
+		Adjust the vertical position of the window backward by the
+		given quantity. (Moves view port).
+		"""
 		self.clear_horizontal_indicators()
 		self.window.vertical.move(-quantity)
 		self.movement = True
@@ -1859,6 +1870,9 @@ class Fields(core.Refraction):
 		self.rotate(-1, h, self.horizontal_focus, reversed(list(self.horizontal_focus.subfields())), quantity)
 
 	def event_navigation_horizontal_start(self, event):
+		"""
+		Horizontally move the cursor to the beginning of the range.
+		"""
 		h = self.horizontal
 		self.vector_last_axis = h
 
@@ -1878,6 +1892,9 @@ class Fields(core.Refraction):
 			h.offset = 0
 
 	def event_navigation_horizontal_stop(self, event):
+		"""
+		Horizontally move the cursor to the end of the range.
+		"""
 		h = self.horizontal
 		self.vector_last_axis = h
 
@@ -1914,9 +1931,15 @@ class Fields(core.Refraction):
 	event_control_backspace = event_navigation_forward_character
 
 	def indentation_adjustments(self, unit):
+		"""
+		Construct a string of tabs reprsenting the indentation of the given unit.
+		"""
 		return self.indentation(self.horizontal_focus).characters()
 
 	def event_navigation_jump_character(self, event, quantity = 1):
+		"""
+		Horizontally move the cursor to the character in the event.
+		"""
 		h = self.vector.horizontal
 		self.vector_last_axis = h
 
@@ -1938,6 +1961,9 @@ class Fields(core.Refraction):
 			h.set(offset + il)
 
 	def select_void(self, linerange):
+		"""
+		Select the first empty line without indentation.
+		"""
 		v = self.vector.vertical
 		self.vector_last_axis = v
 
@@ -2030,7 +2056,6 @@ class Fields(core.Refraction):
 		"""
 		Open a new vertical ahead of the current vertical position.
 		"""
-
 		if len(self.units) == 0:
 			return self.event_open_behind(event, quantity)
 
@@ -2118,7 +2143,7 @@ class Fields(core.Refraction):
 			isinstance=isinstance, StringField=libfields.String
 		):
 		"""
-		Insert characters into the focus.
+		Insert characters at the horizontal focus.
 		"""
 		h, v = self.vector
 
@@ -2146,6 +2171,9 @@ class Fields(core.Refraction):
 		self.display(*r.exclusive())
 
 	def delete_characters(self, quantity):
+		"""
+		Delete the &quantity of characters from the horizontal focus.
+		"""
 		h, v = self.vector
 
 		adjustments = self.indentation_adjustments(self.horizontal_focus)
@@ -2248,6 +2276,10 @@ class Fields(core.Refraction):
 		pass
 
 	def transition_keyboard(self, mode):
+		"""
+		Transition the keyboard mode. Called in order to update the horizontal
+		indicators that can be styled for each mode.
+		"""
 		old_mode = self.keyboard.current[0]
 		if old_mode == mode:
 			return
@@ -2256,6 +2288,9 @@ class Fields(core.Refraction):
 		self.keyboard.set(mode)
 
 	def event_transition_control(self, event):
+		"""
+		Transition into control-mode.
+		"""
 		self.transition_keyboard('control')
 
 	def event_transition_edit(self, event):
@@ -2283,6 +2318,9 @@ class Fields(core.Refraction):
 		self.last_edit = self.horizontal_selection()
 
 	def event_edit_commit(self, event):
+		"""
+		Commit an edited line.
+		"""
 		self.checkpoint()
 		self.record_last_edit()
 		self.transition_keyboard('control')
@@ -2308,6 +2346,9 @@ class Fields(core.Refraction):
 		self.insert_characterslibfields.Delimiter((' '))
 
 	def event_delta_indent_increment(self, event, quantity = 1):
+		"""
+		Increment indentation of the current line.
+		"""
 		if self.distributing and not self.has_content(self.horizontal_focus):
 			# ignore indent if the line is empty and deltas are being distributed
 			return
@@ -2322,6 +2363,9 @@ class Fields(core.Refraction):
 		self.constrain_horizontal_range()
 
 	def event_delta_indent_decrement(self, event, quantity = 1):
+		"""
+		Decrement the indentation of the current line.
+		"""
 		if self.distributing and not self.has_content(self.horizontal_focus):
 			# ignore indent if the line is empty and deltas are being distributed
 			return
@@ -2370,6 +2414,9 @@ class Fields(core.Refraction):
 		self.controller.cache.put(None, ('text', r))
 
 	def event_delta_split(self, event):
+		"""
+		Create a new line splitting the current line at the horizontal position.
+		"""
 		h = self.horizontal
 		hs = h.snapshot()
 		self.clear_horizontal_indicators()
@@ -2396,6 +2443,9 @@ class Fields(core.Refraction):
 		self.movement = True
 
 	def event_delta_join(self, event):
+		"""
+		Join the current line with the following.
+		"""
 		join = self.horizontal_focus[1]
 		ulen = self.horizontal_focus.characters()
 		collapse = self.vertical_index+1
@@ -2423,6 +2473,9 @@ class Fields(core.Refraction):
 			return self.document_line_class
 
 	def event_paste_after(self, event):
+		"""
+		Paste cache contents after the current vertical position.
+		"""
 		self.paste(self.vertical_index+1)
 
 	def event_paste_before(self, event):
@@ -2433,7 +2486,7 @@ class Fields(core.Refraction):
 
 	def seek(self, vertical_index):
 		"""
-		Go to a specific vertical index.
+		Paste cache contents before the current vertical position.
 		"""
 		v = self.vector.vertical
 		d, o, m = v.snapshot()
@@ -2472,7 +2525,7 @@ class Fields(core.Refraction):
 
 	def write(self, index, string, line_separator='\n', Sequence=libfields.Sequence):
 		"""
-		Create new lines to write the string into.
+		Go to a specific vertical index.
 		"""
 
 		if index is None:
@@ -2705,10 +2758,10 @@ class Prompt(Lines):
 		console.focus_pane()
 
 	def command_open(self,
-			source : 'route',
-			type : 'type' = None,
-			mechanism : 'type' = 'Lines',
-			encoding : 'encoding' = 'utf-8',
+			source:libroutes.Route,
+			type:'type'=None,
+			mechanism:'type'='Lines',
+			encoding:str='utf-8',
 		):
 		"""
 		Open a new refraction using the identified source.
@@ -2751,7 +2804,7 @@ class Prompt(Lines):
 		console.display_refraction(console.pane, new)
 		console.focus_pane()
 
-	def command_write(self, target : 'path'):
+	def command_write(self, target:str):
 		"""
 		Write the value of the current working pane to the given target.
 		"""
@@ -3068,8 +3121,7 @@ class Console(libio.Reactor):
 		"""
 		Connect the console to the given session.
 		"""
-
-		return NotImplemented
+		raise libdev.PendingImplementation('session connects')
 
 	def display_refraction(self, pane, refraction):
 		"""
