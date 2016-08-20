@@ -110,6 +110,9 @@ class Fields(core.Refraction):
 	margin = 8 # number of lines that remains below or above the cursor
 	out_of_bounds = libfields.Sequence((libfields.Indentation.acquire(0),))
 
+	def transcript_write(self, data):
+		return self.controller.transcript.write(data)
+
 	@property
 	def current_vertical(self):
 		"""
