@@ -675,9 +675,9 @@ class Fields(core.Refraction):
 
 	def comment(self, q, iterator, color = palette.theme['comment']):
 		"""
-		Draw the comment.
+		Draw the comment and its leading indicator.
 		"""
-		yield (q.value(), (), color)
+		yield (q.value(), (), 0x101010)
 		for path, x in iterator:
 			yield (x.value(), (), color)
 
