@@ -70,7 +70,7 @@ nav = lambda x: ('navigation', x, 0)
 shiftnav = lambda x: ('navigation', x, shift)
 delta = lambda x: ('delta', x, 0)
 
-# events trapped by the console
+# events trapped and handled by the console. These are not forwarded to the refraction.
 trap = Mapping()
 trap.assign(('escaped', '~', 0), 'console', ('process', 'exit'))
 trap.assign(('escaped', '`', 0), 'console', ('toggle', 'prompt'))
@@ -102,8 +102,8 @@ ca(literal('f'), 'refraction', ('navigation', 'horizontal', 'forward'))
 ca(literal('d'), 'refraction', ('navigation', 'horizontal', 'backward'))
 ca(caps('f'), 'refraction', ('navigation', 'horizontal', 'stop'))
 ca(caps('d'), 'refraction', ('navigation', 'horizontal', 'start'))
-ca(controlk('f'), 'refraction', ('navigation',))
-ca(controlk('d'), 'refraction', ('navigation',))
+ca(controlk('f'), 'refraction', ('navigation', 'horizontal', 'query', 'forward'))
+ca(controlk('d'), 'refraction', ('navigation', 'horizontal', 'query', 'backward'))
 
 ca(literal('s'), 'refraction', ('select', 'series',))
 ca(caps('s'), 'refraction', ('select', 'single')) # spare
