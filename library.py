@@ -2254,6 +2254,14 @@ class Fields(core.Refraction):
 		self.previous_keyboard_mode = self.keyboard.current[0]
 		self.transition_keyboard('capture')
 
+	def event_edit_capture(self, event):
+		"""
+		Insert an exact character with the value carried by the event. (^V)
+		"""
+		self.event_capture = self.transition_insert_character
+		self.previous_keyboard_mode = self.keyboard.current[0]
+		self.transition_keyboard('capture')
+
 	def event_delta_delete_tobol(self, event):
 		"""
 		Delete all characters between the current position and the begining of the line.
