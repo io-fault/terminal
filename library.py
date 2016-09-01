@@ -517,7 +517,7 @@ class Fields(core.Refraction):
 		v.reposition()
 
 		# All lines are being updated.
-		self.controller.emit(self.refresh())
+		self.controller.f_emit(self.refresh())
 
 	def __init__(self):
 		super().__init__()
@@ -980,7 +980,7 @@ class Fields(core.Refraction):
 		self.horizontal_positions.clear()
 		self.horizontal_range = None
 
-		self.controller.emit(events)
+		self.controller.f_emit(events)
 
 	def render_horizontal_indicators(
 			self, unit, horizontal,
@@ -1094,7 +1094,7 @@ class Fields(core.Refraction):
 			events = self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
 			seek = self.view.area.seek((0, wl))
 			events.insert(0, seek)
-			self.controller.emit(events)
+			self.controller.f_emit(events)
 
 		self.movement = True
 
@@ -1161,7 +1161,7 @@ class Fields(core.Refraction):
 		Send the given line range to the display.
 		"""
 
-		self.controller.emit(list(self.view.render(*self.render(start, stop))))
+		self.controller.f_emit(list(self.view.render(*self.render(start, stop))))
 
 	def refresh(self, start=0, list=list):
 		origin, top, bottom = self.window.vertical.snapshot()
@@ -1297,7 +1297,7 @@ class Fields(core.Refraction):
 			wl = self.window_line(nunits)
 			stop = wl + (stop-start)
 			v.clear(wl, stop)
-			self.controller.emit(list(v.render(wl, stop)))
+			self.controller.f_emit(list(v.render(wl, stop)))
 
 		self.update_vertical_state()
 
@@ -2751,7 +2751,7 @@ class Prompt(Lines):
 		# remove additional field separator
 		del l[-1]
 		self.horizontal_focus[1].sequences = l
-		self.controller.emit(self.refresh())
+		self.controller.f_emit(self.refresh())
 
 	def event_delta_edit_insert_space(self, event):
 		self.insert_characters(self.separator)
@@ -2997,7 +2997,7 @@ class Transcript(core.Refraction):
 		#@console.context.task
 		def write_reference(data, write = self.write, update = self.refresh, console = console):
 			write(data)
-			#console.emit(update())
+			#console.f_emit(update())
 		return write_reference
 
 	def write(self, text):
@@ -3014,7 +3014,7 @@ class Transcript(core.Refraction):
 
 		self.bottom += nlines
 		if self.view is not None:
-			self.controller.emit(self.refresh())
+			self.controller.f_emit(self.refresh())
 
 	def reveal(self):
 		super().reveal()
@@ -3078,7 +3078,7 @@ def input(transformer, queue, tty, partial=functools.partial):
 	Thread transformer function translating input to Character events for &Console.
 	"""
 	enqueue = transformer.controller.context.enqueue
-	emit = transformer.emit
+	emit = transformer.f_emit
 	now = libtime.now
 	escape_state = 0
 
@@ -3174,13 +3174,13 @@ class Console(libio.Reactor):
 			return
 
 		current = self.visible[pane]
-		self.emit([self.clear_position_indicators(current)])
+		self.f_emit([self.clear_position_indicators(current)])
 		current.conceal()
 		current.pane = None
 		v = current.view
 		current.connect(None)
 
-		self.emit([v.area.clear()])
+		self.f_emit([v.area.clear()])
 
 		self.visible[pane] = refraction
 		refraction.pane = pane
@@ -3191,15 +3191,17 @@ class Console(libio.Reactor):
 
 		refraction.calibrate(v.area.dimensions)
 		refraction.reveal()
-		self.emit([self.set_position_indicators(refraction)])
-		self.emit(refraction.refresh())
+		self.f_emit([self.set_position_indicators(refraction)])
+		self.f_emit(refraction.refresh())
 
 		if isinstance(current, Empty):
 			# Remove the empty refraction.
 			self.panes.remove(current)
 
 	def pane_verticals(self, index):
-		"Calculate the vertical offsets of the pane."
+		"""
+		Calculate the vertical offsets of the pane.
+		"""
 		if index is None:
 			return None
 
@@ -3471,7 +3473,7 @@ class Console(libio.Reactor):
 
 		initialize.extend(self.prompt.refresh())
 		initialize.extend(self.status.refresh())
-		self.emit(initialize)
+		self.f_emit(initialize)
 
 	def actuate(self):
 		inv = self.controller.context.process.invocation
@@ -3513,7 +3515,7 @@ class Console(libio.Reactor):
 
 		libterminal.device.set_raw(self.tty.fileno())
 		sys.excepthook = print_except_with_crlf
-		self.emit(initialize)
+		self.f_emit(initialize)
 
 		initial = \
 			("If you cannot do things my way, I'll just have to find another user.\n\n") + \
@@ -3543,13 +3545,15 @@ class Console(libio.Reactor):
 		self.transcript.write("opened by: [" + sys.executable + "] " + name + " " + " ".join(args) + "\n")
 
 	def focus(self, refraction):
-		"Focus the given refraction, blurring the current. Does nothing if already focused."
+		"""
+		Focus the given refraction, blurring the current. Does nothing if already focused.
+		"""
 		assert refraction in (self.status, self.prompt) or refraction in self.visible
 
 		cp = self.refraction
 
 		if refraction is not self.prompt:
-			self.emit(self.status.refraction_changed(refraction))
+			self.f_emit(self.status.refraction_changed(refraction))
 
 		cp.blur()
 		self.refraction = refraction
@@ -3585,7 +3589,7 @@ class Console(libio.Reactor):
 			self.pane = pane
 			self.refraction = new
 			new.focus()
-			self.emit(self.status.refraction_changed(new))
+			self.f_emit(self.status.refraction_changed(new))
 		else:
 			self.pane = pane
 
@@ -3725,7 +3729,7 @@ class Console(libio.Reactor):
 			if x is self.refraction:
 				if x in self.visible or x is self.prompt:
 					s = self.clear_position_indicators(x) + self.set_position_indicators(x)
-					self.emit((s,))
+					self.f_emit((s,))
 			x.movement = False
 			self.motion.discard(x)
 
@@ -3735,7 +3739,7 @@ class Console(libio.Reactor):
 			x.scrolling = False
 			self.refreshing.discard(x)
 
-		self.emit(effects)
+		self.f_emit(effects)
 
 	def get_display_dimensions(self):
 		"""
@@ -3757,7 +3761,7 @@ def initialize(unit):
 	output_thread = libio.Parallel()
 
 	# terminal input -> console -> terminal output
-	console_flow = libio.Flow(input_thread, c, output_thread)
+	console_flow = libio.Transformation(input_thread, c, output_thread)
 	console_flow.subresource(unit)
 	unit.place(console_flow, 'console-operation')
 

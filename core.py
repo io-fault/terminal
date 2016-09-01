@@ -3,7 +3,7 @@ import operator
 import collections
 
 from ..terminal import library as libterminal
-from ..io import library as iolib
+from ..io import library as libio
 from . import keyboard
 from ..computation import library as libcomp
 
@@ -68,7 +68,7 @@ class Cache(object):
 		"Remove the all the contents of the given slot."
 		self.storage[key].clear()
 
-class Refraction(iolib.Resource):
+class Refraction(libio.Resource):
 	"""
 	A Refraction of a source onto a connected area of the display.
 
@@ -269,7 +269,7 @@ class Refraction(iolib.Resource):
 		"""
 		console = self.controller
 		events = console.set_position_indicators(self)
-		console.emit([events])
+		console.f_emit([events])
 
 	@property
 	def focused(self):
@@ -284,7 +284,7 @@ class Refraction(iolib.Resource):
 		"""
 		console = self.controller
 		events = console.clear_position_indicators(self)
-		console.emit([events])
+		console.f_emit([events])
 
 	def connect(self, view):
 		"""
