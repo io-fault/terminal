@@ -2531,7 +2531,7 @@ class Fields(core.Refraction):
 		self.paste(self.vertical_index)
 
 	def event_paste_between(self, event):
-		raise libdev.PendingImplementation("paste into horizontal and vertical position")
+		raise RuntimeError("paste into horizontal and vertical position")
 
 	def indent(self, sequence, quantity = 1, ignore_empty = False):
 		"""
@@ -2577,7 +2577,7 @@ class Fields(core.Refraction):
 		Read string data from the refraction relative to its cursor position
 		and selected vertical range.
 		"""
-		raise libdev.PendingImplementation("range reads")
+		raise RuntimeError("range reads")
 
 	def write(self, string, line_separator='\n', Sequence=libfields.Sequence):
 		"""
@@ -2591,7 +2591,7 @@ class Fields(core.Refraction):
 			The line terminator to split on.
 		"""
 		index = self.vector.vertical.snapshot()[1]
-		return self.insert_lines(string.split(line_separator))
+		return self.insert_lines(index, string.split(line_separator))
 
 	def append(self, string):
 		self.insert_lines(len(self.units), string)
@@ -3163,7 +3163,7 @@ class Console(libio.Reactor):
 		"""
 		Connect the console to the given session.
 		"""
-		raise libdev.PendingImplementation('session connects')
+		raise RuntimeError('session connects')
 
 	def display_refraction(self, pane, refraction):
 		"""
