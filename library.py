@@ -41,10 +41,7 @@ contexts = (
 	'session', # the state of the set of projects being managed
 	'project', # the project referring to the container (may be None)
 	'container', # root/document
-	'sequence', # the lines of the document
-	'line', # an individual line
-	'field', # a field in a line
-	'set', # a set of fields
+	'query', # The active query context
 )
 
 actions = dict(
@@ -147,7 +144,7 @@ class Fields(core.Refraction):
 		"""
 		return Sequence((indentation or self.Indentation.acquire(0), Class(String(""))))
 
-	def open_vertical(self, il, position, quantity, temporary=False, len=len):
+	def open_vertical(self, il, position, quantity, temporary=False):
 		"""
 		Create a quantity of new lines at the cursor &position.
 		"""
@@ -1000,6 +997,7 @@ class Fields(core.Refraction):
 		area = self.view.area
 		shr = area.seek_horizontal_relative
 		astyle = area.style
+		width = self.dimensions[0]
 
 		line = list(self.draw(unit))
 		for x in line:
@@ -1009,7 +1007,9 @@ class Fields(core.Refraction):
 		else:
 			empty = True
 
+		# XXX: Restrict to visible portion.
 		hs = horizontal
+		hs = (min(width, hs[0]), min(width, hs[1]), min(width, hs[2]))
 		hr, prefix, suffix = self.collect_horizontal_range(line, hs)
 
 		if self.keyboard.mapping == 'edit':
@@ -1031,7 +1031,10 @@ class Fields(core.Refraction):
 
 			rstart, rstop, text = hr
 			rstarto, rstopo = offsets(line, rstart, rstop)
-			range_part = [x[:1] + (x[1] + range_style, (x[2] or 0xAAAAAA) + 0x222222, range_color,) for x in text]
+			range_part = [
+				x[:1] + (x[1] + range_style, (x[2] or 0xAAAAAA) + 0x222222, range_color,)
+				for x in text
+			]
 
 			self.horizontal_range = (rstarto, rstopo, hr)
 
@@ -2179,6 +2182,7 @@ class Fields(core.Refraction):
 		adjustments = self.indentation_adjustments(self.horizontal_focus)
 		offset = h.get() - adjustments
 
+		# Normalized Range: start < stop
 		if quantity < 0:
 			start = offset + quantity
 			stop = offset
@@ -2187,6 +2191,10 @@ class Fields(core.Refraction):
 			start = offset
 			stop = offset + quantity
 			l = quantity
+		if start == stop or start < 0:
+			# XXX: Requires a better condition.
+			# Nothing to do.
+			return
 
 		u = v.get()
 		r = IRange.single(u)
@@ -2198,6 +2206,7 @@ class Fields(core.Refraction):
 		h.contract(h.offset+quantity, l)
 		if quantity > 0:
 			h.move(quantity)
+		h.limit(self.get_indentation_level().length(),self.horizontal_focus.characters())
 
 		self.clear_horizontal_indicators()
 		self.display(*r.exclusive())
