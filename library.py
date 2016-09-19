@@ -524,7 +524,7 @@ class Fields(core.Refraction):
 		# cached access to line and specific field
 		self.horizontal_focus = None # controlling unit; object containing line
 		self.movement = True
-		self.scrolling = True
+		self.scrolling = False
 		self.level = 0 # indentation level
 
 		# method of range production
@@ -699,7 +699,6 @@ class Fields(core.Refraction):
 		"""
 		Draw an individual unit for rendering.
 		"""
-
 		fs = 0
 
 		if len(unit) > 1:
@@ -999,7 +998,7 @@ class Fields(core.Refraction):
 		astyle = area.style
 		width = self.dimensions[0]
 
-		line = list(self.draw(unit))
+		line = list(self.draw(unit or libfields.Text()))
 		for x in line:
 			if len(x[0]) > 0:
 				empty = False
@@ -1007,7 +1006,6 @@ class Fields(core.Refraction):
 		else:
 			empty = True
 
-		# XXX: Restrict to visible portion.
 		hs = horizontal
 		hs = (min(width, hs[0]), min(width, hs[1]), min(width, hs[2]))
 		hr, prefix, suffix = self.collect_horizontal_range(line, hs)
@@ -1057,7 +1055,7 @@ class Fields(core.Refraction):
 
 		# map the positions to names for the dictionary state
 		new_hp = [(names[i], (tuple(offsets(line, x[0]))[0], x,)) for i, x in zip(range(3), hp)]
-		# put position at the end
+		# put position at the end for proper layering of cursor
 		new_hp.append(new_hp[1])
 		del new_hp[1]
 
@@ -1088,18 +1086,23 @@ class Fields(core.Refraction):
 
 		return clear_positions + clear_range + set_range + set_positions
 
-	def update_horizontal_indicators(self):
+	def current_horizontal_indicators(self):
 		wl = self.window_line(self.vertical_index)
 
 		if wl < self.view.height and wl >= 0:
 			h = self.horizontal
-			h.limit(0, self.horizontal_focus.characters())
-			events = self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
-			seek = self.view.area.seek((0, wl))
-			events.insert(0, seek)
-			self.controller.f_emit(events)
+			if self.horizontal_focus is not None:
+				h.limit(0, self.horizontal_focus.characters())
 
-		self.movement = True
+			events = [self.view.area.seek((0, wl))]
+			events.extend(self.render_horizontal_indicators(self.horizontal_focus, h.snapshot()))
+			return events
+
+		return ()
+
+	def update_horizontal_indicators(self):
+		events = self.current_horizontal_indicators()
+		self.controller.f_emit(events)
 
 	def window_line(self, line):
 		"""
@@ -1183,7 +1186,8 @@ class Fields(core.Refraction):
 		for i in range(rl, bottom):
 			seq[i-top].update(list(self.draw(self.out_of_bounds)))
 
-		return list(self.view.render())
+		rendered = list(self.view.render())
+		return rendered
 
 	def insignificant(self, path, field):
 		"""
@@ -1922,7 +1926,7 @@ class Fields(core.Refraction):
 		self.vector_last_axis = h
 
 		h.move(quantity)
-		h.limit(0, self.horizontal_focus.characters())
+		self.constrain_horizontal_range()
 	event_control_space = event_navigation_forward_character
 
 	def event_navigation_backward_character(self, event, quantity = 1):
@@ -1930,7 +1934,7 @@ class Fields(core.Refraction):
 		self.vector_last_axis = h
 
 		h.move(-quantity)
-		h.limit(self.get_indentation_level().length(), self.horizontal_focus.characters())
+		self.constrain_horizontal_range()
 	event_control_backspace = event_navigation_forward_character
 
 	def indentation_adjustments(self, unit):
@@ -2192,7 +2196,6 @@ class Fields(core.Refraction):
 			stop = offset + quantity
 			l = quantity
 		if start == stop or start < 0:
-			# XXX: Requires a better condition.
 			# Nothing to do.
 			return
 
@@ -2206,7 +2209,7 @@ class Fields(core.Refraction):
 		h.contract(h.offset+quantity, l)
 		if quantity > 0:
 			h.move(quantity)
-		h.limit(self.get_indentation_level().length(),self.horizontal_focus.characters())
+		self.constrain_horizontal_range()
 
 		self.clear_horizontal_indicators()
 		self.display(*r.exclusive())
@@ -2659,6 +2662,7 @@ class Lines(Fields):
 		self.units = libc.Segments([initial])
 		self.horizontal_focus = initial
 		nunits = len(self.units)
+		self.vertical_index = 0
 		self.vector.vertical.configure(0, nunits, 0)
 
 	def serialize(self, write, chunk_size = 128, encoding = 'utf-8'):
@@ -2855,8 +2859,12 @@ class Prompt(Lines):
 		new.subresource(self.controller)
 		console.panes.append(new)
 
+		new.vertical_index = 0
+		new.horizontal_focus = new.units[0]
 		console.display_refraction(console.pane, new)
 		console.focus_pane()
+		new.vertical_index = None
+		new.update_vertical_state()
 
 	def command_write(self, target:str):
 		"""
@@ -3183,7 +3191,9 @@ class Console(libio.Reactor):
 			return
 
 		current = self.visible[pane]
-		self.f_emit([self.clear_position_indicators(current)])
+		self.f_emit([
+			self.clear_position_indicators(current)
+		])
 		current.conceal()
 		current.pane = None
 		v = current.view
