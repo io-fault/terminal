@@ -64,7 +64,9 @@ def parse(Class, line,
 			yield space
 
 class Line(libfields.Text):
-	'Base class for profiled text lines.'
+	"""
+	Base class for primary Unit.
+	"""
 	__slots__ = libfields.Text.__slots__
 
 	def reformat(self, str=str):
