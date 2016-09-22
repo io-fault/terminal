@@ -1937,11 +1937,12 @@ class Fields(core.Refraction):
 		self.constrain_horizontal_range()
 	event_control_backspace = event_navigation_forward_character
 
-	def indentation_adjustments(self, unit):
+	def indentation_adjustments(self, unit = None):
 		"""
 		Construct a string of tabs reprsenting the indentation of the given unit.
 		"""
-		return self.indentation(self.horizontal_focus).characters()
+
+		return self.indentation(unit or self.horizontal_focus).characters()
 
 	def event_navigation_jump_character(self, event, quantity = 1):
 		"""
@@ -2108,17 +2109,24 @@ class Fields(core.Refraction):
 		self.log(*inverse)
 		self.movement = True
 
+	def extract_horizontal_range(self, unit, vector):
+		"""
+		Map the display range to the character range compensating for indentation.
+		"""
+		adjust = int(self.indentation_adjustments(unit))
+		return tuple(map((-adjust).__add__, vector.snapshot()))
+
 	def event_delta_substitute(self, event):
 		"""
 		Substitute the contents of the selection.
 		"""
+		self.constrain_horizontal_range()
 		h = self.horizontal
-		adjustments = self.indentation_adjustments(self.horizontal_focus)
-		start, position, stop = map((-adjustments).__add__, h.snapshot())
+		focus = self.horizontal_focus
+		start, position, stop = self.extract_horizontal_range(focus, h)
 		vi = self.vertical_index
 
-		#last_substituted = self.horizontal_focus[1][start:stop]
-		inverse = self.horizontal_focus[1].delete(start, stop)
+		inverse = focus[1].delete(start, stop)
 		r = IRange.single(vi)
 		self.log(inverse, r)
 
@@ -2126,15 +2134,14 @@ class Fields(core.Refraction):
 		self.clear_horizontal_indicators()
 		self.display(*r.exclusive())
 		self.transition_keyboard('edit')
-		self.movement = True
 
 	def event_delta_substitute_previous(self, event):
 		"""
 		Substitute the horizontal selection with previous substitution later.
 		"""
 		h = self.horizontal
-		adjustments = self.indentation_adjustments(self.horizontal_focus)
-		start, position, stop = map((-adjustments).__add__, h.snapshot())
+		focus = self.horizontal_focus
+		start, position, stop = self.extract_horizontal_range(focus, h)
 
 		self.clear_horizontal_indicators()
 
@@ -2610,7 +2617,7 @@ class Fields(core.Refraction):
 
 	def paste(self, index, cache = None):
 		typ, s = self.controller.cache.get(cache)
-		return self.insert_lines(index, s)
+		return self.insert_lines(index, s.split('\n'))
 
 	def focus(self):
 		super().focus()
