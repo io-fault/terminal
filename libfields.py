@@ -178,8 +178,8 @@ def delete(seq, start, stop, empty="", len=len, range=range):
 				if not getattr(x, 'merge', False):
 					break
 			else:
-				# merge
-				seq[start_index:end] = (pair[0].__class__(''.join(pair)),)
+				if pair:
+					seq[start_index:end] = (pair[0].__class__(''.join(pair)),)
 	return seq
 
 def insert(seq, offset, insertion, empty = "", len = len):
