@@ -131,9 +131,9 @@ ca(literal('q'), 'refraction', ('navigation', 'range', 'enqueue'))
 ca(caps('q'), 'refraction', ('navigation', 'range', 'dequeue'))
 ca(controlk('q'), 'refraction', ('',)) # spare
 
-ca(literal('v'), 'refraction', ('navigation', 'void', 'forward',))
-ca(caps('v'), 'refraction', ('navigation', 'void', 'backward',))
-ca(controlk('v'), 'refraction', ('',)) # spare
+#ca(literal('v'), 'refraction', ('navigation', 'void', 'forward',))
+#ca(caps('v'), 'refraction', ('navigation', 'void', 'backward',))
+#ca(controlk('v'), 'refraction', ('',)) # spare
 
 ca(literal('t'), 'refraction', ('delta', 'translocate',))
 ca(caps('t'), 'refraction', ('delta', 'transpose',))
@@ -189,7 +189,7 @@ ca(caps('c'), 'refraction', ('delta', 'substitute', 'previous'),) # remap this
 
 ca(literal('x'), 'refraction', ('delta', 'delete', 'forward'),)
 ca(caps('x'), 'refraction', ('delta', 'delete', 'backward'),)
-ca(controlk('x'), 'selection', ('remove', 'selection')) # cut line
+ca(controlk('x'), 'selection', ('delta', 'delete', 'line')) # cut line
 
 ca(literal('r'), 'refraction', ('delta', 'replace', 'character'),)
 ca(caps('r'), 'refraction', ('delta', 'replace'),)
