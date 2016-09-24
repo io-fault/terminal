@@ -1282,6 +1282,13 @@ class Fields(core.Refraction):
 		self.rotate(self.horizontal, sel, self.horizontal_focus.subfields(), 1)
 		sel[-2].delete(sel[-1])
 
+	def event_delta_delete_line(self, event):
+		self.clear_horizontal_indicators()
+		record = self.truncate_vertical(self.vertical_index, self.vertical_index+1)
+		self.log(record, IRange.single(self.vertical_index))
+		self.movement = True
+		self.update_unit()
+
 	def truncate_vertical(self, start, stop):
 		"""
 		Remove a vertical range from the refraction.
@@ -1975,19 +1982,21 @@ class Fields(core.Refraction):
 		v = self.vector.vertical
 		self.vector_last_axis = v
 
+		i = v.get()
 		for i in linerange:
 			u = self.units[i]
 			if self.indentation(u) == 0 and u.length() == 0:
-				self.clear_horizontal_indicators()
-				v.move(i-v.get())
-				self.horizontal.configure(0, 0, 0)
-				self.update_vertical_state()
-				self.constrain_horizontal_range()
-				self.movement = True
 				break
 		else:
-			# ignore; no void
-			pass
+			# eof
+			i += 1
+
+		self.clear_horizontal_indicators()
+		v.move(i-v.get())
+		self.horizontal.configure(0, 0, 0)
+		self.update_vertical_state()
+		self.constrain_horizontal_range()
+		self.movement = True
 
 	def event_navigation_void_forward(self, event):
 		self.select_void(range(self.vertical_index+1, len(self.units)))
@@ -2150,8 +2159,11 @@ class Fields(core.Refraction):
 		self.horizontal_focus[1].insert(start, le)
 		self.horizontal_focus[1].reformat()
 
-		self.horizontal.configure(start+adjustments, len(le))
+		h.configure(start, len(le))
+
+		self.clear_horizontal_indicators()
 		self.display(*self.current_vertical.exclusive())
+		self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
 
 	def insert_characters(self, characters,
 			isinstance=isinstance, StringField=libfields.String
