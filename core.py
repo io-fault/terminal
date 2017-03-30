@@ -128,19 +128,19 @@ class Refraction(libio.Resource):
 		self.horizontal_positions = {}
 		self.horizontal_range = None
 
-		# Physical location of the refraction.
-		self.vector = libterminal.Vector()
-		self.vector_last_axis = self.vector.vertical # last used axis
-		self.vertical_index = 0 # the focus line
-
 		# View location of the refraction.
 		self.window = libterminal.Vector()
+		# Physical location of the refraction.
+		self.vector = libterminal.Vector()
+
+		self.vector_last_axis = self.vector.vertical # last used axis
+		self.vertical_index = 0 # the focus line
 
 		self.range_queue = collections.deque()
 
 		# Recorded snapshot of vector and window.
 		# Used by Console to clear outdated cursor positions.
-		self.snapshot = None
+		self.snapshot = (self.vector.snapshot(), self.window.snapshot())
 
 		self.keyboard = self.create_keyboard_mapping() # per-refraction to maintain state
 		self.keyboard.set(self.default_keyboard_mapping)

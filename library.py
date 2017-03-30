@@ -35,7 +35,7 @@ def print_except_with_crlf(exc, val, tb):
 IRange = core.IRange
 
 contexts = (
-	'system', # the operating system 
+	'system', # the operating system
 	'unit', # the program the editor is running in
 	'control', # the session control; the prompt
 	'session', # the state of the set of projects being managed
@@ -118,7 +118,7 @@ class Fields(core.Refraction):
 		return IRange((self.vertical_index, self.vertical_index))
 
 	def log(self, message):
-		self.controller.context.process.log(message)
+		self.context.process.log(message)
 
 	def focus(self):
 		super().focus()
@@ -734,7 +734,7 @@ class Fields(core.Refraction):
 				yield (" " * spaces, (), 0xBBBBBB)
 				spaces = 0
 
-			if x == "#":
+			if x in {"#", "//"}:
 				yield from self.comment(x, i)
 				continue
 			elif x in uline.quotations:
@@ -2798,7 +2798,7 @@ class Prompt(Lines):
 		"""
 		Immediately exit the process. Unsaved files will not be saved.
 		"""
-		self.controller.controller.context.process.terminate(0)
+		self.controller.context.process.terminate(0)
 
 	def command_forget(self):
 		"""
@@ -3092,7 +3092,7 @@ class Transcript(core.Refraction):
 
 		return self.view.draw()
 
-def output(transformer, queue, tty):
+def output(flow, queue, tty):
 	"""
 	Thread transformer function receiving display transactions and writing to the terminal.
 	"""
@@ -3104,26 +3104,27 @@ def output(transformer, queue, tty):
 		try:
 			while True:
 				out = get()
-				write(b''.join(out))
-				flush()
+				r = b''.join(out)
+				if r:
+					write(r)
+					flush()
 		except BaseException as exception:
-			transformer.context.process.exception(transformer, exception, "Terminal Output")
+			flow.context.process.exception(flow, exception, "Terminal Output")
 
-def input(transformer, queue, tty, partial=functools.partial):
+def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	"""
 	Thread transformer function translating input to Character events for &Console.
 	"""
-	enqueue = transformer.controller.context.enqueue
-	emit = transformer.f_emit
+	enqueue = flow.context.enqueue
+	emit = flow.f_emit
 	now = libtime.now
-	escape_state = 0
 
 	# using incremental decoder to handle partial writes.
 	state = codecs.getincrementaldecoder('utf-8')('replace')
 
 	chars = ""
 	while True:
-		data = os.read(tty.fileno(), 1024*2)
+		data = os.read(tty.fileno(), maximum_read)
 		chars += state.decode(data)
 		try:
 			events = libterminal.construct_character_events(chars)
@@ -3144,7 +3145,7 @@ class Empty(Lines):
 	"""
 	pass
 
-class Console(libio.Reactor):
+class Console(libio.Flow):
 	"""
 	The application that responds to keyboard input in order to make display changes.
 
@@ -3153,8 +3154,6 @@ class Console(libio.Reactor):
 	"""
 
 	def __init__(self):
-		super().__init__()
-
 		self.display = libterminal.Display() # used to draw the frame.
 		self.tty = None
 
@@ -3514,7 +3513,7 @@ class Console(libio.Reactor):
 		self.f_emit(initialize)
 
 	def actuate(self):
-		inv = self.controller.context.process.invocation
+		inv = self.context.process.invocation
 		if 'system' in inv.parameters:
 			name = inv.parameters['system'].get('name', None)
 			args = inv.parameters['system'].get('arguments', ())
@@ -3545,7 +3544,7 @@ class Console(libio.Reactor):
 		initialize.extend(self.status.refresh())
 
 		# redirect log to the transcript
-		process = self.controller.context.process
+		process = self.context.process
 		wr = self.transcript.reference(self)
 
 		process.log = wr
@@ -3634,7 +3633,7 @@ class Console(libio.Reactor):
 		return new
 
 	def event_process_exit(self, event):
-		self.controller.context.process.terminate(1)
+		self.context.process.terminate(1)
 
 	def event_toggle_prompt(self, event):
 		"""
@@ -3707,7 +3706,7 @@ class Console(libio.Reactor):
 		"""
 		p = self.pane - 1
 		if p < 0:
-			p = len(self.visible) - 1 
+			p = len(self.visible) - 1
 		self.focus(self.switch_pane(p))
 
 	@staticmethod
@@ -3721,7 +3720,7 @@ class Console(libio.Reactor):
 		"""
 
 		# receives Key() instances and emits display events
-		context = self.controller.context
+		context = self.context
 		process = context.process
 
 		effects = list()
@@ -3792,22 +3791,24 @@ def initialize(unit):
 
 	libterminal.restore_at_exit() # cursor will be hidden and raw is enabled
 
-	c = Console()
+	s = libio.Sector()
+	s.subresource(unit)
+	unit.place(s, 'console-operation')
+	s.actuate()
+
 	tty = open(libterminal.device.path, 'r+b')
+	input_thread = libio.Parallel(input, tty)
+	output_thread = libio.Parallel(output, tty)
 
-	input_thread = libio.Parallel()
-	output_thread = libio.Parallel()
-
-	# terminal input -> console -> terminal output
-	console_flow = libio.Transformation(input_thread, c, output_thread)
-	console_flow.subresource(unit)
-	unit.place(console_flow, 'console-operation')
-
-	input_thread.requisite(input, tty)
-	output_thread.requisite(output, tty)
+	c = Console()
 	c.requisite(tty)
 
-	unit.place(c, 'console') # the Console() instance
-	os.environ['FIO_SYSTEM_CONSOLE'] = str(os.getpid())
+	# terminal input -> console -> terminal output
+	input_thread.f_connect(c)
+	c.f_connect(output_thread)
 
-	console_flow.actuate()
+	s.dispatch(output_thread)
+	s.dispatch(c)
+	s.dispatch(input_thread)
+
+	os.environ['FIO_SYSTEM_CONSOLE'] = str(os.getpid())
