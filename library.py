@@ -672,15 +672,15 @@ class Fields(core.Refraction):
 
 	def comment(self, q, iterator, color = palette.theme['comment']):
 		"""
-		Draw the comment and its leading indicator.
+		# Draw the comment and its leading indicator.
 		"""
-		yield (q.value(), (), 0x101010)
+		yield (q.value(), (), 0x4a4a4a)
 		for path, x in iterator:
 			yield (x.value(), (), color)
 
-	def quotation(self, q, iterator, color = 0x666666):
+	def quotation(self, q, iterator, color = palette.theme['quotation']):
 		"""
-		Draw the quotation.
+		# Draw the quotation.
 		"""
 		yield (q.value(), (), color)
 		for path, x in iterator:
@@ -692,6 +692,8 @@ class Fields(core.Refraction):
 			Indent=libfields.Indentation,
 			Constant=libfields.Constant,
 			quotation=palette.theme['quotation'],
+			indent_cv=palette.theme['indent'],
+			theme=palette.theme,
 			isinstance=isinstance,
 			len=len, hasattr=hasattr,
 			iter=iter, next=next,
@@ -716,7 +718,7 @@ class Fields(core.Refraction):
 				if self.has_content(unit):
 					yield (self.tab(x, size=x.size), (), None)
 				else:
-					yield (self.visible_tab(x, size=x.size), (), 0x222222)
+					yield (self.visible_tab(x, size=x.size), (), indent_cv)
 
 		spaces = 0
 
@@ -731,7 +733,7 @@ class Fields(core.Refraction):
 				spaces += 1
 				continue
 			elif spaces:
-				yield (" " * spaces, (), 0xBBBBBB)
+				yield (" " * spaces, (), None)
 				spaces = 0
 
 			if x in {"#", "//"}:
@@ -748,20 +750,7 @@ class Fields(core.Refraction):
 				yield (str(fs), (), 0x202020)
 				continue
 
-			if x in classify:
-				cc = classify[x]
-				if cc == 'keyword':
-					#color = 0x005fd7
-					color = 0x6080FF
-				elif cc == 'core':
-					color = 0x875fff
-				elif cc == 'exoword':
-					color = libterminal.pastels['cyan']
-				else:
-					color = 0xBBBBBB
-			else:
-				color = 0xBBBBBB
-
+			color = theme[classify.get(x, 'fallback')]
 			yield (x, (), color)
 		else:
 			# trailing spaces
@@ -1557,6 +1546,9 @@ class Fields(core.Refraction):
 		else:
 			h.move(abs - h.datum)
 
+		self.movement = True
+		self.update_horizontal_indicators()
+
 	def event_select_vertical_line(self, event, quantity=1):
 		"""
 		Alter the vertical range to contain a single line.
@@ -1813,6 +1805,7 @@ class Fields(core.Refraction):
 
 		self.update_vertical_state()
 		self.constrain_horizontal_range()
+		self.movement = True
 
 	def vertical_query_next(self):
 		v = self.vertical
@@ -1905,6 +1898,8 @@ class Fields(core.Refraction):
 		else:
 			h.offset = 0
 
+		self.movement = True
+
 	def event_navigation_horizontal_stop(self, event):
 		"""
 		Horizontally move the cursor to the end of the range.
@@ -1928,12 +1923,15 @@ class Fields(core.Refraction):
 		else:
 			h.offset = h.magnitude
 
+		self.movement = True
+
 	def event_navigation_forward_character(self, event, quantity = 1):
 		h = self.horizontal
 		self.vector_last_axis = h
 
 		h.move(quantity)
 		self.constrain_horizontal_range()
+		self.movement = True
 	event_control_space = event_navigation_forward_character
 
 	def event_navigation_backward_character(self, event, quantity = 1):
@@ -1942,6 +1940,7 @@ class Fields(core.Refraction):
 
 		h.move(-quantity)
 		self.constrain_horizontal_range()
+		self.movement = True
 	event_control_backspace = event_navigation_forward_character
 
 	def indentation_adjustments(self, unit = None):
@@ -1974,6 +1973,7 @@ class Fields(core.Refraction):
 
 		if offset > -1:
 			h.set(offset + il)
+		self.movement = True
 
 	def select_void(self, linerange):
 		"""
@@ -2472,9 +2472,11 @@ class Fields(core.Refraction):
 
 	def event_delta_delete_backward(self, event, quantity = 1):
 		self.delete_characters(-1*quantity)
+		self.movement = True
 
 	def event_delta_delete_forward(self, event, quantity = 1):
 		self.delete_characters(quantity)
+		self.movement = True
 
 	def event_copy(self, event):
 		"""
@@ -2536,6 +2538,7 @@ class Fields(core.Refraction):
 
 		self.display(self.vertical_index, None)
 		h = self.horizontal.set(ulen)
+
 		self.movement = True
 
 	def unit_class(self, index, len = len):

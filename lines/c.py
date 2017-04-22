@@ -1,5 +1,5 @@
 """
-C language profile.
+# C language profile.
 """
 from .. import libfields
 
@@ -150,3 +150,9 @@ routers = {y: y for y in map(libfields.Constant, (".","-",">"))} # "->"; needs s
 operators = {y: y for y in map(libfields.Constant, "@!&^*%+=-|\\/<>?~:")}
 groupings = {y: y for y in map(libfields.Constant, "()[]{}")}
 quotations = {y: y for y in map(libfields.Constant, ("'", '"',))}
+
+comments = {
+	"//": libfields.Constant("//"),
+	"/*": libfields.Constant("/*"),
+	"*/": libfields.Constant("*/"),
+}
