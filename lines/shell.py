@@ -50,6 +50,10 @@ core_list = [
 	'touch',
 	'cat',
 	'which',
+
+	'sed',
+	'awk',
+	'lam',
 ]
 
 keywords = {y: y for y in map(libfields.String, keyword_list)}
