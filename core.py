@@ -208,7 +208,7 @@ class Refraction(libio.Resource):
 				v.move(1, -1)
 				hs = self.horizontal.snapshot()
 
-				for i in range(v.magnitude, -1, -1):
+				for i in range(v.magnitude, 0, -1):
 					h.restore(hs)
 					self.update_unit()
 					method(event, *params)

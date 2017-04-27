@@ -2517,18 +2517,20 @@ class Fields(core.Refraction):
 		self.transcript_write('\n'.join(l))
 
 	def event_delta_delete_backward(self, event, quantity = 1):
-		r = self.delete_characters(-1*quantity)
 		self.clear_horizontal_indicators()
+		r = self.delete_characters(-1*quantity)
 		self.constrain_horizontal_range()
-		self.display(*r.exclusive())
-		self.movement = True
+		if r is not None:
+			self.display(*r.exclusive())
+			self.movement = True
 
 	def event_delta_delete_forward(self, event, quantity = 1):
-		r = self.delete_characters(quantity)
 		self.clear_horizontal_indicators()
+		r = self.delete_characters(quantity)
 		self.constrain_horizontal_range()
-		self.display(*r.exclusive())
-		self.movement = True
+		if r is not None:
+			self.display(*r.exclusive())
+			self.movement = True
 
 	def event_copy(self, event):
 		"""
