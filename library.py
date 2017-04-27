@@ -2302,7 +2302,7 @@ class Fields(core.Refraction):
 
 	def event_delta_insert_character(self, event):
 		"""
-		##  Insert a character at the current cursor position.
+		# Insert a character at the current cursor position.
 		"""
 		if event.type == 'literal':
 			self.insert_characters(event.string)
@@ -2310,7 +2310,7 @@ class Fields(core.Refraction):
 
 	def transition_insert_character(self, key):
 		"""
-		##  Used as a capture hook to insert literal characters.
+		# Used as a capture hook to insert literal characters.
 		"""
 		if key.type == 'literal':
 			self.insert_characters(key.string)
@@ -2461,7 +2461,7 @@ class Fields(core.Refraction):
 
 	def event_delta_indent_increment(self, event, quantity = 1):
 		"""
-		##  Increment indentation of the current line.
+		# Increment indentation of the current line.
 		"""
 		if self.distributing and not self.has_content(self.horizontal_focus):
 			# ignore indent if the line is empty and deltas are being distributed
@@ -2505,7 +2505,7 @@ class Fields(core.Refraction):
 
 	def event_print_unit(self, event):
 		"""
-		##  Display the structure of the current unit to the transcript.
+		# Display the structure of the current unit to the transcript.
 		"""
 		hf = self.horizontal_focus
 		l = [hf[1].__class__.__name__ + ': ' + str(len(hf[1]))]
@@ -3254,7 +3254,7 @@ class IDeviceState(object):
 
 	def update(self, *params):
 		"""
-		##  Update the mouse state if any events were received.
+		# Update the mouse state if any events were received.
 		"""
 		event = params[2]
 
