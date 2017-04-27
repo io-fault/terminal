@@ -1,5 +1,5 @@
 """
-Plain text
+# Plain text
 """
 from .. import libfields
 

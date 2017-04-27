@@ -1,5 +1,5 @@
 """
-Editor console.
+# Editor console.
 """
 from .. import library as libconsole
 from ...io import library as libio

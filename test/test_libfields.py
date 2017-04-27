@@ -56,21 +56,21 @@ def test_sequence(test):
 	test/str(s) == "test.fields"
 	test/list(s.value()) == [(f, (s,)), (f2, (s,)), (f3, (s,))]
 
-doc = """import foo
-import bar
-import nothing
+# doc = """import foo
+# import bar
+# import nothing
 
-def function(a, b):
-	pass
+# def function(a, b):
+	# pass
 	
-class Class():
+# class Class():
 
-	def __init__(self):
-		pass
-		pass
-		if 0:
-			pass
-		pass
+	# def __init__(self):
+		# pass
+		# pass
+		# if 0:
+			# pass
+		# pass
 
 """
 

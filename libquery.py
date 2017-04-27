@@ -1,5 +1,5 @@
 """
-Horizontal and vertical query for range selection.
+# Horizontal and vertical query for range selection.
 """
 
 punctuation = set(";:.,!?")
@@ -8,7 +8,7 @@ quotation = set("'\"`")
 
 def classify(string):
 	"""
-	Identify the class of the given character.
+	# Identify the class of the given character.
 	"""
 
 	if string.isalpha():
@@ -24,9 +24,9 @@ def classify(string):
 
 class Query(object):
 	"""
-	Range queries for managing range operations.
+	# Range queries for managing range operations.
 
-	Manages the collection of query operations for selecting ranges.
+	# Manages the collection of query operations for selecting ranges.
 	"""
 	def __init__(self, type, scanner, condition):
 		self.type = type
@@ -37,7 +37,7 @@ class Query(object):
 
 	def dispatch(self, sequence, index, minimum, maximum):
 		"""
-		Identify the range where the given conditions hold True.
+		# Identify the range where the given conditions hold True.
 		"""
 		l = []
 		start, pos, stop = index # position is reference point
@@ -65,7 +65,7 @@ class Query(object):
 
 def indentation(seq):
 	"""
-	Return the indentation level or zero if none.
+	# Return the indentation level or zero if none.
 	"""
 	if seq is None:
 		return None
@@ -77,7 +77,7 @@ def indentation(seq):
 
 def has_content(line):
 	"""
-	Whether or not the non-formatting fields have content.
+	# Whether or not the non-formatting fields have content.
 	"""
 	for path, x in line.subfields():
 		if isinstance(x, Formatting):
@@ -88,7 +88,7 @@ def has_content(line):
 
 def indentation_block(direction, initial, level = None, level_adjustment = 0):
 	"""
-	Select indentation block.
+	# Select indentation block.
 	"""
 	# if there's no indentation and it's not empty, check contiguous lines
 	if level is None:
@@ -122,7 +122,7 @@ def indentation_block(direction, initial, level = None, level_adjustment = 0):
 
 def contiguous_block(direction, initial, level = None, level_adjustment = 0):
 	"""
-	Select a contiguous range.
+	# Select a contiguous range.
 	"""
 	if level is None:
 		il = indentation(initial)

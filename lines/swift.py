@@ -1,5 +1,5 @@
 """
-Swift language profile.
+# Swift language profile.
 """
 from .. import libfields
 

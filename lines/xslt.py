@@ -1,5 +1,5 @@
 """
-XSLT language profile.
+# XSLT language profile.
 """
 import itertools
 from .. import libfields

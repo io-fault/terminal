@@ -1,5 +1,5 @@
 """
-Cascading Style Sheets language profile.
+# Cascading Style Sheets language profile.
 """
 from .. import libfields
 

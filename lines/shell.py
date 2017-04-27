@@ -1,5 +1,5 @@
 """
-Bourne Shell language profile.
+# Bourne Shell language profile.
 """
 from .. import libfields
 

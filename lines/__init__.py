@@ -1,5 +1,5 @@
 """
-Package module for custom line parsers and profiles for &.console
+# Package module for custom line parsers and profiles for &.console
 """
 import importlib
 from .. import libfields
@@ -10,7 +10,7 @@ def parse(Class, line,
 		String = libfields.String
 	):
 	"""
-	Parse a line of text into Fields.
+	# Parse a line of text into Fields.
 	"""
 	kws = Class.keywords
 	cores = Class.cores
@@ -65,13 +65,13 @@ def parse(Class, line,
 
 class Line(libfields.Text):
 	"""
-	Base class for primary Unit.
+	# Base class for primary Unit.
 	"""
 	__slots__ = libfields.Text.__slots__
 
 	def reformat(self, str=str):
 		"""
-		Rebuild the Line contents.
+		# Rebuild the Line contents.
 		"""
 		ind, *self.sequences = parse(self.__class__, str(self))
 
@@ -121,34 +121,34 @@ translation_set = (
 
 def table(language):
 	"""
-	Construct a table for string translate.
+	# Construct a table for string translate.
 	"""
 	for x in translation_set:
 		yield from getattr(language, x).keys()
 
 def aggregate(language):
 	"""
-	Aggregate the profile module translation set.
+	# Aggregate the profile module translation set.
 	"""
 	for x in translation_set:
 		yield from getattr(language, x).items()
 
 def profile_module(name):
 	"""
-	Get the profile module for parsing lines for the given language.
+	# Get the profile module for parsing lines for the given language.
 	"""
 	return importlib.import_module('.'+name, package=__name__)
 
 def profile_from_filename(filename):
 	"""
-	Get the profile name from the given file name.
+	# Get the profile name from the given file name.
 	"""
 	ext = filename[filename.rfind('.'):]
 	return extensions.get(ext, 'text')
 
 def profile(name):
 	"""
-	Get the profile module's &Line subclass and module.
+	# Get the profile module's &Line subclass and module.
 	"""
 	if name in cache:
 		return cache[name]

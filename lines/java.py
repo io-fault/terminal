@@ -1,5 +1,5 @@
 """
-Java language profile.
+# Java language profile.
 """
 from .. import libfields
 

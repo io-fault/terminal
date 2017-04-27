@@ -1,5 +1,5 @@
 """
-Lua language profile.
+# Lua language profile.
 """
 from .. import libfields
 

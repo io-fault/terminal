@@ -1,5 +1,5 @@
 """
-Field entry management package.
+# Field entry management package.
 """
 
 import abc
@@ -12,67 +12,67 @@ from ..terminal import symbols
 
 class Field(metaclass = abc.ABCMeta):
 	"""
-	Protocol for Field types.
+	# Protocol for Field types.
 	"""
 
 	@property
 	@abc.abstractmethod
 	def empty(self):
 		"""
-		Designates that the Field contains no content.
+		# Designates that the Field contains no content.
 		"""
 
 	@property
 	@abc.abstractmethod
 	def full(self):
 		"""
-		Designates that the field is full and cannot accept inserts.
+		# Designates that the field is full and cannot accept inserts.
 		"""
 
 	@abc.abstractmethod
 	def characters(self):
 		"""
-		Number of characters in the field.
+		# Number of characters in the field.
 		"""
 
 	@abc.abstractmethod
 	def cells(self):
 		"""
-		Number of cells used by the display of the field.
+		# Number of cells used by the display of the field.
 		"""
 
 	@abc.abstractmethod
 	def value(self):
 		"""
-		The value of the field or structure.
+		# The value of the field or structure.
 		"""
 
 	@abc.abstractmethod
 	def subfields(self):
 		"""
-		The absolute sequence of fields contained within the Field.
-		Nested fields must be unnested by including the Field context.
+		# The absolute sequence of fields contained within the Field.
+		# Nested fields must be unnested by including the Field context.
 
-		Returns an iterator producing a triple:
+		# Returns an iterator producing a triple:
 
-			(path, field)
+			# (path, field)
 
-		Where path is a tuple containing the sequence of containing fields
-		and the corresponding index:
+		# Where path is a tuple containing the sequence of containing fields
+		# and the corresponding index:
 
-			(index, field), ...
+			# (index, field), ...
 		"""
 
 	@abc.abstractmethod
 	def count(self):
 		"""
-		Number of subfields contained by the field.
-		&None if the field is not a container.
+		# Number of subfields contained by the field.
+		# &None if the field is not a container.
 		"""
 
 def changelength(delta):
 	"""
-	Calculate the length of a delta.
+	# Calculate the length of a delta.
 	"""
 	l = 0
 	for x in delta:
@@ -85,7 +85,7 @@ def changelength(delta):
 
 def address(seq, start, stop, len = len, range = range):
 	"""
-	Find the address of the absolute slice.
+	# Find the address of the absolute slice.
 	"""
 	start = start or 0
 	assert start <= stop
@@ -248,7 +248,7 @@ def insert(seq, offset, insertion, empty = "", len = len):
 @Field.register
 class String(str):
 	"""
-	A constant string field. The contents are immutable and it identifies itself as full.
+	# A constant string field. The contents are immutable and it identifies itself as full.
 	"""
 	__slots__ = ()
 	merge = True
@@ -290,7 +290,7 @@ class Delimiter(String):
 @Field.register
 class Styled(object):
 	"""
-	Explicitly styled text field.
+	# Explicitly styled text field.
 	"""
 
 	__slots__ = ('text', 'styles', 'foreground', 'background')
@@ -307,7 +307,7 @@ class Styled(object):
 
 	def terminal(self):
 		"""
-		Return a tuple suitable for fault.terminal.
+		# Return a tuple suitable for fault.terminal.
 		"""
 
 		return (
@@ -320,9 +320,9 @@ class Styled(object):
 @Field.register
 class Text(object):
 	"""
-	Mutable string field.
+	# Mutable string field.
 
-	Normally subclassed for specific languages for highlighting.
+	# Normally subclassed for specific languages for highlighting.
 	"""
 
 	__slots__ = ('sequences',)
@@ -338,7 +338,7 @@ class Text(object):
 	@property
 	def full(self):
 		"""
-		Whether or not more characters can be inserted.
+		# Whether or not more characters can be inserted.
 		"""
 		if self.limit is None:
 			return False
@@ -358,8 +358,8 @@ class Text(object):
 
 	def set(self, characters):
 		"""
-		Set the field characters. Used loading fields.
-		Destroys the log (delta sequence).
+		# Set the field characters. Used loading fields.
+		# Destroys the log (delta sequence).
 		"""
 		inverse = (self.set, (self.sequences,))
 		self.sequences = characters
@@ -367,7 +367,7 @@ class Text(object):
 
 	def clear(self):
 		"""
-		Set the text to an empty string.
+		# Set the text to an empty string.
 		"""
 		return self.set([self.empty_entry])
 
@@ -461,16 +461,16 @@ class Text(object):
 
 class Line(Text):
 	"""
-	Text object representing a single line.
-	Implies the special handling of control characters.
+	# Text object representing a single line.
+	# Implies the special handling of control characters.
 	"""
 	__slots__ = Text.__slots__
 
 class FieldSeparator(Delimiter):
 	"""
-	A space-like character used to delimit fields for commands.
+	# A space-like character used to delimit fields for commands.
 
-	Primarily used by Prompts to distinguish between spaces and field separation.
+	# Primarily used by Prompts to distinguish between spaces and field separation.
 	"""
 	__slots__ = Delimiter.__slots__
 	classifications = ()
@@ -480,8 +480,8 @@ field_separator = FieldSeparator(':')
 @Field.register
 class Formatting(int):
 	"""
-	A field that represents a sequence of tabs.
-	Cannot be used inside &Text fields.
+	# A field that represents a sequence of tabs.
+	# Cannot be used inside &Text fields.
 	"""
 
 	__slots__ = ()
@@ -526,7 +526,7 @@ class Formatting(int):
 
 class Spacing(Formatting):
 	"""
-	A field that represents a series of spaces.
+	# A field that represents a series of spaces.
 	"""
 
 	__slots__ = ()
@@ -537,7 +537,7 @@ class Spacing(Formatting):
 
 class Indentation(Formatting):
 	"""
-	A field that represents a series of tabs.
+	# A field that represents a series of tabs.
 	"""
 	__slots__ = ()
 	character = '\t'
@@ -551,7 +551,7 @@ class Indentation(Formatting):
 
 class Terminator(Formatting):
 	"""
-	A field that represents a newline.
+	# A field that represents a newline.
 	"""
 	__slots__ = ()
 	character = '\n'
@@ -587,7 +587,7 @@ class Sequence(list):
 	@property
 	def empty(self):
 		"""
-		Whether the sequence contains non-empty fields.
+		# Whether the sequence contains non-empty fields.
 		"""
 		for x in self:
 			if not x.empty:
@@ -596,7 +596,7 @@ class Sequence(list):
 
 	def count(self):
 		"""
-		The number of fields immediately contained.
+		# The number of fields immediately contained.
 		"""
 		return len(self)
 
@@ -619,7 +619,7 @@ class Sequence(list):
 
 	def delete(self, *fields, get0=operator.itemgetter(0)):
 		"""
-		Delete a set of fields from the sequence.
+		# Delete a set of fields from the sequence.
 		"""
 		indexes = list(map(self.index, fields))
 		index_fields = list(zip(indexes, fields))
@@ -637,29 +637,29 @@ class Sequence(list):
 
 	def __str__(self):
 		"""
-		Display string of the sequence of fields.
+		# Display string of the sequence of fields.
 		"""
 		return ''.join(map(str, self.value()))
 
 	def length(self, lenmethod=operator.methodcaller('length')):
 		"""
-		The sum of the *display* length of the contained fields.
+		# The sum of the *display* length of the contained fields.
 		"""
 		return sum(map(lenmethod, self))
 	characters = length
 
 	def cells(self, lenmethod=operator.methodcaller('cells')):
 		"""
-		Sum of &cells of all the subfields.
+		# Sum of &cells of all the subfields.
 		"""
 		return sum(map(lenmethod, self))
 
 	def subfields(self, path=(), range=range, len=len, isinstance=isinstance):
 		"""
-		Map the nested sequences into a serialized form.
+		# Map the nested sequences into a serialized form.
 
-		The tuples produced are pairs containing the field and path to the field.
-		The path being the sequence of sequences containing the field.
+		# The tuples produced are pairs containing the field and path to the field.
+		# The path being the sequence of sequences containing the field.
 		"""
 
 		if self in path:
@@ -679,7 +679,7 @@ class Sequence(list):
 
 	def offset(self, path, field):
 		"""
-		Get the horizontal positioning of the field within the unit.
+		# Get the horizontal positioning of the field within the unit.
 		"""
 		offset = 0
 
@@ -695,10 +695,10 @@ class Sequence(list):
 
 	def find(self, offset, state = None):
 		"""
-		Find the field at the relative offset.
+		# Find the field at the relative offset.
 
-		If the offset is beyond the end of the sequence, &None.
-		If the offset is less than zero, the first.
+		# If the offset is beyond the end of the sequence, &None.
+		# If the offset is less than zero, the first.
 		"""
 		if self.empty:
 			return ((), self, (0, 0, ()))

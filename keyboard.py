@@ -1,37 +1,37 @@
 """
-Provides common mappings for keyboard based navigation and control.
+# Provides common mappings for keyboard based navigation and control.
 
-Modifying the mappings is not recommended, but is possible. Interacting
-with these mappings is the only way to modify the keyboard mappings used
-by &.console.
+# Modifying the mappings is not recommended, but is possible. Interacting
+# with these mappings is the only way to modify the keyboard mappings used
+# by &.console.
 
-! FUTURE:
-	The (system:file)`~/.fault/console.py` script can be used to customize
-	the mappings. When a Session is created in an application, the callbacks
-	defined in the module can be used to do further initialization.
+# ! FUTURE:
+	# The (system:file)`~/.fault/console.py` script can be used to customize
+	# the mappings. When a Session is created in an application, the callbacks
+	# defined in the module can be used to do further initialization.
 
-[ Properties ]
+# [ Properties ]
 
-/trap
-	Console level events. Key events mapped here are trapped and are
-	not propagated to Refractions. This is the "global" mapping.
-/control
-	Control mode mapping is for navigation and high-level manipulation.
-/edit
-	Mode used to manage the insertion and removal of characters from fields.
-/capture
-	...
-/types
-	Mode used to select field types for custom interactions.
+# /trap
+	# Console level events. Key events mapped here are trapped and are
+	# not propagated to Refractions. This is the "global" mapping.
+# /control
+	# Control mode mapping is for navigation and high-level manipulation.
+# /edit
+	# Mode used to manage the insertion and removal of characters from fields.
+# /capture
+	# ...
+# /types
+	# Mode used to select field types for custom interactions.
 """
 from ..terminal import library as libterminal
 
 class Mapping(object):
 	"""
-	A mapping of commands and keys for binding shortcuts.
+	# A mapping of commands and keys for binding shortcuts.
 
-	A mapping "context" is a reference to a target. For instance, a field, line, or
-	container.
+	# A mapping "context" is a reference to a target. For instance, a field, line, or
+	# container.
 	"""
 
 	def __init__(self, default = None):
@@ -41,7 +41,7 @@ class Mapping(object):
 
 	def assign(self, character, context, action, parameters = ()):
 		"""
-		Assign the character sequence to action.
+		# Assign the character sequence to action.
 		"""
 		key = (context, action, parameters)
 		if key not in self.mapping:
@@ -53,7 +53,7 @@ class Mapping(object):
 
 	def event(self, key):
 		"""
-		Return the action associated with the given keystroke.
+		# Return the action associated with the given keystroke.
 		"""
 		index = (key.type, key.identity, key.modifiers)
 		return self.reverse.get(index, self.default)
@@ -276,14 +276,14 @@ standard = {
 
 class Selection(object):
 	"""
-	A set of mappings used to interact with objects.
+	# A set of mappings used to interact with objects.
 	"""
 	__slots__ = ('index', 'current')
 
 	@property
 	def mapping(self):
 		"""
-		Get the currently selected mapping by the defined name.
+		# Get the currently selected mapping by the defined name.
 		"""
 		return self.current[0]
 
@@ -297,7 +297,7 @@ class Selection(object):
 
 	def event(self, key):
 		"""
-		Look up the event using the currently selected mapping.
+		# Look up the event using the currently selected mapping.
 		"""
 		return (self.current[0], self.current[1].event(key))
 

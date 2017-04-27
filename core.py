@@ -11,13 +11,13 @@ IRange = libcomp.IRange
 
 class Cache(object):
 	"""
-	Mapping interface for user trans-refraction communication. (Local Clipboard)
+	# Mapping interface for user trans-refraction communication. (Local Clipboard)
 
-	Maintains a set of slots for storing a sequence of typed objects; the latest item
-	in the slot being the default. A sequence is used in order to maintain a history of
-	cached objects. The configured limit restricts the number recalled.
+	# Maintains a set of slots for storing a sequence of typed objects; the latest item
+	# in the slot being the default. A sequence is used in order to maintain a history of
+	# cached objects. The configured limit restricts the number recalled.
 
-	Console clipboard.
+	# Console clipboard.
 	"""
 
 	__slots__ = ('storage', 'limit')
@@ -30,7 +30,7 @@ class Cache(object):
 
 	def allocate(self, *keys):
 		"""
-		Initialize a cache slot.
+		# Initialize a cache slot.
 		"""
 		for k in keys:
 			if k not in self.storage:
@@ -38,13 +38,13 @@ class Cache(object):
 
 	def index(self):
 		"""
-		Return a sequence of storage slots.
+		# Return a sequence of storage slots.
 		"""
 		return self.storage.keys()
 
 	def put(self, key, cobject):
 		"""
-		Put the given object as the cache entry.
+		# Put the given object as the cache entry.
 		"""
 		slot = self.storage[key]
 		type, object = cobject
@@ -55,7 +55,7 @@ class Cache(object):
 
 	def get(self, key, offset = 0):
 		"""
-		Get the contents of the cache slot.
+		# Get the contents of the cache slot.
 		"""
 		r = self.storage[key][-(1 + offset)]
 
@@ -66,16 +66,16 @@ class Cache(object):
 
 	def clear(self, key):
 		"""
-		Remove the all the contents of the given slot.
+		# Remove the all the contents of the given slot.
 		"""
 		self.storage[key].clear()
 
 class Refraction(libio.Resource):
 	"""
-	A Refraction of a source onto a connected area of the display.
+	# A Refraction of a source onto a connected area of the display.
 
-	Refraction resources are used by Console transformers to manage the parts
-	of the display.
+	# Refraction resources are used by Console transformers to manage the parts
+	# of the display.
 	"""
 
 	create_keyboard_mapping = keyboard.Selection.standard
@@ -88,21 +88,21 @@ class Refraction(libio.Resource):
 	@property
 	def horizontal(self):
 		"""
-		The current working horizontal position.
+		# The current working horizontal position.
 		"""
 		return self.vector.horizontal
 
 	@property
 	def vertical(self):
 		"""
-		The current working vertical position.
+		# The current working vertical position.
 		"""
 		return self.vector.vertical
 
 	@property
 	def last_axis(self):
 		"""
-		The recently used axis.
+		# The recently used axis.
 		"""
 		if self.vector_last_axis is self.horizontal:
 			return 'horizontal'
@@ -112,7 +112,7 @@ class Refraction(libio.Resource):
 	@property
 	def axis(self):
 		"""
-		Return the &libterminal.Position of the last axis used.
+		# Return the &libterminal.Position of the last axis used.
 		"""
 		return self.vector_last_axis
 
@@ -155,7 +155,7 @@ class Refraction(libio.Resource):
 
 	def route(self, event, scrollmap={-1:'backward', 1:'forward'}):
 		"""
-		Route the event to the target given the current processing state.
+		# Route the event to the target given the current processing state.
 		"""
 
 		if event.type == 'scrolled':
@@ -178,7 +178,7 @@ class Refraction(libio.Resource):
 
 	def key(self, console, event, getattr=getattr, range=range):
 		"""
-		Process the event.
+		# Process the event.
 		"""
 		routing = self.route(event)
 		if routing is None:
@@ -239,11 +239,11 @@ class Refraction(libio.Resource):
 
 	def adjust(self, point, dimensions):
 		"""
-		Adjust the positioning and size of the view. &point is a pair of positive integers
-		describing the top-right corner on the screen and dimensions is a pair of positive
-		integers describing the width.
+		# Adjust the positioning and size of the view. &point is a pair of positive integers
+		# describing the top-right corner on the screen and dimensions is a pair of positive
+		# integers describing the width.
 
-		Adjustments are conditionally passed to a view.
+		# Adjustments are conditionally passed to a view.
 		"""
 		if self.view is not None:
 			self.view.adjust(point, dimensions)
@@ -251,7 +251,7 @@ class Refraction(libio.Resource):
 
 	def calibrate(self, dimensions):
 		"""
-		Called when the refraction is adjusted.
+		# Called when the refraction is adjusted.
 		"""
 		w = self.window
 		w.horizontal.configure(w.horizontal.datum, dimensions[0], 0)
@@ -259,26 +259,26 @@ class Refraction(libio.Resource):
 
 	def conceal(self):
 		"""
-		Called when the refraction is hidden from the display.
+		# Called when the refraction is hidden from the display.
 		"""
 		pass
 
 	def reveal(self):
 		"""
-		Called when the refraction is revealed. May not be focused.
+		# Called when the refraction is revealed. May not be focused.
 		"""
 		pass
 
 	@property
 	def revealed(self):
 		"""
-		Whether the refraction is currently visible.
+		# Whether the refraction is currently visible.
 		"""
 		return self in self.controller.visible
 
 	def focus(self):
 		"""
-		Set position indicators and activate cursor.
+		# Set position indicators and activate cursor.
 		"""
 		console = self.controller
 		events = console.set_position_indicators(self)
@@ -287,13 +287,13 @@ class Refraction(libio.Resource):
 	@property
 	def focused(self):
 		"""
-		Whether the refraction is the current focus; receives key events.
+		# Whether the refraction is the current focus; receives key events.
 		"""
 		return self.controller.refraction is self
 
 	def blur(self):
 		"""
-		Clear position indicators and lock cursor.
+		# Clear position indicators and lock cursor.
 		"""
 		console = self.controller
 		events = console.clear_position_indicators(self)
@@ -301,9 +301,9 @@ class Refraction(libio.Resource):
 
 	def connect(self, view):
 		"""
-		Connect the area to the refraction for displaying the units.
+		# Connect the area to the refraction for displaying the units.
 
-		Connect &None in order to conceal.
+		# Connect &None in order to conceal.
 		"""
 		self.view = view
 
@@ -316,13 +316,13 @@ class Refraction(libio.Resource):
 
 	def clear(self):
 		"""
-		Clear the refraction state.
+		# Clear the refraction state.
 		"""
 		pass
 
 	def update(self, start, stop, *lines):
 		"""
-		Render all the display lines in the given ranges.
+		# Render all the display lines in the given ranges.
 		"""
 		pass
 
@@ -331,6 +331,6 @@ class Refraction(libio.Resource):
 
 	def refresh(self):
 		"""
-		Render all lines in the refraction.
+		# Render all lines in the refraction.
 		"""
 		pass

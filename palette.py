@@ -1,5 +1,5 @@
 """
-# Theme data. Colors and text borders.
+##  Theme data. Colors and text borders.
 """
 
 colors = {

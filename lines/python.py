@@ -1,5 +1,5 @@
 """
-Python language profile.
+# Python language profile.
 """
 import keyword
 import itertools

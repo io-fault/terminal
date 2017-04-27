@@ -1,5 +1,5 @@
 """
-XML language profile.
+# XML language profile.
 """
 import itertools
 from .. import libfields

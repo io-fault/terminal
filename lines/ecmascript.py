@@ -1,5 +1,5 @@
 """
-ECMA Script language profile.
+# ECMA Script language profile.
 """
 from .. import libfields
 
