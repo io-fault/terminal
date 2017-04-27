@@ -178,7 +178,7 @@ class Refraction(libio.Resource):
 
 	def key(self, console, event, getattr=getattr, range=range):
 		"""
-		Process the given key event.
+		Process the event.
 		"""
 		routing = self.route(event)
 		if routing is None:
@@ -192,19 +192,32 @@ class Refraction(libio.Resource):
 			self.clear_horizontal_indicators()
 			v = self.vertical
 			h = self.horizontal
-			vs = v.get()
-			v.move(0, 1)
-			hs = self.horizontal.snapshot()
 
-			for i in range(v.magnitude):
-				h.restore(hs)
-				self.update_unit()
-				method(event, *params)
-				v.move(1)
+			if abs(v.magnitude) == 0:
+				# Horizontal distribution.
+				hs = h.get()
+				h.move(1, -1)
+				hs = self.horizontal.snapshot()
 
-			v.set(vs)
+				for i in range(h.magnitude-1, -1, -1):
+					method(event, *params)
+					h.move(-1)
+			else:
+				# Vertical distribution.
+				vs = v.get()
+				v.move(1, -1)
+				hs = self.horizontal.snapshot()
+
+				for i in range(v.magnitude, -1, -1):
+					h.restore(hs)
+					self.update_unit()
+					method(event, *params)
+					v.move(-1)
+
+				v.set(vs)
+				self.update_vertical_state()
+
 			rob = None
-			self.update_vertical_state()
 			if self.distribute_once == True:
 				self.distributing = not self.distributing
 				self.distribute_once = None
