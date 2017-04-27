@@ -65,7 +65,9 @@ class Cache(object):
 		return r
 
 	def clear(self, key):
-		"Remove the all the contents of the given slot."
+		"""
+		Remove the all the contents of the given slot.
+		"""
 		self.storage[key].clear()
 
 class Refraction(libio.Resource):
@@ -151,23 +153,21 @@ class Refraction(libio.Resource):
 	def event_method(target, event):
 		return 'event_' + '_'.join(event)
 
-	def route(self, event, scrollmap={'scroll-up':'backward', 'scroll-down':'forward'}):
+	def route(self, event, scrollmap={-1:'backward', 1:'forward'}):
 		"""
 		Route the event to the target given the current processing state.
 		"""
 
-		if event.type == 'mouse':
+		if event.type == 'scrolled':
 			point, mevent, activation = event.identity
 
 			if mevent in scrollmap:
 				return (None, ('refraction',
-					('window', 'vertical', scrollmap[mevent]), (1, point,)
+					('window', 'vertical', scrollmap[mevent]), (activation, point,)
 				))
-			elif isinstance(mevent, int):
-				mevent = 'button' + str(mevent)
-
-			mapping = None
-			event = ('refraction', ('mouse', mevent), point)
+		elif event.type == 'click':
+			point, key_id, delay = event.identity
+			return (None, ('refraction', ('select', 'absolute'), (point[0], point[1])))
 		else:
 			mapping, event = self.keyboard.event(event)
 			if event is None:

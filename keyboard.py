@@ -69,6 +69,7 @@ shiftcontrolk = lambda x: ('control', x, shift)
 nav = lambda x: ('navigation', x, 0)
 shiftnav = lambda x: ('navigation', x, shift)
 delta = lambda x: ('delta', x, 0)
+kmeta = lambda x: ('escaped', x, 0)
 
 # events trapped and handled by the console. These are not forwarded to the refraction.
 trap = Mapping()
@@ -80,6 +81,8 @@ trap.assign(('escaped', 'k', 0), 'console', ('pane', 'rotate', 'refraction'), (-
 
 trap.assign(('control', 'tab', meta), 'console', ('console', 'rotate', 'pane', 'forward'))
 trap.assign(('control', 'tab', shiftmeta), 'console', ('console', 'rotate', 'pane', 'backward'))
+# One off for iterm2:
+trap.assign(('escaped', '\x19', 0), 'console', ('console', 'rotate', 'pane', 'backward'))
 trap.assign(('escaped', 'o', 0), 'console', ('prepare', 'open'))
 
 # refraction control mapping
@@ -89,6 +92,8 @@ ca = control.assign
 # distribution of commands across the vertical range.
 ca(literal('y'), 'refraction', ('distribute', 'one'))
 ca(caps('y'), 'refraction', ('distribute', 'sequence'))
+ca(controlk('y'), 'refraction', ('distribute', 'horizontal'))
+ca(kmeta('y'), 'refraction', ('distribute', 'full')) # replacement for sequence?
 
 # control
 ca(controlk('c'), 'refraction', ('interrupt',))
@@ -106,8 +111,8 @@ ca(controlk('f'), 'refraction', ('navigation', 'horizontal', 'query', 'forward')
 ca(controlk('d'), 'refraction', ('navigation', 'horizontal', 'query', 'backward'))
 
 ca(literal('s'), 'refraction', ('select', 'series',))
-ca(caps('s'), 'refraction', ('select', 'single')) # spare
-ca(controlk('s'), 'refraction', ('console', 'search'))
+ca(caps('s'), 'refraction', ('select', 'horizontal', 'line'))
+ca(controlk('s'), 'refraction', ('console', 'series')) # reserved
 
 ca(literal('e'), 'refraction', ('navigation', 'vertical', 'sections'))
 ca(caps('e'), 'refraction', ('navigation', 'vertical', 'paging'))
@@ -130,6 +135,7 @@ ca(controlk('o'), 'refraction', ('open', 'into'))
 ca(literal('q'), 'refraction', ('navigation', 'range', 'enqueue'))
 ca(caps('q'), 'refraction', ('navigation', 'range', 'dequeue'))
 ca(controlk('q'), 'refraction', ('',)) # spare
+ca(('escaped', 'q', 0), 'refraction', ('console', 'search'))
 
 #ca(literal('v'), 'refraction', ('navigation', 'void', 'forward',))
 #ca(caps('v'), 'refraction', ('navigation', 'void', 'backward',))
@@ -141,7 +147,7 @@ ca(controlk('t'), 'refraction', ('delta', 'truncate'))
 
 ca(literal('z'), 'refraction', ('place', 'stop',))
 ca(caps('z'), 'refraction', ('place', 'start',))
-ca(controlk('z'), 'refraction', ('place', 'expand'))
+ca(controlk('z'), 'refraction', ('place', 'center'))
 
 # [undo] log
 ca(literal('u'), 'refraction', ('delta', 'undo',))
@@ -162,9 +168,10 @@ ca(literal('p'), 'refraction', ('paste', 'after'))
 ca(caps('p'), 'refraction', ('paste', 'before',))
 ca(controlk('p'), 'refraction', ('paste', 'into',))
 
-ca(literal('l'), 'refraction', ('select', 'horizontal', 'line'))
-ca(caps('l'), 'refraction', ('select', 'vertical', 'line'))
-ca(controlk('l'), 'refraction', ('console', 'seek', 'line'))
+ca(literal('l'), 'refraction', ('select', 'vertical', 'line'))
+ca(caps('l'), 'refraction', ('select', 'block'))
+ca(controlk('l'), 'refraction', ('console', 'reserved'))
+ca(kmeta('l'), 'refraction', ('console', 'seek', 'line'))
 
 for i in range(10):
 	control.assign(literal(str(i)), 'refraction', ('index', 'reference'))
@@ -182,17 +189,19 @@ ca(literal('m'), 'refraction', ('menu', 'primary'))
 ca(caps('m'), 'refraction', ('menu', 'secondary'))
 
 ca(literal('i'), 'refraction', ('transition', 'edit'),)
-ca(caps('i'), 'refraction', ('delta', 'split'),) # split field
+ca(caps('i'), 'refraction', ('delta', 'split'),) # split field (reserved)
 
 ca(literal('c'), 'refraction', ('delta', 'substitute'),)
 ca(caps('c'), 'refraction', ('delta', 'substitute', 'previous'),) # remap this
 
 ca(literal('x'), 'refraction', ('delta', 'delete', 'forward'),)
 ca(caps('x'), 'refraction', ('delta', 'delete', 'backward'),)
-ca(controlk('x'), 'selection', ('delta', 'delete', 'line')) # cut line
+ca(controlk('x'), 'refraction', ('delta', 'delete', 'line'))
+ca(kmeta('x'), 'refraction', ('delta', 'cut')) # Not Implemented
 
 ca(literal('r'), 'refraction', ('delta', 'replace', 'character'),)
 ca(caps('r'), 'refraction', ('delta', 'replace'),)
+ca(controlk('r'), 'console', ('navigation', 'return'),)
 
 ca(('control', 'tab', 0), 'refraction', ('delta', 'indent', 'increment'))
 ca(('control', 'tab', shift), 'refraction', ('delta', 'indent', 'decrement'))

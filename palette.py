@@ -2,18 +2,8 @@
 # Theme data. Colors and text borders.
 """
 
-range_colors = {
-	'start-inclusive': 0x00CC00,
-	'stop-inclusive': 0xFF8700, # orange (between yellow and red)
-
-	'offset-active': 0xF0F000, # yellow, actual position
-	'offset-inactive': 0,
-
-	'start-exclusive': 0x005F00,
-	'stop-exclusive': 0xFF0000,
-}
-
 colors = {
+	'white': 0xffffff,
 	'teal': 0x005f5f,
 	'orange': 0xff8700,
 	'purple': 0x8787d7,
@@ -33,4 +23,19 @@ theme = {
 	'core': colors['pastel-purple'],
 	'exoword': colors['orange'],
 	'fallback': 0xCCCCCC,
+	'alpha': 0xAAAAAA,
+	'identifier': 0xDFDFDF,
+	'border': 0x4a4a4a,
+}
+
+range_colors = {
+	'start-inclusive': 0x00CC00,
+	'stop-inclusive': 0xFF8700, # orange (between yellow and red)
+
+	'offset-active': 0xF0F000, # yellow, actual position
+	'offset-inactive': 0,
+
+	'start-exclusive': 0x005F00,
+	'stop-exclusive': 0xFF0000,
+	'clear': theme['border'],
 }

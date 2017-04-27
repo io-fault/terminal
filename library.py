@@ -8,6 +8,7 @@ import keyword
 import itertools
 import weakref
 import subprocess
+import typing
 
 from ..routes import library as libroutes
 from ..chronometry import library as libtime
@@ -672,7 +673,7 @@ class Fields(core.Refraction):
 
 	def comment(self, q, iterator, color = palette.theme['comment']):
 		"""
-		# Draw the comment and its leading indicator.
+		Draw the comment and its leading indicator.
 		"""
 		yield (q.value(), (), 0x4a4a4a)
 		for path, x in iterator:
@@ -680,7 +681,7 @@ class Fields(core.Refraction):
 
 	def quotation(self, q, iterator, color = palette.theme['quotation']):
 		"""
-		# Draw the quotation.
+		Draw the quotation.
 		"""
 		yield (q.value(), (), color)
 		for path, x in iterator:
@@ -729,29 +730,26 @@ class Fields(core.Refraction):
 			val = str(x)
 
 			if x == " ":
-				# space
+				# space, bump count.
 				spaces += 1
 				continue
 			elif spaces:
+				# Regular spaces.
 				yield (" " * spaces, (), None)
 				spaces = 0
 
 			if x in {"#", "//"}:
 				yield from self.comment(x, i)
-				continue
 			elif x in uline.quotations:
 				yield from self.quotation(x, i)
-				continue
 			elif val.isdigit() or (val.startswith('0x') and val[2:].isdigit()):
 				yield (x.value(), (), quotation)
-				continue
 			elif x is self.separator:
 				fs += 1
 				yield (str(fs), (), 0x202020)
-				continue
-
-			color = theme[classify.get(x, 'fallback')]
-			yield (x, (), color)
+			else:
+				color = theme[classify.get(x, 'identifier')]
+				yield (x, (), color)
 		else:
 			# trailing spaces
 			if spaces:
@@ -784,7 +782,7 @@ class Fields(core.Refraction):
 			style = ()
 
 		if empty:
-			color = (0x444444, 0)
+			color = (range_color_palette['clear'], 0)
 		elif positions[1] >= positions[2]:
 			# after or at exclusive stop
 			color = (range_color_palette['stop-exclusive'], 0)
@@ -820,9 +818,7 @@ class Fields(core.Refraction):
 		):
 		"""
 		Collect the fragments of the horizontal range from the rendered unit.
-
 		Used to draw the horizontal range background.
-
 		Nearly identical to &libc.Segments.select()
 		"""
 		llen = len(line)
@@ -981,6 +977,12 @@ class Fields(core.Refraction):
 		Changes the horizontal position indicators.
 		"""
 
+		if horizontal[0] > horizontal[2]:
+			horizontal = (horizontal[2], horizontal[1], horizontal[0])
+			inverted = True
+		else:
+			inverted = False
+
 		window = self.window.horizontal
 		area = self.view.area
 		shr = area.seek_horizontal_relative
@@ -1019,7 +1021,7 @@ class Fields(core.Refraction):
 			rstart, rstop, text = hr
 			rstarto, rstopo = offsets(line, rstart, rstop)
 			range_part = [
-				x[:1] + (x[1] + range_style, (x[2] or 0xAAAAAA) + 0x222222, range_color,)
+				x[:1] + (x[1] + range_style, (x[2] or 0xAAAAAA), range_color,)
 				for x in text
 			]
 
@@ -1031,7 +1033,7 @@ class Fields(core.Refraction):
 				shr(-((rstopo - rstarto) + rstarto)),
 			]
 		else:
-			range_part = [x[:1] + (x[1] + range_style, (x[2] or 0xAAAAAA) + 0x222222, range_color,) for x in hr[2]]
+			range_part = [x[:1] + (x[1] + range_style, (x[2] or 0xAAAAAA), range_color,) for x in hr[2]]
 			clear_range = []
 			set_range = []
 
@@ -1605,6 +1607,28 @@ class Fields(core.Refraction):
 
 		h.restore((start, offset, stop))
 
+	def event_select_absolute(self, target, ax, ay):
+		"""
+		Map the absolute position to the relative position and
+		perform the &event_select_series operation.
+		"""
+		sx, sy = self.area.point
+		rx = ax - sx
+		ry = ay - sy
+		ry += self.window.vertical.get()
+
+		self.clear_horizontal_indicators()
+		self.vector.vertical.set(ry-1)
+		self.vector.horizontal.set(rx-1)
+		self.update_unit()
+		if self.vector.vertical.get() == ry-1:
+			self.event_select_series(None)
+		else:
+			self.movement = True
+
+		# Take focus.
+		self.controller.focus(self)
+
 	def event_select_series(self, event):
 		"""
 		Expand the horizontal range to include fields separated by an access, routing, delimiter.
@@ -1626,6 +1650,7 @@ class Fields(core.Refraction):
 		nfields = len(fields)
 		start = index
 
+		# Scan for edge at ending.
 		for i in range(index, nfields):
 			path, f = fields[i]
 			if f.merge == False and f not in line.routers:
@@ -1636,6 +1661,7 @@ class Fields(core.Refraction):
 
 		stop = self.horizontal_focus.offset(*fields[i])
 
+		# Scan for edge at beginning.
 		for i in range(index, -1, -1):
 			path, f = fields[i]
 			if isinstance(f, libfields.Indentation):
@@ -1649,7 +1675,10 @@ class Fields(core.Refraction):
 		self.horizontal_query = 'series'
 		h = self.vector_last_axis = self.horizontal
 
+		if start > stop:
+			start, stop = stop, start
 		h.restore((start, offset, stop))
+		self.movement = True
 
 	def event_select_block(self, event, quantity=1):
 		self.vertical_query = 'indentation'
@@ -1675,6 +1704,14 @@ class Fields(core.Refraction):
 		d, o, m = a.snapshot()
 		a.restore((d, o, o))
 
+		self.movement = True
+
+	def event_place_center(self, event):
+		self.clear_horizontal_indicators()
+		a = self.axis
+		a.bisect()
+
+		self.update_vertical_state()
 		self.movement = True
 
 	def event_navigation_move_bol(self, event):
@@ -1738,7 +1775,7 @@ class Fields(core.Refraction):
 	def event_window_vertical_forward(self, event, quantity=1, point=None):
 		"""
 		Adjust the vertical position of the window forward by the
-		given quantity. (Moves view port).
+		given quantity.
 		"""
 		self.clear_horizontal_indicators()
 		self.window.vertical.move(quantity)
@@ -1879,6 +1916,7 @@ class Fields(core.Refraction):
 	def event_navigation_horizontal_start(self, event):
 		"""
 		Horizontally move the cursor to the beginning of the range.
+		or extend the range if already on the edge of the start.
 		"""
 		h = self.horizontal
 		self.vector_last_axis = h
@@ -1891,6 +1929,9 @@ class Fields(core.Refraction):
 				change = h.datum - start
 				h.magnitude += change
 				h.datum -= change
+
+				# Disallow spanning of indentation.
+				self.constrain_horizontal_range()
 		elif h.offset < 0:
 			# move start exactly
 			h.datum += h.offset
@@ -2214,7 +2255,7 @@ class Fields(core.Refraction):
 			start = offset
 			stop = offset + quantity
 			l = quantity
-		if start == stop or start < 0:
+		if start == stop or start < 0 or len(self.horizontal_focus[1]) == 0:
 			# Nothing to do.
 			return
 
@@ -2230,8 +2271,7 @@ class Fields(core.Refraction):
 			h.move(quantity)
 		self.constrain_horizontal_range()
 
-		self.clear_horizontal_indicators()
-		self.display(*r.exclusive())
+		return r
 
 	def insert_lines(self, index, lines, Sequence=libfields.Sequence):
 		"""
@@ -2262,18 +2302,23 @@ class Fields(core.Refraction):
 
 	def event_delta_insert_character(self, event):
 		"""
-		Insert a character at the current cursor position.
+		# Insert a character at the current cursor position.
 		"""
 		if event.type == 'literal':
 			self.insert_characters(event.string)
+			self.movement = True
 
 	def transition_insert_character(self, key):
 		"""
-		Used as a capture hook to insert literal characters.
+		# Used as a capture hook to insert literal characters.
 		"""
 		if key.type == 'literal':
 			self.insert_characters(key.string)
-			self.delete_characters(1)
+			r = self.delete_characters(1)
+			self.clear_horizontal_indicators()
+			self.display(*r.exclusive())
+			self.movement = True
+
 		self.transition_keyboard(self.previous_keyboard_mode)
 		del self.previous_keyboard_mode
 
@@ -2406,16 +2451,17 @@ class Fields(core.Refraction):
 		create a new text field for further editing.
 		"""
 		self.insert_characters(libfields.Delimiter(' '))
+		self.movement = True
 
 	def event_delta_insert_space(self, event):
 		"""
 		Insert a literal space.
 		"""
-		self.insert_characterslibfields.Delimiter((' '))
+		self.insert_characters(libfields.Delimiter((' ')))
 
 	def event_delta_indent_increment(self, event, quantity = 1):
 		"""
-		Increment indentation of the current line.
+		# Increment indentation of the current line.
 		"""
 		if self.distributing and not self.has_content(self.horizontal_focus):
 			# ignore indent if the line is empty and deltas are being distributed
@@ -2457,9 +2503,9 @@ class Fields(core.Refraction):
 	event_edit_tab = event_delta_indent_increment
 	event_edit_shift_tab = event_delta_indent_decrement
 
-	def print_unit(self):
+	def event_print_unit(self, event):
 		"""
-		Display the structure of the current unit to the transcript.
+		# Display the structure of the current unit to the transcript.
 		"""
 		hf = self.horizontal_focus
 		l = [hf[1].__class__.__name__ + ': ' + str(len(hf[1]))]
@@ -2471,11 +2517,17 @@ class Fields(core.Refraction):
 		self.transcript_write('\n'.join(l))
 
 	def event_delta_delete_backward(self, event, quantity = 1):
-		self.delete_characters(-1*quantity)
+		r = self.delete_characters(-1*quantity)
+		self.clear_horizontal_indicators()
+		self.constrain_horizontal_range()
+		self.display(*r.exclusive())
 		self.movement = True
 
 	def event_delta_delete_forward(self, event, quantity = 1):
-		self.delete_characters(quantity)
+		r = self.delete_characters(quantity)
+		self.clear_horizontal_indicators()
+		self.constrain_horizontal_range()
+		self.display(*r.exclusive())
 		self.movement = True
 
 	def event_copy(self, event):
@@ -2564,7 +2616,7 @@ class Fields(core.Refraction):
 		"""
 		self.paste(self.vertical_index)
 
-	def event_paste_between(self, event):
+	def event_paste_into(self, event):
 		raise RuntimeError("paste into horizontal and vertical position")
 
 	def indent(self, sequence, quantity = 1, ignore_empty = False):
@@ -2662,6 +2714,7 @@ class Lines(Fields):
 	"""
 	Fields based line editor.
 	"""
+
 	@staticmethod
 	@functools.lru_cache(4)
 	def _lindent(lsize):
@@ -2688,7 +2741,9 @@ class Lines(Fields):
 		self.vector.vertical.configure(0, nunits, 0)
 
 	def serialize(self, write, chunk_size = 128, encoding = 'utf-8'):
-		"Serialize the Refraction's content into the given &write function."
+		"""
+		Serialize the Refraction's content into the given &write function.
+		"""
 		size = 0
 
 		for i in range(0, len(self.units), chunk_size):
@@ -2702,18 +2757,23 @@ class Lines(Fields):
 		return size
 
 	def event_edit_return(self, event):
-		"Splits the line at the cursor position."
+		"""
+		Splits the line at the cursor position.
+		"""
 		return self.event_delta_split(event)
 
 class Status(Fields):
 	"""
 	The status line above the console prompt.
 	"""
+	from ..terminal import libformat
+	status_open_resource = libfields.Styled('[', None)
+	status_close_resource = libfields.Styled(']', None)
 
 	def __init__(self):
 		super().__init__()
 		self.units = [
-			libfields.Sequence([libfields.String("initialize")])
+			libfields.Sequence([libfields.String("initializing")])
 		]
 
 	def draw(self, unit, getattr=getattr):
@@ -2731,11 +2791,19 @@ class Status(Fields):
 			fg = libterminal.pastels['blue']
 		)
 
+		path = getattr(new, 'source', None) or '/dev/null'
+		r = libroutes.File.from_absolute(str(path))
+		path_r = [
+			libfields.Styled(x[0], x[2])
+			for x in self.libformat.f_route_absolute(r)
+		]
 		self.units = [
 			libfields.Sequence([
+				self.status_open_resource,
 				title,
 				libfields.Styled(": "),
-				libfields.Styled(getattr(new, 'source', '<No Source>') or "none"),
+			] + path_r + [
+				self.status_close_resource,
 			])
 		]
 
@@ -2748,7 +2816,8 @@ class Prompt(Lines):
 	This refraction manages the last two lines on the screen and provides
 	a globally accessible command interface for managing the content panes.
 
-	The units of a prompt make up the history.
+	The units of a prompt make up the history and are global across panes
+	and refractions.
 	"""
 	margin = 0
 
@@ -2790,9 +2859,11 @@ class Prompt(Lines):
 
 	def event_delta_edit_insert_space(self, event):
 		self.insert_characters(self.separator)
+		self.movement = True
 
 	def event_edit_tab(self, event):
 		self.insert_characters(libfields.space)
+		self.movement = True
 
 	def event_edit_shift_tab(self, event):
 		pass
@@ -2825,17 +2896,9 @@ class Prompt(Lines):
 
 	def command_shell(self):
 		"""
-		Open a new shell in the current focus pane.
+		Select the shell state set used to execute processes in the given session.
 		"""
 		return
-		console = self.controller
-		new = Shell()
-		new.source = "<memory>"
-		new.units = libc.Segments([])
-		new.requisite(self.controller)
-		console.panes.append(new)
-		console.display_refraction(console.pane, new)
-		console.focus_pane()
 
 	def command_open(self,
 			source:libroutes.Route,
@@ -2903,7 +2966,7 @@ class Prompt(Lines):
 
 		console.focus_pane()
 
-	def command_seek(self, vertical_index : 'whole number'):
+	def command_seek(self, vertical_index):
 		"""
 		Move the refraction's vector to a specific vertical index. (Line Number).
 		"""
@@ -2977,6 +3040,7 @@ class Prompt(Lines):
 		re = console.visible[console.pane]
 		chars = ''.join(chr(int(x, basemap.get(x[:2], 10))) for x in characters)
 		re.write(chars)
+		self.movement = True
 
 	def command_index(self, *parameters):
 		"""
@@ -3008,10 +3072,6 @@ class Transcript(core.Refraction):
 	A trivial line buffer. While &Log refractions are usually preferred, a single
 	transcript is always available for critical messages.
 	"""
-
-	@property
-	def source(self):
-		return str(libtime.now().select('iso'))
 
 	@staticmethod
 	def system():
@@ -3114,6 +3174,97 @@ def output(flow, queue, tty):
 		except BaseException as exception:
 			flow.context.process.exception(flow, exception, "Terminal Output")
 
+class IDeviceState(object):
+	"""
+	Manage the state of mouse key presses and scroll events.
+	"""
+
+	def __init__(self):
+		self.keys = {}
+
+		self.scroll_flush = False
+		self.scroll_event = None
+		self.scroll_count = 0
+		self.scroll_trigger = 4
+		self.scroll_maximum = 16
+		self.scroll_magnification = 1
+
+	def scroll(self, refraction, timestamp, event, Event=libterminal.core.Character):
+		"""
+		Record the scroll event for later propagation after counts have accumulated.
+		"""
+
+		if self.scroll_event == event:
+			self.scroll_count += 1
+			if self.scroll_count >= self.scroll_trigger:
+				pass
+		elif self.scroll_event is None or self.scroll_refraction != refraction:
+			self.scroll_refraction = refraction
+			self.scroll_event = event
+			self.scroll_count = 1
+			self.scroll_flush = False
+
+		return (None, None)
+
+	@property
+	def scroll_quantity(self):
+		return int((self.scroll_count * self.scroll_magnification) // 1)
+
+	def flush_scroll_events(self, ref=None, Event=libterminal.core.Character):
+		point, dir, sid = self.scroll_event[2]
+
+		count = min(self.scroll_count, self.scroll_maximum)
+		if ref is not None and ref[2][1] != dir:
+			# Direction change, abort scroll entirely.
+			count = 0
+
+		ev = Event((
+			'scrolled', '<state>',
+			(point, dir, count),
+			self.scroll_event.modifiers
+		))
+
+		self.scroll_count = 0
+
+		ar = self.scroll_refraction
+		if self.scroll_count < 1:
+			self.scroll_refraction = None
+			self.scroll_event = None
+			self.scroll_count = 0
+
+		self.scroll_flush = False
+
+		return ar, ev
+
+	def key_delta(self, refraction, timestamp, event):
+		point, disposition, kid = event[2]
+		ref, start, state = self.keys.get(kid, (None, None, 0))
+
+		action = disposition + state
+		if state != 0 and action == 0:
+			# click or drag completion
+			delay = start.measure(timestamp)
+			del self.keys[kid]
+			return ref, libterminal.core.Character(('click', '<state>', (point, kid, delay), event[3]))
+		else:
+			# Open the event.
+			self.keys[kid] = (refraction, timestamp, disposition)
+
+		return (None, None)
+
+	def update(self, *params):
+		"""
+		# Update the mouse state if any events were received.
+		"""
+		event = params[2]
+
+		if event.subtype == 'scroll':
+			return self.scroll(*params)
+		elif event.subtype == 'mouse':
+			return self.key_delta(*params)
+
+		return (None, None)
+
 def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	"""
 	Thread transformer function translating input to Character events for &Console.
@@ -3124,18 +3275,25 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 
 	# using incremental decoder to handle partial writes.
 	state = codecs.getincrementaldecoder('utf-8')('replace')
+	decode = state.decode
+	construct = libterminal.construct_character_events
+	read = os.read
+	fileno = tty.fileno()
 
 	chars = ""
 	while True:
-		data = os.read(tty.fileno(), maximum_read)
-		chars += state.decode(data)
+		data = read(fileno, maximum_read)
+		rts = now()
+		chars += decode(data)
 		try:
-			events = libterminal.construct_character_events(chars)
+			# ctl belongs downstream so that timeouts can
+			# introduce events.
+			events = construct(chars)
 		except ValueError:
 			# read more
 			continue
 
-		enqueue(partial(emit, (now(), events)))
+		enqueue(partial(emit, (rts, events)))
 		chars = ""
 
 class Empty(Lines):
@@ -3158,8 +3316,9 @@ class Console(libio.Flow):
 
 	def __init__(self):
 		self.display = libterminal.Display() # used to draw the frame.
+		self.id_state = IDeviceState()
+		self.id_scroll_timeout_deferred = False
 		self.tty = None
-
 		# In memory database for simple transfers (copy/paste).
 		self.cache = core.Cache() # user cache / clipboard index
 		self.cache.allocate(None)
@@ -3169,7 +3328,7 @@ class Console(libio.Flow):
 
 		# Per-console refractions
 		self.transcript = Transcript() # the always available in memory buffer
-		self.status = Status() # the status line
+		self.c_status = Status() # the status line
 		self.prompt = Prompt() # prompt below status
 
 		self.refreshing = set() # set of panes to be refreshed
@@ -3183,25 +3342,20 @@ class Console(libio.Flow):
 
 		self.panes = [Empty(), Empty(), self.transcript]
 		self.rotation = 0
+		self.count = 3
 		self.visible = list(self.panes[:3])
 
 		self.pane = 0 # focus pane (visible)
 		self.refraction = self.panes[0] # focus refraction; receives events
 
-	def requisite(self, tty):
+	def con_connect_tty(self, tty):
 		self.tty = tty
 		self.dimensions = self.get_display_dimensions()
 
 		self.prompt.connect(libterminal.View(self.areas['prompt']))
-		self.status.view = libterminal.View(self.areas['status'])
+		self.c_status.view = libterminal.View(self.areas['status'])
 		for x, a in zip(self.panes, self.areas['panes']):
 			x.connect(libterminal.View(a))
-
-	def connect(self, session):
-		"""
-		Connect the console to the given session.
-		"""
-		raise RuntimeError('session connects')
 
 	def display_refraction(self, pane, refraction):
 		"""
@@ -3245,7 +3399,7 @@ class Console(libio.Flow):
 		if index is None:
 			return None
 
-		n = len(self.visible)
+		n = self.count
 		width = self.dimensions[0] - (n+1) # substract framing
 		pane_size = width // n # remainder goes to last pane
 
@@ -3261,12 +3415,26 @@ class Console(libio.Flow):
 		"""
 		The window changed and the views and controls need to be updated.
 		"""
-		n = len(self.visible)
+
 		width, height = dimensions
-		size = (width // n) - 1
+		n = self.count = max(width // 93, 1)
+		nvis = len(self.visible)
+
+		# Disconnect from areas and remove from visible panes.
+		for r in self.visible[n:]:
+			r.connect(None)
+		del self.visible[n:]
+
+		new = n - nvis
+		if new > 0:
+			for vi in zip(self.areas['panes'][-new:]):
+				e = Empty()
+				self.visible.append(e)
+				self.panes.append(e)
+				e.connect(vi)
 
 		# for status and prompt
-		self.status.adjust((0, height-2), (width, 1)) # width change
+		self.c_status.adjust((0, height-2), (width, 1)) # width change
 		self.prompt.adjust((0, height-1), (width, 1)) # width change
 
 		pheight = height - 3
@@ -3291,15 +3459,15 @@ class Console(libio.Flow):
 		if y == height:
 			return self.prompt
 		elif y == height-1:
-			return self.status
+			return self.c_status
 
-		size = width // len(self.visible)
+		size = width // self.count
 		pane_index = x // size
 		po = pane_index * size
 
 		return self.visible[x // size]
 
-	def frame(self, color = 0x222222, nomap = str.maketrans({})):
+	def frame(self, color=palette.theme['border'], nomap=str.maketrans({})):
 		"""
 		Draw the frame of the console. Vertical separators and horizontal.
 		"""
@@ -3307,7 +3475,7 @@ class Console(libio.Flow):
 		seek = display.seek
 		style = display.style
 
-		n = len(self.visible)
+		n = self.count
 		width, height = self.dimensions
 		pane_size = width // n
 		vh = height - 3 # vertical separator height and horizontal position
@@ -3421,7 +3589,7 @@ class Console(libio.Flow):
 			h_intersection = symbols.intersections['bottom'],
 			h_bottom_left = symbols.corners['bottom-left'],
 			h_bottom_right = symbols.corners['bottom-right'],
-			color = 0x222222
+			color = palette.range_colors['clear']
 		):
 		"""
 		Clear the position indicators on the frame.
@@ -3468,7 +3636,7 @@ class Console(libio.Flow):
 
 			# identifies intersections
 			vertical_set = set()
-			for i in range(len(self.visible)):
+			for i in range(self.count):
 				left, right = self.pane_verticals(i)
 				vertical_set.add(left)
 				vertical_set.add(right)
@@ -3512,7 +3680,7 @@ class Console(libio.Flow):
 			initialize.extend(x.refresh())
 
 		initialize.extend(self.prompt.refresh())
-		initialize.extend(self.status.refresh())
+		initialize.extend(self.c_status.refresh())
 		self.f_emit(initialize)
 
 	def actuate(self):
@@ -3528,7 +3696,7 @@ class Console(libio.Flow):
 
 		for x in self.panes:
 			x.subresource(self)
-		self.status.subresource(self)
+		self.c_status.subresource(self)
 		self.prompt.subresource(self)
 
 		initialize = [
@@ -3539,12 +3707,12 @@ class Console(libio.Flow):
 			self.display.enable_mouse()
 		]
 
-		initialize.extend(self.status.refraction_changed(self.panes[0]))
+		initialize.extend(self.c_status.refraction_changed(self.panes[0]))
 
 		for x in self.visible:
 			initialize.extend(x.refresh())
 		initialize.extend(self.prompt.refresh())
-		initialize.extend(self.status.refresh())
+		initialize.extend(self.c_status.refresh())
 
 		# redirect log to the transcript
 		process = self.context.process
@@ -3588,12 +3756,12 @@ class Console(libio.Flow):
 		"""
 		Focus the given refraction, blurring the current. Does nothing if already focused.
 		"""
-		assert refraction in (self.status, self.prompt) or refraction in self.visible
+		assert refraction in (self.c_status, self.prompt) or refraction in self.visible
 
 		cp = self.refraction
 
 		if refraction is not self.prompt:
-			self.f_emit(self.status.refraction_changed(refraction))
+			self.f_emit(self.c_status.refraction_changed(refraction))
 
 		cp.blur()
 		self.refraction = refraction
@@ -3629,7 +3797,7 @@ class Console(libio.Flow):
 			self.pane = pane
 			self.refraction = new
 			new.focus()
-			self.f_emit(self.status.refraction_changed(new))
+			self.f_emit(self.c_status.refraction_changed(new))
 		else:
 			self.pane = pane
 
@@ -3699,7 +3867,7 @@ class Console(libio.Flow):
 		Select the next pane horizontally. If on the last pane, select the first one.
 		"""
 		p = self.pane + 1
-		if p >= len(self.visible):
+		if p >= self.count:
 			p = 0
 		self.focus(self.switch_pane(p))
 
@@ -3709,7 +3877,7 @@ class Console(libio.Flow):
 		"""
 		p = self.pane - 1
 		if p < 0:
-			p = len(self.visible) - 1
+			p = self.count - 1
 		self.focus(self.switch_pane(p))
 
 	@staticmethod
@@ -3717,53 +3885,82 @@ class Console(libio.Flow):
 	def event_method(target, event):
 		return 'event_' + '_'.join(event)
 
-	def process(self, event, trap = core.keyboard.trap.event, list=list, tuple=tuple):
+	def process(self, event, source=None,
+			sto=libtime.Measure.of(millisecond=75),
+			sto_soon=libtime.Measure.of(millisecond=50),
+			trap=core.keyboard.trap.event, list=list, tuple=tuple
+		):
 		"""
 		Process key events received from the device.
 		"""
 
 		# receives Key() instances and emits display events
-		context = self.context
-		process = context.process
-
 		effects = list()
 		ts, keys = event
+		original_refraction = self.refraction
+		refraction = self.refraction
 
-		for k in keys:
-			# refraction can change from individual keystrokes.
-			refraction = self.refraction
+		while keys:
+			for k in keys:
+				# refraction can change from individual keystrokes.
 
-			# mouse events may be directed to a different pane
-			if k.type == 'mouse':
-				# position is a point (pair)
-				refraction = self.locate_refraction(k.identity[0])
+				# discover if a pane has focus
+				if refraction in self.visible:
+					pi = self.visible.index(refraction)
+				else:
+					# prompt or status
+					pi = None
 
-			# discover if a pane has focus
-			if refraction in self.visible:
-				pi = self.visible.index(refraction)
+				# mouse events may be directed to a different pane
+				if k.type in {'mouse', 'scroll', 'drag', 'click'}:
+					# position is a point (pair)
+					mrefraction = self.locate_refraction(k.identity[0])
+					ar, agg = self.id_state.update(mrefraction, ts, k)
+					if agg is None or ar is None:
+						# No aggregate event produced, consume.
+						continue
+					else:
+						# Event purged for execution.
+						refraction = ar
+						k = agg
+
+				trapped = trap(k)
+				if trapped is not None:
+					# Global handlers intercepting application events.
+					(target_id, event_selection, params) = trapped
+					method_name = self.event_method(target_id, event_selection)
+					method = getattr(self, method_name)
+
+					result = method(k, *params)
+				else:
+					# refraction may change during iteration
+					result = refraction.key(self, k)
+					if result is not None:
+						#self.rstack.append(result)
+						pass
+
+					if refraction.scrolling:
+						self.refreshing.add(refraction)
+
+					if refraction.movement:
+						self.motion.add(refraction)
+
+				# Re-initialize to focus primarily for mouse events
+				# that may override the target refraction. Notably,
+				# scroll events need to hit the target under the cursor,
+				# not the focus.
+				refraction = self.refraction
 			else:
-				# prompt or status
-				pi = None
-
-			trapped = trap(k)
-			if trapped is not None:
-				(target_id, event_selection, params) = trapped
-				method_name = self.event_method(target_id, event_selection)
-				method = getattr(self, method_name)
-
-				result = method(k, *params)
-			else:
-				# refraction may change during iteration
-				result = refraction.key(self, k)
-				if result is not None:
-					#self.rstack.append(result)
-					pass
-
-				if refraction.scrolling:
-					self.refreshing.add(refraction)
-
-				if refraction.movement:
-					self.motion.add(refraction)
+				keys = ()
+				if self.id_state.scroll_flush:
+					refraction, event = self.id_state.flush_scroll_events()
+					if refraction is not None:
+						keys = (event,)
+		if self.id_state.scroll_count > 0:
+			if self.id_scroll_timeout_deferred is False:
+				self.id_scroll_timeout_deferred = True
+				delay = sto_soon
+				self.controller.scheduler.defer(delay, self.id_scroll_timeout)
 
 		for x in tuple(self.motion):
 			if x is self.refraction:
@@ -3780,6 +3977,12 @@ class Console(libio.Flow):
 			self.refreshing.discard(x)
 
 		self.f_emit(effects)
+
+	def id_scroll_timeout(self):
+		self.id_scroll_timeout_deferred = False
+		if self.id_state.scroll_count > 0 and self.id_state.scroll_flush is False:
+			self.id_state.scroll_flush = True
+			self.process((libtime.now(), ()))
 
 	def get_display_dimensions(self):
 		"""
@@ -3804,12 +4007,13 @@ def initialize(unit):
 	output_thread = libio.Parallel(output, tty)
 
 	c = Console()
-	c.requisite(tty)
+	c.con_connect_tty(tty)
 
 	# terminal input -> console -> terminal output
 	input_thread.f_connect(c)
 	c.f_connect(output_thread)
 
+	s.scheduling()
 	s.dispatch(output_thread)
 	s.dispatch(c)
 	s.dispatch(input_thread)
