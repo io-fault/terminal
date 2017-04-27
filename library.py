@@ -1,3 +1,15 @@
+"""
+# [ Engineering ]
+# The initial development has left some major misdesign. Refractions
+# are currently conflated with Application Contexts. Contexts being
+# purely conceptual with the current incarnation.
+
+# Application Contexts will be the primary focus of a Console's runtime.
+# Each Context will represent a document being edited, rather, a generalization.
+# Refractions will have static view relationships and be configured to connect
+# to applications. The refractions will manage the dispatching of Application Events
+# if any are necessary.
+"""
 import sys
 import os
 import queue
@@ -3095,10 +3107,8 @@ class Transcript(core.Refraction):
 		"""
 		# Allocate a reference to the write method paired with a draw.
 		"""
-		#@console.context.task
 		def write_reference(data, write = self.write, update = self.refresh, console = console):
 			write(data)
-			#console.f_emit(update())
 		return write_reference
 
 	def write(self, text):
