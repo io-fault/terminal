@@ -5,9 +5,9 @@ import collections
 from ..terminal import library as libterminal
 from ..io import library as libio
 from . import keyboard
-from ..computation import library as libcomp
+from ..computation import library as libc
 
-IRange = libcomp.IRange
+IRange = libc.range.IRange
 
 class Cache(object):
 	"""
