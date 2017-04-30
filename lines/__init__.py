@@ -2,12 +2,12 @@
 # Package module for custom line parsers and profiles for &.console
 """
 import importlib
-from .. import libfields
+from .. import fields
 
 def parse(Class, line,
 		len = len,
-		space = libfields.space,
-		String = libfields.String
+		space = fields.space,
+		String = fields.String
 	):
 	"""
 	# Parse a line of text into Fields.
@@ -63,11 +63,11 @@ def parse(Class, line,
 		if offset < l:
 			yield space
 
-class Line(libfields.Text):
+class Line(fields.Text):
 	"""
 	# Base class for primary Unit.
 	"""
-	__slots__ = libfields.Text.__slots__
+	__slots__ = fields.Text.__slots__
 
 	def reformat(self, str=str):
 		"""

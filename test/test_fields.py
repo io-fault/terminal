@@ -1,15 +1,15 @@
-from .. import libfields as library
+from .. import fields as module
 
 def test_sequence(test):
 	return
-	s = library.Sequence()
-	f = library.Field()
+	s = module.Sequence()
+	f = module.Field()
 	s.insert(f)
 
 	test/s.length() == 0
 
 	test/list(s.value()) == [(f, (s,))]
-	
+
 	s.clear()
 	test/tuple(s.value()) == ()
 	test/s.length() == 0
@@ -31,7 +31,7 @@ def test_sequence(test):
 	test/s.find(3) == f
 	test/s.find(4) == None
 
-	f2 = library.Field()
+	f2 = module.Field()
 	s.insert(f2)
 	test/list(s.value()) == [(f, (s,)), (f2, (s,))]
 
@@ -50,7 +50,7 @@ def test_sequence(test):
 	s.move(1)
 	test/s.selection == None # position at edge
 
-	f3 = library.Field()
+	f3 = module.Field()
 	s.insert(f3)
 	f3.insert("fields")
 	test/str(s) == "test.fields"
@@ -62,7 +62,7 @@ def test_sequence(test):
 
 # def function(a, b):
 	# pass
-	
+
 # class Class():
 
 	# def __init__(self):
@@ -76,14 +76,14 @@ def test_sequence(test):
 
 def test_block(test):
 	return
-	lines = [library.Sequence(library.parse(line)) for line in doc.split('\n')]
+	lines = [module.Sequence(module.parse(line)) for line in doc.split('\n')]
 
 	# contiguous
-	start, stop = library.block(lines, 1, 0, len(lines), library.indentation_block)
+	start, stop = module.block(lines, 1, 0, len(lines), module.indentation_block)
 	test/start == 0
 	test/stop == 2
 
-	start, stop = library.block(lines, 12, 0, len(lines), library.indentation_block)
+	start, stop = module.block(lines, 12, 0, len(lines), module.indentation_block)
 	test/start == 9
 	test/stop == len(lines)
 

@@ -1,7 +1,7 @@
 """
 # C language profile.
 """
-from .. import libfields
+from .. import fields
 from . import c
 
 keyword_list = [
@@ -105,13 +105,13 @@ core_list = [
 
 core_list.extend(c.core_list)
 
-keywords = {y: y for y in map(libfields.String, keyword_list)}
-cores = {y: y for y in map(libfields.String, core_list)}
+keywords = {y: y for y in map(fields.String, keyword_list)}
+cores = {y: y for y in map(fields.String, core_list)}
 exowords = c.exowords
 
-terminators = {y: y for y in map(libfields.Constant, ";")}
-separators = {y: y for y in map(libfields.Constant, ",")}
-routers = {y: y for y in map(libfields.Constant, (".","-",">"))} # "->"; needs special handling
-operators = {y: y for y in map(libfields.Constant, "@!&^*%+=-|\\/<>?~:")}
-groupings = {y: y for y in map(libfields.Constant, "()[]{}")}
-quotations = {y: y for y in map(libfields.Constant, ("'", '"',))}
+terminators = {y: y for y in map(fields.Constant, ";")}
+separators = {y: y for y in map(fields.Constant, ",")}
+routers = {y: y for y in map(fields.Constant, (".","-",">"))} # "->"; needs special handling
+operators = {y: y for y in map(fields.Constant, "@!&^*%+=-|\\/<>?~:")}
+groupings = {y: y for y in map(fields.Constant, "()[]{}")}
+quotations = {y: y for y in map(fields.Constant, ("'", '"',))}

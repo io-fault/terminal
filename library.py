@@ -32,8 +32,8 @@ from ..computation import library as libc
 
 from ..io import library as libio
 
-from . import libfields
-from . import libquery
+from . import fields
+from . import query
 from . import lines as liblines
 
 from . import core
@@ -113,12 +113,12 @@ class Fields(core.Refraction):
 	"""
 	# A &fields based refraction that maintains focus and field selection state.
 	"""
-	Indentation = libfields.Indentation
-	separator = libfields.field_separator
+	Indentation = fields.Indentation
+	separator = fields.field_separator
 
 	delete_across_units = False
 	margin = 8 # number of lines that remains below or above the cursor
-	out_of_bounds = libfields.Sequence((libfields.Indentation.acquire(0),))
+	out_of_bounds = fields.Sequence((fields.Indentation.acquire(0),))
 
 	def transcript_write(self, data):
 		return self.controller.transcript.write(data)
@@ -149,8 +149,8 @@ class Fields(core.Refraction):
 	def new(self,
 			indentation=None,
 			Class=liblines.profile('text')[0],
-			Sequence=libfields.Sequence,
-			String=libfields.String
+			Sequence=fields.Sequence,
+			String=fields.String
 		):
 		"""
 		# Create and return new Field Sequence.
@@ -211,7 +211,7 @@ class Fields(core.Refraction):
 		# Whether or not the non-formatting fields have content.
 		"""
 		for path, x in line.subfields():
-			if isinstance(x, libfields.Formatting):
+			if isinstance(x, fields.Formatting):
 				continue
 			if x.length() > 0:
 				return True
@@ -702,8 +702,8 @@ class Fields(core.Refraction):
 				break
 
 	def draw(self, unit,
-			Indent=libfields.Indentation,
-			Constant=libfields.Constant,
+			Indent=fields.Indentation,
+			Constant=fields.Constant,
 			quotation=palette.theme['quotation'],
 			indent_cv=palette.theme['indent'],
 			theme=palette.theme,
@@ -826,7 +826,7 @@ class Fields(core.Refraction):
 			line, positions,
 			len=len,
 			whole=slice(None,None),
-			address=libfields.address,
+			address=fields.address,
 		):
 		"""
 		# Collect the fragments of the horizontal range from the rendered unit.
@@ -1001,7 +1001,7 @@ class Fields(core.Refraction):
 		astyle = area.style
 		width = self.dimensions[0]
 
-		line = list(self.draw(unit or libfields.Text()))
+		line = list(self.draw(unit or fields.Text()))
 		for x in line:
 			if len(x[0]) > 0:
 				empty = False
@@ -1196,7 +1196,7 @@ class Fields(core.Refraction):
 		"""
 		# Determines whether the field as having insignifianct content.
 		"""
-		return isinstance(field, (libfields.Formatting, libfields.Constant)) or str(field) == " "
+		return isinstance(field, (fields.Formatting, fields.Constant)) or str(field) == " "
 
 	def rotate(self, direction, horizontal, unit, sequence, quantity,
 			filtered=None, iter=iter
@@ -1261,7 +1261,7 @@ class Fields(core.Refraction):
 	def event_console_search(self, event):
 		console = self.controller
 		prompt = console.prompt
-		prompt.prepare(libfields.String("search"), libfields.String(""))
+		prompt.prepare(fields.String("search"), fields.String(""))
 		prompt.horizontal.configure(8, 8, 0)
 		prompt.event_transition_edit(event)
 		console.focus_prompt()
@@ -1269,13 +1269,13 @@ class Fields(core.Refraction):
 
 	def event_console_save(self, event):
 		console = self.controller
-		console.prompt.prepare(libfields.String("write"), libfields.String(self.source))
+		console.prompt.prepare(fields.String("write"), fields.String(self.source))
 		console.focus_prompt()
 
 	def event_console_seek_line(self, event):
 		console = self.controller
 		prompt = console.prompt
-		prompt.prepare(libfields.String("seek"), libfields.String(""))
+		prompt.prepare(fields.String("seek"), fields.String(""))
 		prompt.event_select_horizontal_line(None)
 		prompt.horizontal.move(0, -1)
 		prompt.keyboard.set('edit')
@@ -1351,7 +1351,7 @@ class Fields(core.Refraction):
 				target = 0
 
 		r = IRange.single(index)
-		self.log(unit[1].insert(target, libfields.String(seq)), r)
+		self.log(unit[1].insert(target, fields.String(seq)), r)
 		unit[1].reformat()
 		self.display(*r.exclusive())
 
@@ -1606,7 +1606,7 @@ class Fields(core.Refraction):
 
 		for i in range(index, -1, -1):
 			path, f = fields[i]
-			if isinstance(f, libfields.Indentation):
+			if isinstance(f, fields.Indentation):
 				i = 1
 				break
 			if f.merge == False and f not in line.routers:
@@ -1676,7 +1676,7 @@ class Fields(core.Refraction):
 		# Scan for edge at beginning.
 		for i in range(index, -1, -1):
 			path, f = fields[i]
-			if isinstance(f, libfields.Indentation):
+			if isinstance(f, fields.Indentation):
 				i = 1
 				break
 			if f.merge == False and f not in line.routers:
@@ -2219,7 +2219,7 @@ class Fields(core.Refraction):
 		self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
 
 	def insert_characters(self, characters,
-			isinstance=isinstance, StringField=libfields.String
+			isinstance=isinstance, StringField=fields.String
 		):
 		"""
 		# Insert characters at the horizontal focus.
@@ -2285,7 +2285,7 @@ class Fields(core.Refraction):
 
 		return r
 
-	def insert_lines(self, index, lines, Sequence=libfields.Sequence):
+	def insert_lines(self, index, lines, Sequence=fields.Sequence):
 		"""
 		# Insert the given &lines at the absolute vertical &index.
 
@@ -2384,7 +2384,7 @@ class Fields(core.Refraction):
 		self.display(*r.exclusive())
 
 	def event_delta_delete_backward_adjacent_class(self, event,
-			classify=libquery.classify
+			classify=query.classify
 		):
 		"""
 		# Delete the characters before the position indicator
@@ -2393,7 +2393,7 @@ class Fields(core.Refraction):
 		pass
 
 	def event_delta_delete_forward_adjacent_class(self, event,
-			classify=libquery.classify
+			classify=query.classify
 		):
 		"""
 		# Delete the characters after the position until the class changes.
@@ -2462,14 +2462,14 @@ class Fields(core.Refraction):
 		# Insert a constant into the field sequence and
 		# create a new text field for further editing.
 		"""
-		self.insert_characters(libfields.Delimiter(' '))
+		self.insert_characters(fields.Delimiter(' '))
 		self.movement = True
 
 	def event_delta_insert_space(self, event):
 		"""
 		# Insert a literal space.
 		"""
-		self.insert_characters(libfields.Delimiter((' ')))
+		self.insert_characters(fields.Delimiter((' ')))
 
 	def event_delta_indent_increment(self, event, quantity = 1):
 		"""
@@ -2644,7 +2644,7 @@ class Fields(core.Refraction):
 		h = self.vector.horizontal
 
 		l = 0
-		if not sequence or not isinstance(sequence[0], libfields.Indentation):
+		if not sequence or not isinstance(sequence[0], fields.Indentation):
 			new = init = IClass(quantity)
 			sequence.prefix(init)
 		else:
@@ -2679,7 +2679,7 @@ class Fields(core.Refraction):
 		"""
 		raise RuntimeError("range reads")
 
-	def write(self, string, line_separator='\n', Sequence=libfields.Sequence):
+	def write(self, string, line_separator='\n', Sequence=fields.Sequence):
 		"""
 		# Write the given string at the current position. The string will be split
 		# by the &line_separator and processed independently
@@ -2712,10 +2712,10 @@ class Fields(core.Refraction):
 		current = ""
 
 		for path, x in unit.subfields():
-			if isinstance(x, libfields.FieldSeparator) and x:
+			if isinstance(x, fields.FieldSeparator) and x:
 				yield current
 				current = ""
-			elif isinstance(x, libfields.Formatting):
+			elif isinstance(x, fields.Formatting):
 				pass
 			else:
 				current += x.value()
@@ -2733,10 +2733,10 @@ class Lines(Fields):
 	@functools.lru_cache(4)
 	def _lindent(lsize):
 		# Cache custom indentation classes.
-		if lsize == libfields.Indentation.size:
-			return libfields.Indentation
+		if lsize == fields.Indentation.size:
+			return fields.Indentation
 
-		class LIndentation(libfields.Indentation):
+		class LIndentation(fields.Indentation):
 			size = lsize
 		return LIndentation
 
@@ -2781,13 +2781,13 @@ class Status(Fields):
 	# The status line above the console prompt.
 	"""
 	from ..terminal import libformat
-	status_open_resource = libfields.Styled('[', None)
-	status_close_resource = libfields.Styled(']', None)
+	status_open_resource = fields.Styled('[', None)
+	status_close_resource = fields.Styled(']', None)
 
 	def __init__(self):
 		super().__init__()
 		self.units = [
-			libfields.Sequence([libfields.String("initializing")])
+			fields.Sequence([fields.String("initializing")])
 		]
 
 	def draw(self, unit, getattr=getattr):
@@ -2800,7 +2800,7 @@ class Status(Fields):
 		"""
 		self.refraction_type = new.__class__
 
-		title = libfields.Styled(
+		title = fields.Styled(
 			self.refraction_type.__name__ or "unknown",
 			fg = libterminal.pastels['blue']
 		)
@@ -2808,14 +2808,14 @@ class Status(Fields):
 		path = getattr(new, 'source', None) or '/dev/null'
 		r = libroutes.File.from_absolute(str(path))
 		path_r = [
-			libfields.Styled(x[0], x[2])
+			fields.Styled(x[0], x[2])
 			for x in self.libformat.f_route_absolute(r)
 		]
 		self.units = [
-			libfields.Sequence([
+			fields.Sequence([
 				self.status_open_resource,
 				title,
-				libfields.Styled(": "),
+				fields.Styled(": "),
 			] + path_r + [
 				self.status_close_resource,
 			])
@@ -2876,7 +2876,7 @@ class Prompt(Lines):
 		self.movement = True
 
 	def event_edit_tab(self, event):
-		self.insert_characters(libfields.space)
+		self.insert_characters(fields.space)
 		self.movement = True
 
 	def event_edit_shift_tab(self, event):
@@ -2944,7 +2944,7 @@ class Prompt(Lines):
 			with open(path, encoding = encoding) as f:
 				parse = Line.parse
 
-				seq = libfields.Sequence
+				seq = fields.Sequence
 				txt = Line.from_sequence
 				append = i.append
 
@@ -3830,8 +3830,8 @@ class Console(libio.Flow):
 	def event_prepare_open(self, event):
 		prompt = self.prompt
 
-		fs = libfields.String("")
-		prompt.prepare(libfields.String("open"), fs)
+		fs = fields.String("")
+		prompt.prepare(fields.String("open"), fs)
 
 		prompt.event_select_horizontal_line(None)
 		prompt.horizontal.move(0, -1)
