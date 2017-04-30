@@ -1,4 +1,7 @@
 """
+# Application view publishing library.
+# Currently limited to built-in applications.
+
 # [ Engineering ]
 # The initial development has left some major misdesign. Refractions
 # are currently conflated with Application Contexts. Contexts being
@@ -45,7 +48,7 @@ def print_except_with_crlf(exc, val, tb):
 	sys.stderr.write('\n\r')
 	sys.stderr.writelines([x[:-1] + '    \n\r' for x in traceback.format_exception(exc, val, tb)])
 
-IRange = core.IRange
+IRange = libc.range.IRange
 
 contexts = (
 	'system', # the operating system
