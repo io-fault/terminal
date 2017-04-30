@@ -79,6 +79,7 @@ class Line(fields.Text):
 cache = {}
 
 extensions = {
+	'.hs': 'haskell',
 	'.py': 'python',
 	'.sh': 'shell',
 
