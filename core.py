@@ -1,9 +1,9 @@
 import functools
 import operator
 import collections
+from fault.io import library as libio
 
 from ..terminal import library as libterminal
-from ..io import library as libio
 from . import keyboard
 
 class Cache(object):

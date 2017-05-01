@@ -25,15 +25,15 @@ import weakref
 import subprocess
 import typing
 
-from ..routes import library as libroutes
-from ..chronometry import library as libtime
-from ..filesystem import library as libfs # autosave/session persistence
+from fault.routes import library as libroutes
+from fault.chronometry import library as libtime
+from fault.filesystem import library as libfs # autosave/session persistence
+from fault.computation import library as libc
+from fault.io import library as libio
 
 from ..terminal import library as libterminal # terminal display
 from ..terminal import symbols
-from ..computation import library as libc
 
-from ..io import library as libio
 
 from . import fields
 from . import query
@@ -1644,7 +1644,7 @@ class Fields(core.Refraction):
 		# Take focus.
 		self.controller.focus(self)
 
-	def event_select_series(self, event):
+	def event_select_series(self, event, Indentation=fields.Indentation):
 		"""
 		# Expand the horizontal range to include fields separated by an access, routing, delimiter.
 		"""
@@ -1679,7 +1679,7 @@ class Fields(core.Refraction):
 		# Scan for edge at beginning.
 		for i in range(index, -1, -1):
 			path, f = fields[i]
-			if isinstance(f, fields.Indentation):
+			if isinstance(f, Indentation):
 				i = 1
 				break
 			if f.merge == False and f not in line.routers:

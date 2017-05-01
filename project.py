@@ -1,4 +1,4 @@
-identity = 'http://fault.io/python/console'
+identity = 'http://code.fault.io/fi.console'
 name = 'console'
 abstract = 'Interactive shell and editor environment'
 icon = '💻'
