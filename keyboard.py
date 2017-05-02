@@ -24,7 +24,7 @@
 # /types
 	# Mode used to select field types for custom interactions.
 """
-from ..terminal import library as libterminal
+from fault.terminal import library as libterminal
 
 class Mapping(object):
 	"""

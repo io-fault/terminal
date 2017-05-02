@@ -8,7 +8,7 @@ import keyword
 import itertools
 import functools
 
-from ..terminal import symbols
+from fault.terminal import symbols
 
 class Field(metaclass = abc.ABCMeta):
 	"""

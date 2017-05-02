@@ -3,7 +3,7 @@ import operator
 import collections
 from fault.io import library as libio
 
-from ..terminal import library as libterminal
+from fault.terminal import library as libterminal
 from . import keyboard
 
 class Cache(object):

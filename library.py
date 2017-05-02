@@ -31,9 +31,8 @@ from fault.filesystem import library as libfs # autosave/session persistence
 from fault.computation import library as libc
 from fault.io import library as libio
 
-from ..terminal import library as libterminal # terminal display
-from ..terminal import symbols
-
+from fault.terminal import library as libterminal # terminal display
+from fault.terminal import symbols
 
 from . import fields
 from . import query
@@ -2783,7 +2782,7 @@ class Status(Fields):
 	"""
 	# The status line above the console prompt.
 	"""
-	from ..terminal import libformat
+	from fault.terminal import libformat
 	status_open_resource = fields.Styled('[', None)
 	status_close_resource = fields.Styled(']', None)
 
@@ -3741,8 +3740,8 @@ class Console(libio.Flow):
 		self.f_emit(initialize)
 
 		initial = \
-			("If you cannot do things my way, I'll just have to find another user.\n\n") + \
-			("fault.io system console\n\n") + \
+			("fault.io console\n\n") + \
+			("  If you cannot do things my way, I'll just have to find another user.\n\n") + \
 			("") + \
 			("Terminal must support meta-key in order for console to function properly.\n") + \
 			("Terminal.app: Preferences -> Profile -> Keyboard -> Use option as Meta Key\n") + \
