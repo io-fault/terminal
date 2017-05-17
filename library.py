@@ -3528,6 +3528,7 @@ class Console(libio.Flow):
 
 	def set_position_indicators(self, refraction,
 			colors=(0x008800, 0xF0F000, 0x880000),
+			range_color_palette=palette.range_colors,
 			vprecede=symbols.wedges['up'],
 			vproceed=symbols.wedges['down'],
 			vwedges=(symbols.wedges['right'], symbols.wedges['left']),
@@ -3536,7 +3537,10 @@ class Console(libio.Flow):
 			#vwedges=(symbols.lines['vertical'],)*2,
 			#hproceed=symbols.lines['vertical'],
 			#hprecede=symbols.lines['vertical'],
+			zip=zip,
+			bytearray=bytearray
 		):
+
 		events = bytearray()
 		verticals = self.pane_verticals(refraction.pane)
 		win = refraction.window
@@ -3551,23 +3555,26 @@ class Console(libio.Flow):
 			h_offset, h_limit = verticals
 			hpointer = symbols.wedges['up']
 			vtop = win.vertical.get()
+			v_last = vec.vertical.snapshot()[-1] - 1
 
 			for side, wedge in zip(verticals, vwedges):
 				for y, color in zip(vec.vertical.snapshot(), colors):
 					if y is not None:
-						y = y - vtop
-						if y < 0:
+						ry = y - vtop
+						pointer = wedge
+
+						if ry < 0:
 							# position is above the window
 							pointer = vprecede
-							y = 0
-						elif y >= v_limit:
+							ry = 0
+						elif ry >= v_limit:
 							# position is below the window
 							pointer = vproceed
-							y = v_limit - 1
-						else:
-							pointer = wedge
+							ry = v_limit - 1
+						elif y == v_last:
+							color = range_color_palette['stop-inclusive']
 
-						events += seek((side, y))
+						events += seek((side, ry))
 						events += style(pointer, textcolor = color)
 
 			# adjust for horizontal sets
