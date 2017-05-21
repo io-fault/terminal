@@ -32,6 +32,7 @@ from fault.computation import library as libc
 from fault.io import library as libio
 
 from fault.terminal import library as libterminal # terminal display
+from fault.terminal import meta
 from fault.terminal import symbols
 
 from . import fields
@@ -2320,6 +2321,10 @@ class Fields(core.Refraction):
 		"""
 		if event.type == 'literal':
 			self.insert_characters(event.string)
+			self.movement = True
+		elif event.type == 'escaped':
+			mchar = meta.select(event.identity)
+			self.insert_characters(mchar)
 			self.movement = True
 
 	def transition_insert_character(self, key):
