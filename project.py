@@ -1,7 +1,7 @@
-identity = 'http://code.fault.io/fi.console'
+identity = 'http://fault.io/src/control.portals'
 name = 'console'
 abstract = 'Interactive shell and editor environment'
-icon = '💻'
+icon = '🔬'
 
 fork = 'xterm'
 versioning = 'continuous'
