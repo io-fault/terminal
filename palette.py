@@ -18,7 +18,7 @@ colors = {
 theme = {
 	'comment': colors['bright-brick'],
 	'quotation': 0x707070,
-	'indent': 0x222222,
+	'indent': 0x3F3F3F,
 	'keyword': colors['pastel-blue'],
 	'core': colors['pastel-purple'],
 	'exoword': colors['orange'],
