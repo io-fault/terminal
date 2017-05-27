@@ -45,8 +45,15 @@ from . import palette
 def print_except_with_crlf(exc, val, tb):
 	# Used to allow reasonable exception displays.
 	import traceback
-	sys.stderr.write('\n\r')
-	sys.stderr.writelines([x[:-1] + '    \n\r' for x in traceback.format_exception(exc, val, tb)])
+
+	sys.stderr.flush()
+	sys.stderr.write('\r')
+	sys.stderr.write('\r\n'.join(itertools.chain.from_iterable([
+		x.rstrip().split('\n')
+		for x in traceback.format_exception(exc, val, tb)
+	])))
+	sys.stderr.write('\r\n')
+	sys.stderr.flush()
 
 IRange = libc.range.IRange
 
