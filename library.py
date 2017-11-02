@@ -996,7 +996,7 @@ class Fields(core.Refraction):
 			list=list, len=len, tuple=tuple, zip=zip
 		):
 		"""
-		# Changes the horizontal position indicators.
+		# Changes the horizontal position indicators surrounding the portal.
 		"""
 
 		if horizontal[0] > horizontal[2]:
@@ -1009,7 +1009,7 @@ class Fields(core.Refraction):
 		area = self.view.area
 		shr = area.seek_horizontal_relative
 		astyle = area.style
-		width = self.dimensions[0]
+		width = self.dimensions[0] - 1
 
 		line = list(self.draw(unit or fields.Text()))
 		for x in line:
@@ -1076,7 +1076,7 @@ class Fields(core.Refraction):
 		set_positions = []
 		for k, (offset, v) in new_hp:
 
-			# clear old posiition if different
+			# clear old position if different
 			oldoffset, old = self.horizontal_positions.get(k, (None, None))
 			if old is not None and old != v:
 				if old[:2] != v[:2]:
@@ -1852,6 +1852,9 @@ class Fields(core.Refraction):
 			self.block((vi-2, vi-1, vi-1), self.level, maximum=vi-1)
 
 	def event_navigation_vertical_start(self, event):
+		"""
+		# Relocate the vertical position to the start of the vertical range.
+		"""
 		v = self.vertical
 		self.vector_last_axis = v
 		self.clear_horizontal_indicators()
