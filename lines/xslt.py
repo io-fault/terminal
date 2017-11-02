@@ -31,7 +31,11 @@ _keywords = [
 	'text',
 ]
 keywords = {y: y for y in map(fields.String, _keywords)}
-cores = {}
+cores = {
+	'xsl': fields.String('xsl'),
+	'xmlns': fields.String('xmlns'),
+	'xml': fields.String('xml')
+}
 
 terminators = {y: y for y in map(fields.Constant, "<>")}
 separators = {}
