@@ -2797,7 +2797,9 @@ class Status(Fields):
 	"""
 	# The status line above the console prompt.
 	"""
-	from fault.terminal import libformat
+	from fault.terminal.format.path import f_route_absolute as format_route
+	format_route = staticmethod(format_route)
+
 	status_open_resource = fields.Styled('[', None)
 	status_close_resource = fields.Styled(']', None)
 
@@ -2826,7 +2828,7 @@ class Status(Fields):
 		r = libroutes.File.from_absolute(str(path))
 		path_r = [
 			fields.Styled(x[0], x[2])
-			for x in self.libformat.f_route_absolute(r)
+			for x in self.format_route(r)
 		]
 		self.units = [
 			fields.Sequence([
