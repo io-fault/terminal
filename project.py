@@ -1,5 +1,5 @@
-identity = 'http://fault.io/src/control.portals'
-name = 'console'
+identity = 'http://fault.io/src/editor/portals'
+name = 'portals'
 abstract = 'Interactive shell and editor environment'
 icon = '🔬'
 
