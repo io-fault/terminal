@@ -328,7 +328,11 @@ class Fields(core.Refraction):
 			maximum = len(self.units) - 1
 
 		if ilevel is None:
-			self.level = self.Indentation(self.indentation(self.units[index[1]]))
+			unit = self.units[index[1]]
+			if unit is not None:
+				self.level = self.Indentation(self.indentation(unit))
+			else:
+				self.level = 0
 		else:
 			self.level = ilevel
 
