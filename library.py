@@ -2451,6 +2451,10 @@ class Fields(core.Refraction):
 		# Get the string of the current horizontal selection.
 		"""
 
+		hf = self.horizontal_focus
+		if len(hf) < 2:
+			return ""
+
 		h = self.horizontal
 		adjustments = self.indentation_adjustments(self.horizontal_focus)
 		start, position, stop = map((-adjustments).__add__, h.snapshot())
