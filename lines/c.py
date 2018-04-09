@@ -1,5 +1,5 @@
 """
-##  C language profile.
+# C language profile.
 """
 from .. import fields
 

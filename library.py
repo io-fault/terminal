@@ -30,6 +30,7 @@ from fault.chronometry import library as libtime
 from fault.filesystem import library as libfs # autosave/session persistence
 from fault.computation import library as libc
 from fault.io import library as libio
+from fault.range import library as librange
 
 from fault.terminal import library as libterminal # terminal display
 from fault.terminal import meta
@@ -55,7 +56,7 @@ def print_except_with_crlf(exc, val, tb):
 	sys.stderr.write('\r\n')
 	sys.stderr.flush()
 
-IRange = libc.range.IRange
+IRange = librange.IRange
 
 contexts = (
 	'system', # the operating system
