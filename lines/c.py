@@ -116,6 +116,7 @@ core_list = [
 	'strupr',
 
 	'size_t',
+	'ssize_t',
 	'offset_t',
 
 	'setjmp',
