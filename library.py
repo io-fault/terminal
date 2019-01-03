@@ -1798,6 +1798,24 @@ class Fields(core.Refraction):
 		self.update_vertical_state()
 		self.movement = True
 
+	def event_window_horizontal_forward(self, event, quantity=1, point=None):
+		"""
+		# Adjust the horizontal position of the window forward by the given quantity.
+		"""
+		self.clear_horizontal_indicators()
+		self.window.horizontal.move(quantity)
+		self.movement = True
+		self.scrolled()
+
+	def event_window_horizontal_backward(self, event, quantity=1, point=None):
+		"""
+		# Adjust the horizontal position of the window forward by the given quantity.
+		"""
+		self.clear_horizontal_indicators()
+		self.window.horizontal.move(-quantity)
+		self.movement = True
+		self.scrolled()
+
 	# line [history] forward/backward
 	def event_window_vertical_forward(self, event, quantity=1, point=None):
 		"""
