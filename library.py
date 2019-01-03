@@ -1201,8 +1201,8 @@ class Fields(core.Refraction):
 			seq[i-top].update(list(draw(u)))
 
 		u = self.out_of_bounds
-		for i in range(rl, bottom):
-			seq[i-top].update(list(self.draw(self.out_of_bounds)))
+		for i in range(rl-top, bottom-top):
+			seq[i].update(list(self.draw(self.out_of_bounds)))
 
 		rendered = list(self.view.render())
 		return rendered
@@ -1864,7 +1864,7 @@ class Fields(core.Refraction):
 		self.vector_last_axis = v
 		self.clear_horizontal_indicators()
 
-		if v.offset == 0 or self.vertical_query == 'pattern':
+		if v.offset <= 0 or self.vertical_query == 'pattern':
 			# already at beginning, imply previous block at same level
 			self.vertical_query_previous()
 		else:
@@ -1907,7 +1907,7 @@ class Fields(core.Refraction):
 				self.horizontal.configure(adj + index, len(self.pattern))
 				v.set(i)
 		else:
-			vi = self.vertical_index
+			vi = self.vertical_index + 1
 			self.block((vi, vi, vi+1), self.level, minimum = vi)
 
 	def event_navigation_vertical_stop(self, event):
@@ -1915,11 +1915,11 @@ class Fields(core.Refraction):
 		self.vector_last_axis = v
 		self.clear_horizontal_indicators()
 
-		if v.offset == v.magnitude or self.vertical_query == 'pattern':
+		if (v.offset+1) >= v.magnitude or self.vertical_query == 'pattern':
 			# already at end, imply next block at same level
 			self.vertical_query_next()
 		else:
-			v.offset = v.magnitude
+			v.offset = v.magnitude - 1
 
 		self.update_vertical_state()
 		self.constrain_horizontal_range()
