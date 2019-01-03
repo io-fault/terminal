@@ -232,8 +232,13 @@ ea(('control', 'return', 0), 'refraction', ('edit', 'return'))
 
 ea(('navigation', 'left', 0), 'refraction', ('navigation', 'backward', 'character'))
 ea(('navigation', 'right', 0), 'refraction', ('navigation', 'forward', 'character'))
-ea(('navigation', 'up', 0), 'refraction', ('navigation', 'beginning'))
-ea(('navigation', 'down', 0), 'refraction', ('navigation', 'end'))
+ea(('navigation', 'up', 0), 'refraction', ('navigation', 'move', 'bol'))
+ea(('navigation', 'down', 0), 'refraction', ('navigation', 'move', 'eol'))
+
+ea(('navigation', 'left', shiftmeta), 'refraction', ('delta', 'insert', 'character'))
+ea(('navigation', 'right', shiftmeta), 'refraction', ('delta', 'insert', 'character'))
+ea(('navigation', 'up', shiftmeta), 'refraction', ('delta', 'insert', 'character'))
+ea(('navigation', 'down', shiftmeta), 'refraction', ('delta', 'insert', 'character'))
 
 ea(controlk('u'), 'refraction', ('delta', 'delete', 'tobol'))
 ea(controlk('k'), 'refraction', ('delta', 'delete', 'toeol'))
