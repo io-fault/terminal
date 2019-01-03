@@ -2359,6 +2359,9 @@ class Fields(core.Refraction):
 			mchar = meta.select(event.identity)
 			self.insert_characters(mchar)
 			self.movement = True
+		elif event.type == 'navigation':
+			self.insert_characters(symbols.arrows.get(event.identity))
+			self.movement = True
 
 	def transition_insert_character(self, key):
 		"""
