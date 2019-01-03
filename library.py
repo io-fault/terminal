@@ -26,7 +26,7 @@ import subprocess
 import typing
 
 from fault.routes import library as libroutes
-from fault.chronometry import library as libtime
+from fault.time import library as libtime
 from fault.filesystem import library as libfs # autosave/session persistence
 from fault.computation import library as libc
 from fault.io import library as libio
