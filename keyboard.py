@@ -6,22 +6,22 @@
 # by &.console.
 
 # ! FUTURE:
-	# The (system:file)`~/.fault/console.py` script can be used to customize
+	# The (system/file)`~/.fault/console.py` script can be used to customize
 	# the mappings. When a Session is created in an application, the callbacks
 	# defined in the module can be used to do further initialization.
 
 # [ Properties ]
 
-# /trap
+# /trap/
 	# Console level events. Key events mapped here are trapped and are
 	# not propagated to Refractions. This is the "global" mapping.
-# /control
+# /control/
 	# Control mode mapping is for navigation and high-level manipulation.
-# /edit
+# /edit/
 	# Mode used to manage the insertion and removal of characters from fields.
-# /capture
+# /capture/
 	# ...
-# /types
+# /types/
 	# Mode used to select field types for custom interactions.
 """
 from fault.terminal import library as libterminal
