@@ -1,0 +1,22 @@
+! CONTEXT:
+	/protocol/
+		&<http://if.fault.io/project/information>
+
+/identifier/
+	`http://fault.io/engineering/sources`
+/name/
+	`sources`
+/abstract/
+	Source editor with multiple display implementations.
+/icon/
+	- (emoji)`🔬`
+
+/versioning/
+	continuous
+/status/
+	flux
+
+/controller/
+	fault.io
+/contact/
+	`http://fault.io/critical`
