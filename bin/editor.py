@@ -1,11 +1,14 @@
 """
 # Editor console.
 """
-from .. import library as libconsole
+from fault.system import process
 from fault.io import library as libio
 
-def main():
-	libio.execute(console = (libconsole.initialize,))
+from .. import library as libconsole
+
+def main(inv:process.Invocation) -> process.Exit:
+	spr = libio.system.Process.spawn(inv, libio.Unit, {'console':(libconsole.initialize,)}, 'root')
+	spr.boot(())
 
 if __name__ == '__main__':
-	main()
+	process.control(main, process.Invocation.system())
