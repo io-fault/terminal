@@ -27,7 +27,6 @@ import typing
 
 from fault.routes import library as libroutes
 from fault.time import library as libtime
-from fault.filesystem import library as libfs # autosave/session persistence
 from fault.computation import library as libc
 from fault.io import library as libio
 from fault.range import library as librange
@@ -118,7 +117,7 @@ class Session(libio.Processor):
 		self.transcript = None
 		self.connections = weakref.WeakValueDictionary()
 		self.refractions = {}
-		self.persistence = None #libfs.Dictionary()
+		self.persistence = None
 
 class Fields(core.Refraction):
 	"""
