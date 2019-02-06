@@ -2325,9 +2325,9 @@ class Fields(core.Refraction):
 		# Insert the given &lines at the absolute vertical &index.
 
 		# [ Parameters ]
-		# /index
+		# /index/
 			# The absolute vertical index in the document in memory.
-		# /lines
+		# /lines/
 			# The sequence of lines to insert *without* line terminators.
 		"""
 		sl = lines
@@ -3369,9 +3369,9 @@ class Empty(Lines):
 	"""
 	# Space holder for empty panes.
 
-	# ! DEVELOPMENT:
-		# This class will manage the display of random usage tips, and
-		# likely recently used files display.
+	# [ Engineering ]
+	# This class will manage the display of random usage tips, and
+	# likely recently used files display.
 	"""
 	pass
 
@@ -3802,13 +3802,11 @@ class Console(libio.Flow):
 		self.f_emit(initialize)
 
 		initial = \
-			("fault.io console\n\n") + \
-			("  If you cannot do things my way, I'll just have to find another user.\n\n") + \
-			("") + \
 			("Terminal must support meta-key in order for console to function properly.\n") + \
 			("Terminal.app: Preferences -> Profile -> Keyboard -> Use option as Meta Key\n") + \
 			("iTerm2: Preferences -> Profiles -> Keys -> +Esc Radio Buttons\n") + \
-			("\nImmediate Exit: Shift-Meta-` (~); Toggle Console Prompt: Meta-`\n") + \
+			("Alacritty: Bindings must be configured\n") + \
+			("\nExit: [Meta-`] [i-e-x-i-t]; Toggle Console Prompt: Meta-`\n") + \
 			("Open file using line editor: Meta-o;\n\n") + \
 			("Pane Management\n") + \
 			(" close: Close the current refraction without saving. (prompt command)\n") + \
@@ -3817,8 +3815,7 @@ class Console(libio.Flow):
 			("Mouse Support\n") + \
 			(" Primary Click: Control and Edit Mode will move cursor.\n") + \
 			(" Secondary Click: Opens Contextual Menu when in focus pane; otherwise focuses unfocused pane.\n") + \
-			(" Scroll: Scrolls the pane regardless of focus state.\n") + \
-			("\nThis refraction is the console's Transcript; the in-memory log of the process.\n\n")
+			(" Scroll: Scrolls the pane regardless of focus state.\n")
 
 		self.transcript.write(initial)
 		self.panes[0].focus()
@@ -4029,6 +4026,7 @@ class Console(libio.Flow):
 					refraction, event = self.id_state.flush_scroll_events()
 					if refraction is not None:
 						keys = (event,)
+		# while
 		if self.id_state.scroll_count > 0:
 			if self.id_scroll_timeout_deferred is False:
 				self.id_scroll_timeout_deferred = True
