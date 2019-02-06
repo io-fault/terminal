@@ -82,11 +82,12 @@ trap.assign(('control', 'tab', meta), 'console', ('console', 'rotate', 'pane', '
 trap.assign(('control', 'tab', shiftmeta), 'console', ('console', 'rotate', 'pane', 'backward'))
 # One off for iterm2:
 trap.assign(('escaped', '\x19', 0), 'console', ('console', 'rotate', 'pane', 'backward'))
-trap.assign(('escaped', 'o', 0), 'console', ('prepare', 'open'))
 
 # refraction control mapping
 control = Mapping(('refraction', ('navigation', 'jump', 'character'), ()))
 ca = control.assign
+
+ca(('escaped', 'o', 0), 'refraction', ('prepare', 'open'))
 
 # distribution of commands across the vertical range.
 ca(literal('y'), 'refraction', ('distribute', 'one'))

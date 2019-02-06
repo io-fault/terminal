@@ -234,6 +234,10 @@ class Refraction(libio.Resource):
 		self.distributing = not self.distributing
 		self.distribute_once = True
 
+	def event_prepare_open(self, event):
+		console = self.controller
+		return console.event_prepare_open(event)
+
 	def adjust(self, point, dimensions):
 		"""
 		# Adjust the positioning and size of the view. &point is a pair of positive integers
