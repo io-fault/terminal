@@ -446,7 +446,7 @@ class Fields(core.Refraction):
 		self.vertical_index = nl
 		self.constrain_horizontal_range()
 
-	def update_vertical_state(self):
+	def update_vertical_state(self, force=False):
 		"""
 		# Update the cache of the position based on the vector.
 		"""
@@ -463,7 +463,7 @@ class Fields(core.Refraction):
 			nl = nunits
 			v.set(nl)
 
-		if self.vertical_index == nl:
+		if self.vertical_index == nl and force is False:
 			# vertical did not change.
 			return
 
@@ -2343,9 +2343,18 @@ class Fields(core.Refraction):
 			paste.append(seq)
 
 		r = (index, index+nl)
+		if r[0] <= self.vertical_index < r[1]:
+			self.movement = True
+			self.clear_horizontal_indicators()
+			self.update_unit()
+			self.update_window()
+
 		self.units[r[0]:r[0]] = paste
-		self.display(r[0], None)
 		self.log((self.truncate_vertical, r), IRange((r[0], r[1]-1)))
+		self.checkpoint()
+
+		self.update_vertical_state(force=True)
+		self.display(r[0], None)
 
 	def event_delta_insert_character(self, event):
 		"""
