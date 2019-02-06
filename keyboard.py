@@ -73,7 +73,6 @@ kmeta = lambda x: ('escaped', x, 0)
 
 # events trapped and handled by the console. These are not forwarded to the refraction.
 trap = Mapping()
-trap.assign(('escaped', '~', 0), 'console', ('process', 'exit'))
 trap.assign(('escaped', '`', 0), 'console', ('toggle', 'prompt'))
 # pane management
 trap.assign(('escaped', 'j', 0), 'console', ('pane', 'rotate', 'refraction'), (1,))
