@@ -3879,9 +3879,6 @@ class Console(libio.Flow):
 
 		return new
 
-	def event_process_exit(self, event):
-		self.context.process.terminate(1)
-
 	def event_toggle_prompt(self, event):
 		"""
 		# Toggle the focusing of the prompt.
