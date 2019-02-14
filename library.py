@@ -28,7 +28,7 @@ import typing
 from fault.routes import library as libroutes
 from fault.time import library as libtime
 from fault.computation import library as libc
-from fault.io import library as libio
+from fault.kernel import library as libkernel
 from fault.range import library as librange
 
 from fault.terminal import library as libterminal # terminal display
@@ -105,7 +105,7 @@ actions = dict(
 	),
 )
 
-class Session(libio.Processor):
+class Session(libkernel.Processor):
 	"""
 	# A set of buffers and execution contexts accessed by a Console.
 
@@ -3375,7 +3375,7 @@ class Empty(Lines):
 	"""
 	pass
 
-class Console(libio.Flow):
+class Console(libkernel.Flow):
 	"""
 	# The application that responds to keyboard input in order to make display changes.
 
@@ -3665,7 +3665,9 @@ class Console(libio.Flow):
 			h_intersection = symbols.intersections['bottom'],
 			h_bottom_left = symbols.corners['bottom-left'],
 			h_bottom_right = symbols.corners['bottom-right'],
-			color = palette.range_colors['clear']
+			color = palette.range_colors['clear'],
+			bytearray=bytearray,
+			set=set, range=range,
 		):
 		"""
 		# Clear the position indicators on the frame.
@@ -4068,14 +4070,14 @@ def initialize(unit):
 
 	libterminal.restore_at_exit() # cursor will be hidden and raw is enabled
 
-	s = libio.Sector()
+	s = libkernel.Sector()
 	s.subresource(unit)
 	unit.place(s, 'console-operation')
 	s.actuate()
 
 	tty = open(libterminal.device.path, 'r+b')
-	input_thread = libio.Parallel(input, tty)
-	output_thread = libio.Parallel(output, tty)
+	input_thread = libkernel.Parallel(input, tty)
+	output_thread = libkernel.Parallel(output, tty)
 
 	c = Console()
 	c.con_connect_tty(tty)

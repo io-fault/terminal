@@ -1,7 +1,7 @@
 import functools
 import operator
 import collections
-from fault.io import library as libio
+from fault.kernel import library as libkernel
 
 from fault.terminal import library as libterminal
 from . import keyboard
@@ -67,7 +67,7 @@ class Cache(object):
 		"""
 		self.storage[key].clear()
 
-class Refraction(libio.Resource):
+class Refraction(libkernel.Resource):
 	"""
 	# A Refraction of a source onto a connected area of the display.
 
