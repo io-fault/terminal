@@ -3389,6 +3389,7 @@ class Console(flows.Channel):
 		self.id_state = IDeviceState()
 		self.id_scroll_timeout_deferred = False
 		self.tty = None
+		self.ttyfile = None
 		# In memory database for simple transfers (copy/paste).
 		self.cache = core.Cache() # user cache / clipboard index
 		self.cache.allocate(None)
@@ -3418,8 +3419,10 @@ class Console(flows.Channel):
 		self.pane = 0 # focus pane (visible)
 		self.refraction = self.panes[0] # focus refraction; receives events
 
-	def con_connect_tty(self, tty):
-		self.tty = tty
+	def con_connect_tty(self, ttyfile):
+		from fault.system import tty
+		self.tty = tty.Device(ttyfile.fileno())
+		self.ttyfile = ttyfile
 		self.dimensions = self.get_display_dimensions()
 
 		self.prompt.connect(libterminal.View(self.areas['prompt']))
@@ -3800,9 +3803,7 @@ class Console(flows.Channel):
 		process.log = wr
 		process.system_event_connect(('signal', 'terminal.delta'), self, self.delta)
 
-		from fault.system.tty import Device
-		Device(self.tty.fileno()).set_raw()
-		del Device
+		self.tty.set_raw()
 
 		sys.excepthook = print_except_with_crlf
 		self.f_emit(initialize)
@@ -4065,7 +4066,7 @@ class Console(flows.Channel):
 		"""
 		# Get the current tty dimensions.
 		"""
-		return libterminal.device.dimensions(self.tty.fileno())
+		return self.tty.get_window_dimensions()
 
 def initialize(unit):
 	"""
@@ -4080,8 +4081,8 @@ def initialize(unit):
 	s.actuate()
 
 	tty = open(libterminal.device.path, 'r+b')
-	input_thread = libkernel.Parallel(input, tty)
-	output_thread = libkernel.Parallel(output, tty)
+	input_thread = flows.Parallel(input, tty)
+	output_thread = flows.Parallel(output, tty)
 
 	c = Console()
 	c.con_connect_tty(tty)
