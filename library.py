@@ -29,6 +29,7 @@ from fault.routes import library as libroutes
 from fault.time import library as libtime
 from fault.computation import library as libc
 from fault.kernel import library as libkernel
+from fault.kernel import flows
 from fault.range import library as librange
 
 from fault.terminal import library as libterminal # terminal display
@@ -3375,7 +3376,7 @@ class Empty(Lines):
 	"""
 	pass
 
-class Console(libkernel.Flow):
+class Console(flows.Channel):
 	"""
 	# The application that responds to keyboard input in order to make display changes.
 
@@ -3799,7 +3800,10 @@ class Console(libkernel.Flow):
 		process.log = wr
 		process.system_event_connect(('signal', 'terminal.delta'), self, self.delta)
 
-		libterminal.device.set_raw(self.tty.fileno())
+		from fault.system.tty import Device
+		Device(self.tty.fileno()).set_raw()
+		del Device
+
 		sys.excepthook = print_except_with_crlf
 		self.f_emit(initialize)
 
