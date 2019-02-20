@@ -24,7 +24,7 @@
 # /types/
 	# Mode used to select field types for custom interactions.
 """
-from fault.terminal import library as libterminal
+from fault.terminal import events
 
 class Mapping(object):
 	"""
@@ -58,12 +58,11 @@ class Mapping(object):
 		index = (key.type, key.identity, key.modifiers)
 		return self.reverse.get(index, self.default)
 
-shift = libterminal.Modifiers.construct(shift=True)
-meta = libterminal.Modifiers.construct(meta=True)
-controlmod = libterminal.Modifiers.construct(control=True)
-shiftmeta = libterminal.Modifiers.construct(meta=True, shift=True)
+shift = events.Modifiers.construct(shift=True)
+meta = events.Modifiers.construct(meta=True)
+controlmod = events.Modifiers.construct(control=True)
+shiftmeta = events.Modifiers.construct(meta=True, shift=True)
 literal = lambda x: ('literal', x, 0)
-caps = lambda x: ('literal', x, shift)
 controlk = lambda x: ('control', x, controlmod)
 shiftcontrolk = lambda x: ('control', x, shift)
 nav = lambda x: ('navigation', x, 0)
@@ -91,7 +90,7 @@ ca(('escaped', 'o', 0), 'refraction', ('prepare', 'open'))
 
 # distribution of commands across the vertical range.
 ca(literal('y'), 'refraction', ('distribute', 'one'))
-ca(caps('y'), 'refraction', ('distribute', 'sequence'))
+ca(literal('Y'), 'refraction', ('distribute', 'sequence'))
 ca(controlk('y'), 'refraction', ('distribute', 'horizontal'))
 ca(kmeta('y'), 'refraction', ('distribute', 'full')) # replacement for sequence?
 
@@ -105,17 +104,17 @@ ca(('control', 'return', 0), 'refraction', ('control', 'return'))
 
 ca(literal('f'), 'refraction', ('navigation', 'horizontal', 'forward'))
 ca(literal('d'), 'refraction', ('navigation', 'horizontal', 'backward'))
-ca(caps('f'), 'refraction', ('navigation', 'horizontal', 'stop'))
-ca(caps('d'), 'refraction', ('navigation', 'horizontal', 'start'))
+ca(literal('F'), 'refraction', ('navigation', 'horizontal', 'stop'))
+ca(literal('D'), 'refraction', ('navigation', 'horizontal', 'start'))
 ca(controlk('f'), 'refraction', ('navigation', 'horizontal', 'query', 'forward'))
 ca(controlk('d'), 'refraction', ('navigation', 'horizontal', 'query', 'backward'))
 
 ca(literal('s'), 'refraction', ('select', 'series',))
-ca(caps('s'), 'refraction', ('select', 'horizontal', 'line'))
+ca(literal('S'), 'refraction', ('select', 'horizontal', 'line'))
 ca(controlk('s'), 'refraction', ('console', 'series')) # reserved
 
 ca(literal('e'), 'refraction', ('navigation', 'vertical', 'sections'))
-ca(caps('e'), 'refraction', ('navigation', 'vertical', 'paging'))
+ca(literal('E'), 'refraction', ('navigation', 'vertical', 'paging'))
 ca(controlk('e'), 'refraction', ('print', 'unit'))
 
 # temporary
@@ -123,53 +122,53 @@ ca(controlk('w'), 'refraction', ('console', 'save'))
 
 ca(literal('j'), 'refraction', ('navigation', 'vertical', 'forward'))
 ca(literal('k'), 'refraction', ('navigation', 'vertical', 'backward'))
-ca(caps('j'), 'refraction', ('navigation', 'vertical', 'stop'))
-ca(caps('k'), 'refraction', ('navigation', 'vertical', 'start'))
+ca(literal('J'), 'refraction', ('navigation', 'vertical', 'stop'))
+ca(literal('K'), 'refraction', ('navigation', 'vertical', 'start'))
 ca(('control', 'newline', 0), 'refraction', ('navigation', 'void', 'forward'))
 ca(controlk('k'), 'refraction', ('navigation', 'void', 'backward'))
 
-ca(caps('o'), 'refraction', ('open', 'behind',))
+ca(literal('O'), 'refraction', ('open', 'behind',))
 ca(literal('o'), 'refraction', ('open', 'ahead'))
 ca(controlk('o'), 'refraction', ('open', 'into'))
 
 ca(literal('q'), 'refraction', ('navigation', 'range', 'enqueue'))
-ca(caps('q'), 'refraction', ('navigation', 'range', 'dequeue'))
+ca(literal('Q'), 'refraction', ('navigation', 'range', 'dequeue'))
 ca(controlk('q'), 'refraction', ('',)) # spare
 ca(('escaped', 'q', 0), 'refraction', ('console', 'search'))
 
 #ca(literal('v'), 'refraction', ('navigation', 'void', 'forward',))
-#ca(caps('v'), 'refraction', ('navigation', 'void', 'backward',))
+#ca(literal('V'), 'refraction', ('navigation', 'void', 'backward',))
 #ca(controlk('v'), 'refraction', ('',)) # spare
 
 ca(literal('t'), 'refraction', ('delta', 'translocate',))
-ca(caps('t'), 'refraction', ('delta', 'transpose',))
+ca(literal('T'), 'refraction', ('delta', 'transpose',))
 ca(controlk('t'), 'refraction', ('delta', 'truncate'))
 
 ca(literal('z'), 'refraction', ('place', 'stop',))
-ca(caps('z'), 'refraction', ('place', 'start',))
+ca(literal('Z'), 'refraction', ('place', 'start',))
 ca(controlk('z'), 'refraction', ('place', 'center'))
 
 # [undo] log
 ca(literal('u'), 'refraction', ('delta', 'undo',))
-ca(caps('u'), 'refraction', ('delta', 'redo',))
+ca(literal('U'), 'refraction', ('delta', 'redo',))
 ca(controlk('u'), 'refraction', ('redo',))
 
 ca(literal('a'), 'refraction', ('select', 'adjacent', 'local'))
-ca(caps('a'), 'refraction', ('select', 'adjacent'))
+ca(literal('A'), 'refraction', ('select', 'adjacent'))
 
 ca(literal('b'), 'refraction', ('select', 'block'))
-ca(caps('b'), 'refraction', ('select', 'outerblock'))
+ca(literal('B'), 'refraction', ('select', 'outerblock'))
 
 ca(literal('n'), 'refraction', ('delta', 'split',))
-ca(caps('n'), 'refraction', ('delta', 'join',))
+ca(literal('N'), 'refraction', ('delta', 'join',))
 ca(controlk('n'), 'refraction', ('',))
 
 ca(literal('p'), 'refraction', ('paste', 'after'))
-ca(caps('p'), 'refraction', ('paste', 'before',))
+ca(literal('P'), 'refraction', ('paste', 'before',))
 ca(controlk('p'), 'refraction', ('paste', 'into',))
 
 ca(literal('l'), 'refraction', ('select', 'vertical', 'line'))
-ca(caps('l'), 'refraction', ('select', 'block'))
+ca(literal('L'), 'refraction', ('select', 'block'))
 ca(controlk('l'), 'refraction', ('console', 'reserved'))
 ca(kmeta('l'), 'refraction', ('console', 'seek', 'line'))
 
@@ -185,22 +184,27 @@ ca(nav('right'), 'refraction', ('window', 'horizontal', 'backward'))
 ca(nav('down'), 'refraction', ('window', 'vertical', 'forward'))
 ca(nav('up'), 'refraction', ('window', 'vertical', 'backward'))
 
+ca(nav('pagedown'), 'refraction', ('window', 'vertical', 'forward', 'jump'))
+ca(nav('pageup'), 'refraction', ('window', 'vertical', 'backward', 'jump'))
+ca(nav('home'), 'refraction', ('window', 'vertical', 'start'))
+ca(nav('end'), 'refraction', ('window', 'vertical', 'stop'))
+
 ca(literal('m'), 'refraction', ('menu', 'primary'))
-ca(caps('m'), 'refraction', ('menu', 'secondary'))
+ca(literal('M'), 'refraction', ('menu', 'secondary'))
 
 ca(literal('i'), 'refraction', ('transition', 'edit'),)
-ca(caps('i'), 'refraction', ('delta', 'split'),) # split field (reserved)
+ca(literal('I'), 'refraction', ('delta', 'split'),) # split field (reserved)
 
 ca(literal('c'), 'refraction', ('delta', 'substitute'),)
-ca(caps('c'), 'refraction', ('delta', 'substitute', 'previous'),) # remap this
+ca(literal('C'), 'refraction', ('delta', 'substitute', 'previous'),) # remap this
 
 ca(literal('x'), 'refraction', ('delta', 'delete', 'forward'),)
-ca(caps('x'), 'refraction', ('delta', 'delete', 'backward'),)
+ca(literal('X'), 'refraction', ('delta', 'delete', 'backward'),)
 ca(controlk('x'), 'refraction', ('delta', 'delete', 'line'))
 ca(kmeta('x'), 'refraction', ('delta', 'cut')) # Not Implemented
 
 ca(literal('r'), 'refraction', ('delta', 'replace', 'character'),)
-ca(caps('r'), 'refraction', ('delta', 'replace'),)
+ca(literal('R'), 'refraction', ('delta', 'replace'),)
 ca(controlk('r'), 'console', ('navigation', 'return'),)
 
 ca(('control', 'tab', 0), 'refraction', ('delta', 'indent', 'increment'))
@@ -270,7 +274,7 @@ for k, v in field_type_mnemonics.items():
 
 types.assign(literal('l'), 'container', ('create', 'line'))
 
-del nav, controlk, literal, caps, shift
+del nav, controlk, literal, shift
 
 standard = {
 	'control': control,

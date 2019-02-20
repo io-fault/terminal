@@ -33,6 +33,7 @@ from fault.kernel import flows
 from fault.range import library as librange
 
 from fault.terminal import library as libterminal # terminal display
+from fault.terminal import events
 from fault.terminal import meta
 from fault.terminal import symbols
 
@@ -1816,7 +1817,6 @@ class Fields(core.Refraction):
 		self.movement = True
 		self.scrolled()
 
-	# line [history] forward/backward
 	def event_window_vertical_forward(self, event, quantity=1, point=None):
 		"""
 		# Adjust the vertical position of the window forward by the
@@ -2382,7 +2382,7 @@ class Fields(core.Refraction):
 		# Insert a character at the current cursor position.
 		"""
 		if event.type == 'literal':
-			self.insert_characters(event.string)
+			self.insert_characters(event.identity)
 			self.movement = True
 		elif event.type == 'escaped':
 			mchar = meta.select(event.identity)
@@ -3279,7 +3279,7 @@ class IDeviceState(object):
 		self.scroll_maximum = 16
 		self.scroll_magnification = 1
 
-	def scroll(self, refraction, timestamp, event, Event=libterminal.core.Character):
+	def scroll(self, refraction, timestamp, event, Event=events.Character):
 		"""
 		# Record the scroll event for later propagation after counts have accumulated.
 		"""
@@ -3300,7 +3300,7 @@ class IDeviceState(object):
 	def scroll_quantity(self):
 		return int((self.scroll_count * self.scroll_magnification) // 1)
 
-	def flush_scroll_events(self, ref=None, Event=libterminal.core.Character):
+	def flush_scroll_events(self, ref=None, Event=events.Character):
 		point, dir, sid = self.scroll_event[2]
 
 		count = min(self.scroll_count, self.scroll_maximum)
@@ -3335,7 +3335,7 @@ class IDeviceState(object):
 			# click or drag completion
 			delay = start.measure(timestamp)
 			del self.keys[kid]
-			return ref, libterminal.core.Character(('click', '<state>', (point, kid, delay), event[3]))
+			return ref, events.Character(('click', '<state>', (point, kid, delay), event[3]))
 		else:
 			# Open the event.
 			self.keys[kid] = (refraction, timestamp, disposition)
@@ -3366,25 +3366,25 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	# using incremental decoder to handle partial writes.
 	state = codecs.getincrementaldecoder('utf-8')('replace')
 	decode = state.decode
-	construct = libterminal.construct_character_events
+	construct = events.construct_character_events
 	read = os.read
 	fileno = tty.fileno()
 
-	chars = ""
+	string = ""
 	while True:
 		data = read(fileno, maximum_read)
 		rts = now()
-		chars += decode(data)
+		string += decode(data)
 		try:
 			# ctl belongs downstream so that timeouts can
 			# introduce events.
-			events = construct(chars)
+			chars = construct(string)
 		except ValueError:
 			# read more
 			continue
 
-		enqueue(partial(emit, (rts, events)))
-		chars = ""
+		enqueue(partial(emit, (rts, chars)))
+		string = ""
 
 class Empty(Lines):
 	"""

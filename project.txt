@@ -9,7 +9,7 @@
 /abstract/
 	Source editor with multiple display implementations.
 /icon/
-	- (emoji)`🔬`
+	- (emoji)`📄`
 
 /versioning/
 	continuous
