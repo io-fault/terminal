@@ -1837,6 +1837,26 @@ class Fields(core.Refraction):
 		self.movement = True
 		self.scrolled()
 
+	def event_window_vertical_forward_jump(self, event, quantity=32, point=None):
+		"""
+		# Adjust the vertical position of the window forward by the
+		# given quantity.
+		"""
+		self.clear_horizontal_indicators()
+		self.window.vertical.move(quantity)
+		self.movement = True
+		self.scrolled()
+
+	def event_window_vertical_backward_jump(self, event, quantity=32, point=None):
+		"""
+		# Adjust the vertical position of the window backward by the
+		# given quantity. (Moves view port).
+		"""
+		self.clear_horizontal_indicators()
+		self.window.vertical.move(-quantity)
+		self.movement = True
+		self.scrolled()
+
 	def vertical_query_previous(self):
 		v = self.vertical
 		qtype = self.vertical_query
