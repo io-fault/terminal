@@ -60,98 +60,95 @@ class Mapping(object):
 
 shift = events.Modifiers.construct(shift=True)
 meta = events.Modifiers.construct(meta=True)
-controlmod = events.Modifiers.construct(control=True)
 shiftmeta = events.Modifiers.construct(meta=True, shift=True)
-literal = lambda x: ('literal', x, 0)
-controlk = lambda x: ('control', x, controlmod)
-shiftcontrolk = lambda x: ('control', x, shift)
-nav = lambda x: ('navigation', x, 0)
-shiftnav = lambda x: ('navigation', x, shift)
-delta = lambda x: ('delta', x, 0)
-kmeta = lambda x: ('escaped', x, 0)
+
+literal = (lambda x: ('literal', x, 0))
+kmeta = (lambda x: ('literal', x, meta))
+def ctl(x, mods=0):
+	return ('control', x, mods)
+nav = (lambda x: ('navigation', x, 0))
+shiftnav = (lambda x: ('navigation', x, shift))
 
 # events trapped and handled by the console. These are not forwarded to the refraction.
 trap = Mapping()
-trap.assign(('escaped', '`', 0), 'console', ('toggle', 'prompt'))
+trap.assign(('literal', '`', meta), 'console', ('toggle', 'prompt'))
 # pane management
-trap.assign(('escaped', 'j', 0), 'console', ('pane', 'rotate', 'refraction'), (1,))
-trap.assign(('escaped', 'k', 0), 'console', ('pane', 'rotate', 'refraction'), (-1,))
+trap.assign(('literal', 'j', meta), 'console', ('pane', 'rotate', 'refraction'), (1,))
+trap.assign(('literal', 'k', meta), 'console', ('pane', 'rotate', 'refraction'), (-1,))
 
-trap.assign(('control', 'tab', meta), 'console', ('console', 'rotate', 'pane', 'forward'))
-trap.assign(('control', 'tab', shiftmeta), 'console', ('console', 'rotate', 'pane', 'backward'))
-# One off for iterm2:
-trap.assign(('escaped', '\x19', 0), 'console', ('console', 'rotate', 'pane', 'backward'))
+trap.assign(ctl('i', meta), 'console', ('console', 'rotate', 'pane', 'forward'))
+trap.assign(ctl('i', shiftmeta), 'console', ('console', 'rotate', 'pane', 'backward'))
 
 # refraction control mapping
 control = Mapping(('refraction', ('navigation', 'jump', 'character'), ()))
 ca = control.assign
 
-ca(('escaped', 'o', 0), 'refraction', ('prepare', 'open'))
+ca(('literal', 'o', meta), 'refraction', ('prepare', 'open'))
 
 # distribution of commands across the vertical range.
 ca(literal('y'), 'refraction', ('distribute', 'one'))
 ca(literal('Y'), 'refraction', ('distribute', 'sequence'))
-ca(controlk('y'), 'refraction', ('distribute', 'horizontal'))
+ca(ctl('y'), 'refraction', ('distribute', 'horizontal'))
 ca(kmeta('y'), 'refraction', ('distribute', 'full')) # replacement for sequence?
 
 # control
-ca(controlk('c'), 'refraction', ('interrupt',))
-ca(('escaped', 'c', 0), 'refraction', ('copy',))
+ca(ctl('c'), 'refraction', ('interrupt',))
+ca(('literal', 'c', meta), 'refraction', ('copy',))
 
 #control.assign(('control', 'escape', 0), 'refraction', ('transition', 'exit'))
-ca(('control', 'space', 0), 'refraction', ('control', 'space'))
-ca(('control', 'return', 0), 'refraction', ('control', 'return'))
+ca(ctl(' '), 'refraction', ('control', 'space'))
+ca(ctl('m'), 'refraction', ('control', 'return'))
 
 ca(literal('f'), 'refraction', ('navigation', 'horizontal', 'forward'))
 ca(literal('d'), 'refraction', ('navigation', 'horizontal', 'backward'))
 ca(literal('F'), 'refraction', ('navigation', 'horizontal', 'stop'))
 ca(literal('D'), 'refraction', ('navigation', 'horizontal', 'start'))
-ca(controlk('f'), 'refraction', ('navigation', 'horizontal', 'query', 'forward'))
-ca(controlk('d'), 'refraction', ('navigation', 'horizontal', 'query', 'backward'))
+ca(ctl('f'), 'refraction', ('navigation', 'horizontal', 'query', 'forward'))
+ca(ctl('d'), 'refraction', ('navigation', 'horizontal', 'query', 'backward'))
 
 ca(literal('s'), 'refraction', ('select', 'series',))
 ca(literal('S'), 'refraction', ('select', 'horizontal', 'line'))
-ca(controlk('s'), 'refraction', ('console', 'series')) # reserved
+ca(ctl('s'), 'refraction', ('console', 'series')) # reserved
 
 ca(literal('e'), 'refraction', ('navigation', 'vertical', 'sections'))
 ca(literal('E'), 'refraction', ('navigation', 'vertical', 'paging'))
-ca(controlk('e'), 'refraction', ('print', 'unit'))
+ca(ctl('e'), 'refraction', ('print', 'unit'))
 
 # temporary
-ca(controlk('w'), 'refraction', ('console', 'save'))
+ca(ctl('w'), 'refraction', ('console', 'save'))
 
 ca(literal('j'), 'refraction', ('navigation', 'vertical', 'forward'))
 ca(literal('k'), 'refraction', ('navigation', 'vertical', 'backward'))
 ca(literal('J'), 'refraction', ('navigation', 'vertical', 'stop'))
 ca(literal('K'), 'refraction', ('navigation', 'vertical', 'start'))
-ca(('control', 'newline', 0), 'refraction', ('navigation', 'void', 'forward'))
-ca(controlk('k'), 'refraction', ('navigation', 'void', 'backward'))
+ca(ctl('j'), 'refraction', ('navigation', 'void', 'forward'))
+ca(ctl('k'), 'refraction', ('navigation', 'void', 'backward'))
 
 ca(literal('O'), 'refraction', ('open', 'behind',))
 ca(literal('o'), 'refraction', ('open', 'ahead'))
-ca(controlk('o'), 'refraction', ('open', 'into'))
+ca(ctl('o'), 'refraction', ('open', 'into'))
 
 ca(literal('q'), 'refraction', ('navigation', 'range', 'enqueue'))
 ca(literal('Q'), 'refraction', ('navigation', 'range', 'dequeue'))
-ca(controlk('q'), 'refraction', ('',)) # spare
-ca(('escaped', 'q', 0), 'refraction', ('console', 'search'))
+ca(ctl('q'), 'refraction', ('',)) # spare
+ca(('literal', 'q', meta), 'refraction', ('console', 'search'))
 
 #ca(literal('v'), 'refraction', ('navigation', 'void', 'forward',))
 #ca(literal('V'), 'refraction', ('navigation', 'void', 'backward',))
-#ca(controlk('v'), 'refraction', ('',)) # spare
+#ca(ctl('v'), 'refraction', ('',)) # spare
 
 ca(literal('t'), 'refraction', ('delta', 'translocate',))
 ca(literal('T'), 'refraction', ('delta', 'transpose',))
-ca(controlk('t'), 'refraction', ('delta', 'truncate'))
+ca(ctl('t'), 'refraction', ('delta', 'truncate'))
 
 ca(literal('z'), 'refraction', ('place', 'stop',))
 ca(literal('Z'), 'refraction', ('place', 'start',))
-ca(controlk('z'), 'refraction', ('place', 'center'))
+ca(ctl('z'), 'refraction', ('place', 'center'))
 
 # [undo] log
 ca(literal('u'), 'refraction', ('delta', 'undo',))
 ca(literal('U'), 'refraction', ('delta', 'redo',))
-ca(controlk('u'), 'refraction', ('redo',))
+ca(ctl('u'), 'refraction', ('redo',))
 
 ca(literal('a'), 'refraction', ('select', 'adjacent', 'local'))
 ca(literal('A'), 'refraction', ('select', 'adjacent'))
@@ -161,23 +158,23 @@ ca(literal('B'), 'refraction', ('select', 'outerblock'))
 
 ca(literal('n'), 'refraction', ('delta', 'split',))
 ca(literal('N'), 'refraction', ('delta', 'join',))
-ca(controlk('n'), 'refraction', ('',))
+ca(ctl('n'), 'refraction', ('',))
 
 ca(literal('p'), 'refraction', ('paste', 'after'))
 ca(literal('P'), 'refraction', ('paste', 'before',))
-ca(controlk('p'), 'refraction', ('paste', 'into',))
+ca(ctl('p'), 'refraction', ('paste', 'into',))
 
 ca(literal('l'), 'refraction', ('select', 'vertical', 'line'))
 ca(literal('L'), 'refraction', ('select', 'block'))
-ca(controlk('l'), 'refraction', ('console', 'reserved'))
+ca(ctl('l'), 'refraction', ('console', 'reserved'))
 ca(kmeta('l'), 'refraction', ('console', 'seek', 'line'))
 
 for i in range(10):
 	control.assign(literal(str(i)), 'refraction', ('index', 'reference'))
 
 # character level movement
-ca(controlk('space'), 'refraction', ('navigation', 'forward', 'character'))
-ca(delta('delete'), 'refraction', ('navigation', 'backward', 'character'))
+ca(ctl(' '), 'refraction', ('navigation', 'forward', 'character'))
+ca(ctl('?'), 'refraction', ('navigation', 'backward', 'character'))
 
 ca(nav('left'), 'refraction', ('window', 'horizontal', 'forward'))
 ca(nav('right'), 'refraction', ('window', 'horizontal', 'backward'))
@@ -200,39 +197,38 @@ ca(literal('C'), 'refraction', ('delta', 'substitute', 'previous'),) # remap thi
 
 ca(literal('x'), 'refraction', ('delta', 'delete', 'forward'),)
 ca(literal('X'), 'refraction', ('delta', 'delete', 'backward'),)
-ca(controlk('x'), 'refraction', ('delta', 'delete', 'line'))
+ca(ctl('x'), 'refraction', ('delta', 'delete', 'line'))
 ca(kmeta('x'), 'refraction', ('delta', 'cut')) # Not Implemented
 
 ca(literal('r'), 'refraction', ('delta', 'replace', 'character'),)
 ca(literal('R'), 'refraction', ('delta', 'replace'),)
-ca(controlk('r'), 'console', ('navigation', 'return'),)
+ca(ctl('r'), 'console', ('navigation', 'return'),)
 
-ca(('control', 'tab', 0), 'refraction', ('delta', 'indent', 'increment'))
-ca(('control', 'tab', shift), 'refraction', ('delta', 'indent', 'decrement'))
-ca(controlk('v'), 'refraction', ('delta', 'indent', 'void'))
+ca(ctl('i'), 'refraction', ('delta', 'indent', 'increment'))
+ca(ctl('i', shift), 'refraction', ('delta', 'indent', 'decrement'))
+ca(ctl('v'), 'refraction', ('delta', 'indent', 'void'))
 
-ca(('control', 'c', 1), 'control', ('navigation', 'console')) # focus control console
+ca(ctl('c', 1), 'control', ('navigation', 'console')) # focus control console
 del ca
 
 # insert mode
 edit = Mapping(default = ('refraction', ('delta', 'insert', 'character'), ())) # insert
 ea = edit.assign
-ea(('control', 'nul', 0), 'refraction', ('delta', 'insert', 'space')) # literal space
+ea(ctl('@'), 'refraction', ('delta', 'insert', 'space')) # literal space
 
-ea(controlk('c'), 'refraction', ('edit', 'abort'))
-ea(controlk('d'), 'refraction', ('edit', 'commit')) # eof
-ea(controlk('v'), 'refraction', ('edit', 'capture'))
+ea(ctl('c'), 'refraction', ('edit', 'abort'))
+ea(ctl('d'), 'refraction', ('edit', 'commit')) # eof
+ea(ctl('v'), 'refraction', ('edit', 'capture'))
 
-ea(('delta', 'delete', 0), 'refraction', ('delta', 'delete', 'backward'))
-ea(('delta', 'backspace', 0), 'refraction', ('delta', 'delete', 'backward'))
-ea(controlk('x'), 'refraction', ('delta', 'delete', 'forward'))
+ea(ctl('?'), 'refraction', ('delta', 'delete', 'backward'))
+ea(ctl('x'), 'refraction', ('delta', 'delete', 'forward'))
 
 # these are mapped to keyboard names in order to allow class-level overrides
 # and/or context sensitive action selection
-ea(('control', 'space', 0), 'refraction', ('delta', 'edit', 'insert', 'space'))
-ea(('control', 'tab', 0), 'refraction', ('edit', 'tab'))
-ea(('control', 'tab', shift), 'refraction', ('edit', 'shift', 'tab'))
-ea(('control', 'return', 0), 'refraction', ('edit', 'return'))
+ea(ctl(' '), 'refraction', ('delta', 'edit', 'insert', 'space'))
+ea(ctl('i'), 'refraction', ('edit', 'tab'))
+ea(ctl('i', shift), 'refraction', ('edit', 'shift', 'tab'))
+ea(ctl('m'), 'refraction', ('edit', 'return'))
 
 ea(('navigation', 'left', 0), 'refraction', ('navigation', 'backward', 'character'))
 ea(('navigation', 'right', 0), 'refraction', ('navigation', 'forward', 'character'))
@@ -244,14 +240,14 @@ ea(('navigation', 'right', shiftmeta), 'refraction', ('delta', 'insert', 'charac
 ea(('navigation', 'up', shiftmeta), 'refraction', ('delta', 'insert', 'character'))
 ea(('navigation', 'down', shiftmeta), 'refraction', ('delta', 'insert', 'character'))
 
-ea(controlk('u'), 'refraction', ('delta', 'delete', 'tobol'))
-ea(controlk('k'), 'refraction', ('delta', 'delete', 'toeol'))
+ea(ctl('u'), 'refraction', ('delta', 'delete', 'tobol'))
+ea(ctl('k'), 'refraction', ('delta', 'delete', 'toeol'))
 
-ea(controlk('w'), 'refraction', ('delta', 'delete', 'backward', 'adjacent', 'class'))
-ea(controlk('t'), 'refraction', ('delta', 'delete', 'forward', 'adjacent', 'class'))
+ea(ctl('w'), 'refraction', ('delta', 'delete', 'backward', 'adjacent', 'class'))
+ea(ctl('t'), 'refraction', ('delta', 'delete', 'forward', 'adjacent', 'class'))
 
-ea(controlk('a'), 'refraction', ('navigation', 'move', 'bol'))
-ea(controlk('e'), 'refraction', ('navigation', 'move', 'eol'))
+ea(ctl('a'), 'refraction', ('navigation', 'move', 'bol'))
+ea(ctl('e'), 'refraction', ('navigation', 'move', 'eol'))
 del ea
 
 # capture keystroke
@@ -274,7 +270,7 @@ for k, v in field_type_mnemonics.items():
 
 types.assign(literal('l'), 'container', ('create', 'line'))
 
-del nav, controlk, literal, shift
+del nav, ctl, literal, shift
 
 standard = {
 	'control': control,

@@ -2382,10 +2382,11 @@ class Fields(core.Refraction):
 		# Insert a character at the current cursor position.
 		"""
 		if event.type == 'literal':
-			self.insert_characters(event.identity)
-			self.movement = True
-		elif event.type == 'escaped':
-			mchar = meta.select(event.identity)
+			if event.modifiers.meta:
+				mchar = meta.select(event.identity)
+			else:
+				mchar = event.identity
+
 			self.insert_characters(mchar)
 			self.movement = True
 		elif event.type == 'navigation':
