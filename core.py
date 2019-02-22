@@ -3,7 +3,7 @@ import operator
 import collections
 from fault.kernel import library as libkernel
 
-from fault.terminal import library as libterminal
+from fault.terminal.core import Vector
 from . import keyboard
 
 class Cache(object):
@@ -109,7 +109,7 @@ class Refraction(libkernel.Resource):
 	@property
 	def axis(self):
 		"""
-		# Return the &libterminal.Position of the last axis used.
+		# Return the &Position of the last axis used.
 		"""
 		return self.vector_last_axis
 
@@ -128,9 +128,9 @@ class Refraction(libkernel.Resource):
 		self.horizontal_range = None
 
 		# View location of the refraction.
-		self.window = libterminal.Vector()
+		self.window = Vector()
 		# Physical location of the refraction.
-		self.vector = libterminal.Vector()
+		self.vector = Vector()
 
 		self.vector_last_axis = self.vector.vertical # last used axis
 		self.vertical_index = 0 # the focus line

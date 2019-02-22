@@ -33,6 +33,9 @@ from fault.kernel import flows
 from fault.range import library as librange
 
 from fault.terminal import library as libterminal # terminal display
+from fault.terminal import control
+from fault.terminal import paging
+from fault.terminal import matrix
 from fault.terminal import events
 from fault.terminal import meta
 from fault.terminal import symbols
@@ -680,7 +683,7 @@ class Fields(core.Refraction):
 		# Calculate the cell offsets of the given unit.
 		"""
 		u = self.draw(unit)
-		libterminal.offsets(u, indexes)
+		matrix.offsets(u, indexes)
 
 	@staticmethod
 	@functools.lru_cache(16)
@@ -949,7 +952,7 @@ class Fields(core.Refraction):
 		slices = [areas[k[0]] for k in positions]
 		return slices
 
-	def clear_horizontal_indicators(self, starmap=itertools.starmap, cells=libterminal.cells):
+	def clear_horizontal_indicators(self, starmap=itertools.starmap, cells=matrix.text.cells):
 		"""
 		# Called to clear the horizontal indicators for line switches.
 		"""
@@ -997,8 +1000,8 @@ class Fields(core.Refraction):
 			#range_color=0x262626,
 			range_color=None,
 			starmap=itertools.starmap,
-			cells=libterminal.cells,
-			offsets=libterminal.offsets,
+			cells=matrix.text.cells,
+			offsets=matrix.offsets,
 			list=list, len=len, tuple=tuple, zip=zip
 		):
 		"""
@@ -2881,7 +2884,7 @@ class Status(Fields):
 
 		title = fields.Styled(
 			self.refraction_type.__name__ or "unknown",
-			fg = libterminal.pastels['blue']
+			fg = palette.colors['pastel-blue']
 		)
 
 		path = getattr(new, 'source', None) or '/dev/null'
@@ -3233,7 +3236,7 @@ class Transcript(core.Refraction):
 				vi = i - top
 				self.view.sequence[vi].update(((line,),))
 
-			yield from self.view.draw(start - top, stop - top)
+			yield from self.view.render(start - top, stop - top)
 
 	def refresh(self):
 		# don't bother using the view's scroll.
@@ -3244,24 +3247,27 @@ class Transcript(core.Refraction):
 		for i, j in zip(range(0 if start < 0 else start, self.bottom), range(height)):
 			seq[j].update(((self.lines[i],),))
 
-		return self.view.draw()
+		return self.view.render()
 
 def output(flow, queue, tty):
 	"""
 	# Thread transformer function receiving display transactions and writing to the terminal.
 	"""
-	write = tty.write
-	flush = tty.flush
+	write = os.write
+	fileno = tty.kport
 	get = queue.get
 
 	while True:
 		try:
 			while True:
 				out = get()
-				r = b''.join(out)
-				if r:
-					write(r)
-					flush()
+				r = bytearray().join(out)
+				while r:
+					try:
+						del r[:write(fileno, r)]
+					except OSError as err:
+						if err.errno == errno.EINTR:
+							continue
 		except BaseException as exception:
 			flow.context.process.exception(flow, exception, "Terminal Output")
 
@@ -3369,7 +3375,7 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	decode = state.decode
 	construct = events.construct_character_events
 	read = os.read
-	fileno = tty.fileno()
+	fileno = tty.kport
 
 	string = ""
 	while True:
@@ -3406,11 +3412,10 @@ class Console(flows.Channel):
 	"""
 
 	def __init__(self):
-		self.display = libterminal.Display() # used to draw the frame.
+		self.display = matrix.Screen() # used to draw the frame.
 		self.id_state = IDeviceState()
 		self.id_scroll_timeout_deferred = False
 		self.tty = None
-		self.ttyfile = None
 		# In memory database for simple transfers (copy/paste).
 		self.cache = core.Cache() # user cache / clipboard index
 		self.cache.allocate(None)
@@ -3427,9 +3432,9 @@ class Console(flows.Channel):
 		self.motion = set() # set of panes whose position indicators changed
 
 		self.areas = {
-			'status': libterminal.Area(),
-			'prompt': libterminal.Area(),
-			'panes': (libterminal.Area(), libterminal.Area(), libterminal.Area()),
+			'status': matrix.Context(),
+			'prompt': matrix.Context(),
+			'panes': (matrix.Context(), matrix.Context(), matrix.Context()),
 		}
 
 		self.panes = [Empty(), Empty(), self.transcript]
@@ -3440,16 +3445,14 @@ class Console(flows.Channel):
 		self.pane = 0 # focus pane (visible)
 		self.refraction = self.panes[0] # focus refraction; receives events
 
-	def con_connect_tty(self, ttyfile):
-		from fault.system import tty
-		self.tty = tty.Device(ttyfile.fileno())
-		self.ttyfile = ttyfile
-		self.dimensions = self.get_display_dimensions()
+	def con_connect_tty(self, tty):
+		self.tty = tty
+		self.dimensions = tty.get_window_dimensions()
 
-		self.prompt.connect(libterminal.View(self.areas['prompt']))
-		self.c_status.view = libterminal.View(self.areas['status'])
+		self.prompt.connect(paging.View(self.areas['prompt']))
+		self.c_status.view = paging.View(self.areas['status'])
 		for x, a in zip(self.panes, self.areas['panes']):
-			x.connect(libterminal.View(a))
+			x.connect(paging.View(a))
 
 	def display_refraction(self, pane, refraction):
 		"""
@@ -3772,7 +3775,7 @@ class Console(flows.Channel):
 		# The terminal window changed in size. Get the new dimensions and refresh the entire
 		# screen.
 		"""
-		self.dimensions = self.get_display_dimensions()
+		self.dimensions = self.tty.get_window_dimensions()
 
 		initialize = [
 			self.display.clear(),
@@ -3804,10 +3807,9 @@ class Console(flows.Channel):
 
 		initialize = [
 			self.display.clear(),
-			self.display.caret_hide(),
-			self.display.disable_line_wrap(),
+			control.optset('mouse-drag', 'mouse-events'),
+			control.optrst('cursor-visible', 'line-wrapping'),
 			b''.join(self.adjust(self.dimensions)),
-			self.display.enable_mouse()
 		]
 
 		initialize.extend(self.c_status.refraction_changed(self.panes[0]))
@@ -3911,6 +3913,9 @@ class Console(flows.Channel):
 		if self.refraction is self.prompt:
 			self.focus_pane()
 		else:
+			prompt = self.prompt
+			if not prompt.has_content(prompt.units[prompt.vertical_index]):
+				prompt.keyboard.set('edit')
 			self.focus_prompt()
 
 	def event_prepare_open(self, event):
@@ -4083,12 +4088,6 @@ class Console(flows.Channel):
 			self.id_state.scroll_flush = True
 			self.process((libtime.now(), ()))
 
-	def get_display_dimensions(self):
-		"""
-		# Get the current tty dimensions.
-		"""
-		return self.tty.get_window_dimensions()
-
 def initialize(unit):
 	"""
 	# Initialize the given unit with a console.
@@ -4101,12 +4100,13 @@ def initialize(unit):
 	unit.place(s, 'console-operation')
 	s.actuate()
 
-	tty = open(libterminal.device.path, 'r+b')
-	input_thread = flows.Parallel(input, tty)
-	output_thread = flows.Parallel(output, tty)
+	from fault.system import tty
+	dev = tty.Device.open() # XXX: Parameter override?
+	input_thread = flows.Parallel(input, dev)
+	output_thread = flows.Parallel(output, dev)
 
 	c = Console()
-	c.con_connect_tty(tty)
+	c.con_connect_tty(dev)
 
 	# terminal input -> console -> terminal output
 	input_thread.f_connect(c)
