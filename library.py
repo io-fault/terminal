@@ -32,7 +32,6 @@ from fault.kernel import library as libkernel
 from fault.kernel import flows
 from fault.range import library as librange
 
-from fault.terminal import library as libterminal # terminal display
 from fault.terminal import control
 from fault.terminal import paging
 from fault.terminal import matrix
@@ -4093,8 +4092,6 @@ def initialize(unit):
 	# Initialize the given unit with a console.
 	"""
 
-	libterminal.restore_at_exit() # cursor will be hidden and raw is enabled
-
 	s = libkernel.Sector()
 	s.subresource(unit)
 	unit.place(s, 'console-operation')
@@ -4102,6 +4099,8 @@ def initialize(unit):
 
 	from fault.system import tty
 	dev = tty.Device.open() # XXX: Parameter override?
+	dev.record()
+	control.restore_at_exit(tty) # cursor will be hidden and raw is enabled
 	input_thread = flows.Parallel(input, dev)
 	output_thread = flows.Parallel(output, dev)
 
