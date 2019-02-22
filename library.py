@@ -4100,7 +4100,7 @@ def initialize(unit):
 	from fault.system import tty
 	dev = tty.Device.open() # XXX: Parameter override?
 	dev.record()
-	control.restore_at_exit(tty) # cursor will be hidden and raw is enabled
+	control.restore_at_exit(dev) # cursor will be hidden and raw is enabled
 	input_thread = flows.Parallel(input, dev)
 	output_thread = flows.Parallel(output, dev)
 
