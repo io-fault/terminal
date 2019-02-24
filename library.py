@@ -3806,8 +3806,12 @@ class Console(flows.Channel):
 
 		initialize = [
 			self.display.clear(),
-			control.optset('mouse-drag', 'mouse-events'),
-			control.optrst('cursor-visible', 'line-wrapping'),
+			control.configure({
+				'mouse-extended-protocol': True,
+				'mouse-drag': True,
+				'cursor-visible': False,
+				'line-wrap': False,
+			}),
 			b''.join(self.adjust(self.dimensions)),
 		]
 
@@ -4014,7 +4018,7 @@ class Console(flows.Channel):
 					pi = None
 
 				# mouse events may be directed to a different pane
-				if k.type in {'mouse', 'scroll', 'drag', 'click'}:
+				if k.type in {'mouse', 'scroll', 'motion', 'click'}:
 					# position is a point (pair)
 					mrefraction = self.locate_refraction(k.identity[0])
 					ar, agg = self.id_state.update(mrefraction, ts, k)
