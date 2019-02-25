@@ -4101,7 +4101,7 @@ def initialize(unit):
 	output_thread = flows.Parallel(output, tty)
 
 	c = Console()
-	c.con_connect_tty(dev)
+	c.con_connect_tty(tty)
 
 	# terminal input -> console -> terminal output
 	input_thread.f_connect(c)
