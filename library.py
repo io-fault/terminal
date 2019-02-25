@@ -3253,7 +3253,7 @@ def output(flow, queue, tty):
 	# Thread transformer function receiving display transactions and writing to the terminal.
 	"""
 	write = os.write
-	fileno = tty.kport
+	fileno = tty.fileno()
 	get = queue.get
 
 	while True:
@@ -3374,7 +3374,7 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	decode = state.decode
 	construct = events.construct_character_events
 	read = os.read
-	fileno = tty.kport
+	fileno = tty.fileno()
 
 	string = ""
 	while True:
@@ -3806,12 +3806,6 @@ class Console(flows.Channel):
 
 		initialize = [
 			self.display.clear(),
-			control.configure({
-				'mouse-extended-protocol': True,
-				'mouse-drag': True,
-				'cursor-visible': False,
-				'line-wrap': False,
-			}),
 			b''.join(self.adjust(self.dimensions)),
 		]
 
@@ -4101,12 +4095,10 @@ def initialize(unit):
 	unit.place(s, 'console-operation')
 	s.actuate()
 
-	from fault.system import tty
-	dev = tty.Device.open() # XXX: Parameter override?
-	dev.record()
-	control.restore_at_exit(dev) # cursor will be hidden and raw is enabled
-	input_thread = flows.Parallel(input, dev)
-	output_thread = flows.Parallel(output, dev)
+	tty = control.setup() # Cursor will be hidden and raw mode is enabled.
+
+	input_thread = flows.Parallel(input, tty)
+	output_thread = flows.Parallel(output, tty)
 
 	c = Console()
 	c.con_connect_tty(dev)
