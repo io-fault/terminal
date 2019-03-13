@@ -88,6 +88,7 @@ extensions = {
 	'.m': 'objectivec',
 	'.swift': 'swift',
 	'.java': 'java',
+	'.rs': 'rust',
 
 	'.hh': 'cxx',
 	'.hpp': 'cxx',
