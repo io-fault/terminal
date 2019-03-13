@@ -3676,7 +3676,7 @@ class Console(flows.Channel):
 
 		# middle verticals
 		verticals = set(itertools.chain(*[self.pane_verticals(i) for i in range(0, n-1)]))
-		verticals.discard(1)
+		verticals.discard(0)
 		for vposition in verticals:
 			yield screen.seek((vposition, offset+0))
 			yield screen.draw_unit_vertical(top)
