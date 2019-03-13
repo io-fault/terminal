@@ -8,8 +8,6 @@ import keyword
 import itertools
 import functools
 
-from fault.terminal import symbols
-
 class Field(metaclass = abc.ABCMeta):
 	"""
 	# Protocol for Field types.
@@ -293,17 +291,17 @@ class Styled(object):
 	# Explicitly styled text field.
 	"""
 
-	__slots__ = ('text', 'styles', 'foreground', 'background')
+	__slots__ = ('text', 'textcolor', 'cellcolor', 'traits')
 
 	@property
 	def underlined(self):
 		return 'underline' in self.styles
 
-	def __init__(self, text = "", fg = None):
+	def __init__(self, text="", fg=-1024):
 		self.text = text
-		self.styles = ()
-		self.foreground = fg
-		self.background = None
+		self.textcolor = fg
+		self.cellcolor = -1024
+		self.traits = 0
 
 	def terminal(self):
 		"""
@@ -312,9 +310,9 @@ class Styled(object):
 
 		return (
 			self.text,
-			self.styles,
-			self.foreground,
-			self.background,
+			self.textcolor,
+			self.cellcolor,
+			self.traits
 		)
 
 @Field.register

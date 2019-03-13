@@ -180,8 +180,8 @@ for i in range(10):
 ca(ctl(' '), 'refraction', ('navigation', 'forward', 'character'))
 ca(ctl('?'), 'refraction', ('navigation', 'backward', 'character'))
 
-ca(nav('left'), 'refraction', ('window', 'horizontal', 'forward'))
-ca(nav('right'), 'refraction', ('window', 'horizontal', 'backward'))
+ca(nav('left'), 'refraction', ('window', 'horizontal', 'backward'))
+ca(nav('right'), 'refraction', ('window', 'horizontal', 'forward'))
 ca(nav('down'), 'refraction', ('window', 'vertical', 'forward'))
 ca(nav('up'), 'refraction', ('window', 'vertical', 'backward'))
 
@@ -223,8 +223,8 @@ ea(ctl('x'), 'refraction', ('delta', 'delete', 'forward'))
 # these are mapped to keyboard names in order to allow class-level overrides
 # and/or context sensitive action selection
 ea(ctl(' '), 'refraction', ('delta', 'edit', 'insert', 'space'))
-ea(ctl('i'), 'refraction', ('navigation', 'horizontal', 'forward'))
-ea(ctl('i', shift), 'refraction', ('navigation', 'horizontal', 'backward'))
+ea(ctl('i'), 'refraction', ('delta', 'indent', 'increment'))
+ea(ctl('i', shift), 'refraction', ('delta', 'indent', 'decrement'))
 ea(ctl('m'), 'refraction', ('edit', 'return'))
 
 ea(nav('left'), 'refraction', ('navigation', 'backward', 'character'))

@@ -1,31 +1,52 @@
 """
-##  Theme data. Colors and text borders.
+# Theme data. Colors and text borders.
 """
 
-colors = {
-	'white': 0xffffff,
-	'teal': 0x005f5f,
-	'orange': 0xff8700,
-	'purple': 0x8787d7,
-	'cream': 0xffd787,
-	'brick': 0x875f5f,
-	'bright-brick': 0xa75a5a,
-	'blue': 0x5f87ff,
-	'pastel-blue': 0x6e94d3,
-	'pastel-purple': 0x8e6f92,
-}
+colors = (
+	# These are the symbols used to identify the sixteen colors commonly
+	# made available by terminals and emulators. Either this list can be
+	# reorganzied to match a terminal's existing configuration or the
+	# terminal can be reconfigured to match this list's expectations.
+
+	'background-limit', # black (currently unused)
+
+	'comment',          # red
+	'endpoint',         # green
+	'highlighter',      # yellow
+	'keyword',          # blue
+	'core',             # purple, normally magenta
+	'literal',          # teal, normally cyan
+	'gray',             # white (darker default text)
+
+	'dark',             # bright black (lighter default cell)
+
+	# Position indicators on borders:
+		'stop',         # bright red
+		'start',        # bright green
+		'current',      # bright yellow
+
+	'blue',             # bright blue
+	'magenta',          # bright magenta (magenta)
+	'preprocessor',     # bright cyan (oranage)
+
+	'foreground-limit', # bright white (currently unused)
+)
 
 theme = {
-	'comment': colors['bright-brick'],
-	'quotation': 0x707070,
-	'indent': 0x3F3F3F,
-	'keyword': colors['pastel-blue'],
-	'core': colors['pastel-purple'],
-	'exoword': colors['orange'],
+	'comment': -(512 + colors.index('comment')),
+	'quotation': -(512 + colors.index('gray')),
+	'indent': -(512 + colors.index('dark')),
+	'keyword': -(512 + colors.index('keyword')),
+	'core': -(512 + colors.index('core')),
+	'exoword': -(512 + colors.index('preprocessor')),
+	'identifier': -(1024), #-(512 + colors.index('gray')), # (terminal) default text color
 	'fallback': 0xCCCCCC,
 	'alpha': 0xAAAAAA,
-	'identifier': 0xDFDFDF,
-	'border': 0x4a4a4a,
+
+	'cell': -(1024), # (terminal) default cell color
+	'border': -(512 + colors.index('dark')),
+	'refraction-type': -(512 + colors.index('blue')),
+	'cursor-text': -(512 + colors.index('background-limit')),
 }
 
 range_colors = {

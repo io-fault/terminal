@@ -1,9 +1,11 @@
 import functools
 import operator
 import collections
-from fault.kernel import library as libkernel
 
+from fault.kernel import library as libkernel
 from fault.terminal.core import Vector
+from fault.terminal import matrix
+
 from . import keyboard
 
 class Cache(object):
@@ -79,10 +81,6 @@ class Refraction(libkernel.Resource):
 	default_keyboard_mapping = 'edit'
 
 	@property
-	def dimensions(self):
-		return self.view.area.dimensions
-
-	@property
 	def horizontal(self):
 		"""
 		# The current working horizontal position.
@@ -119,8 +117,10 @@ class Refraction(libkernel.Resource):
 
 	def __init__(self):
 		self.movement = False
+		self.page = [] # Phrase buffer.
+		self.page_cells = [] # Sum of cells.
+
 		self.view = None
-		self.area = None
 		self.pane = None # pane index of refraction; None if not a pane or hidden
 
 		# keeps track of horizontal positions that are modified for cursor and range display
@@ -247,7 +247,8 @@ class Refraction(libkernel.Resource):
 		# Adjustments are conditionally passed to a view.
 		"""
 		if self.view is not None:
-			self.view.adjust(point, dimensions)
+			self.view.context_set_position(point)
+			self.view.context_set_dimensions(dimensions)
 			self.calibrate(dimensions)
 
 	def calibrate(self, dimensions):
@@ -309,10 +310,8 @@ class Refraction(libkernel.Resource):
 		self.view = view
 
 		if view is None:
-			self.area = None
 			return self.conceal()
 		else:
-			self.area = view.area
 			return self.reveal()
 
 	def clear(self):

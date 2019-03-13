@@ -2,7 +2,22 @@
 # Application view publishing library.
 # Currently limited to built-in applications.
 
+# [ Concepts ]
+
+# /window/
+	# A collection of organized Panes.
+	# Windows are event receivers.
+# /pane/
+	# A drawing area connected to a Refraction.
+	# Panes do not receive events; Windows pass them to refractions.
+# /refraction/
+	# A view connected to a sequence of pages.
+	# Refractions are event receivers.
+# /terminal/
+	# The display endpoint and event source connected to a Window.
+
 # [ Engineering ]
+
 # The initial development has left some major misdesign. Refractions
 # are currently conflated with Application Contexts. Contexts being
 # purely conceptual with the current incarnation.
@@ -17,7 +32,6 @@ import sys
 import os
 import queue
 import functools
-import locale
 import codecs
 import keyword
 import itertools
@@ -33,12 +47,11 @@ from fault.kernel import flows
 from fault.range import library as librange
 
 from fault.terminal import control
-from fault.terminal import paging
 from fault.terminal import matrix
 from fault.terminal import events
 from fault.terminal import meta
-from fault.terminal import symbols
 
+from . import symbols
 from . import fields
 from . import query
 from . import lines as liblines
@@ -46,9 +59,13 @@ from . import lines as liblines
 from . import core
 from . import palette
 
+underlined = matrix.Traits.construct('underline')
+normalstyle = matrix.Traits.none()
+
 def print_except_with_crlf(exc, val, tb):
 	# Used to allow reasonable exception displays.
 	import traceback
+	import pprint
 
 	sys.stderr.flush()
 	sys.stderr.write('\r')
@@ -200,10 +217,10 @@ class Fields(core.Refraction):
 
 		self.horizontal.configure(il.length(), 0)
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.update_unit()
 		self.update_window()
-		self.display(max(0, new-quantity), None)
+		self.update(max(0, new-quantity), None)
 
 		return ((self.truncate_vertical, (new, new+quantity)), IRange((new, new+quantity-1)))
 
@@ -263,6 +280,7 @@ class Fields(core.Refraction):
 		"""
 		# Detect indentation blocks.
 		"""
+
 		# if there's no indentation and it's not empty, check contiguous lines
 		if level is None:
 			il = self.indentation(initial)
@@ -279,6 +297,8 @@ class Fields(core.Refraction):
 			nonlocal self
 
 			iil = self.indentation(item)
+			if iil is None:
+				return None
 
 			if iil < ilevel:
 				if self.has_content(item):
@@ -410,7 +430,7 @@ class Fields(core.Refraction):
 		self.horizontal_focus = unit
 
 		# Adjust the vertical position without modifying the range.
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.vertical_index = line
 		v = self.vector.vertical
 		v.move(v.get() - line)
@@ -531,8 +551,6 @@ class Fields(core.Refraction):
 		if not hscrolled and not vscrolled:
 			return
 
-		self.clear_horizontal_indicators()
-
 		# normalize the window by setting the datum to stop
 		overflow = v.maximum - len(self.units)
 		if overflow > 0:
@@ -542,6 +560,7 @@ class Fields(core.Refraction):
 		if underflow < 0:
 			v.move(-underflow)
 
+		h.reposition()
 		v.reposition()
 
 		# All lines are being updated.
@@ -606,7 +625,7 @@ class Fields(core.Refraction):
 		redo = []
 		add = redo.append
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		ranges = []
 		for ts, (undo, lr) in actions:
@@ -625,7 +644,7 @@ class Fields(core.Refraction):
 		for r in ranges:
 			for x in self.units[r.start:r.stop]:
 				x[1].reformat()
-			self.display(*r.exclusive()) # filters out-of-sight lines
+			self.update(*r.exclusive()) # filters out-of-sight lines
 
 		self.update_unit()
 		self.update_window()
@@ -644,12 +663,12 @@ class Fields(core.Refraction):
 		undo = []
 		add = undo.append
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		for ts, (redo, lr) in actions:
 			method, args = redo
 			inverse = method(*args)
-			self.display(*lr.exclusive()) # filters out-of-sight lines
+			self.update(*lr.exclusive()) # filters out-of-sight lines
 			add((None, (inverse, lr)))
 
 		self.past.append(undo)
@@ -677,16 +696,9 @@ class Fields(core.Refraction):
 		"""
 		self.distribution = 'vertical'
 
-	def offsets(self, unit, *indexes):
-		"""
-		# Calculate the cell offsets of the given unit.
-		"""
-		u = self.draw(unit)
-		matrix.offsets(u, indexes)
-
 	@staticmethod
 	@functools.lru_cache(16)
-	def tab(v, size = 4):
+	def tab(v, size=4):
 		"""
 		# Draw a tab for display.
 		"""
@@ -701,55 +713,97 @@ class Fields(core.Refraction):
 		"""
 		return (('-' * (size-1)) + '|') * v
 
-	def comment(self, q, iterator, color = palette.theme['comment']):
+	def comment(self, iterator, color=palette.theme['comment']):
 		"""
-		# Draw the comment and its leading indicator.
+		# Draw the content of a comment.
 		"""
-		yield (q.value(), (), 0x4a4a4a)
-		for path, x in iterator:
-			yield (x.value(), (), color)
 
-	def quotation(self, q, iterator, color = palette.theme['quotation']):
+		spaces = 0
+		for path, x in iterator:
+			if x.empty:
+				continue
+
+			val = str(x)
+
+			if x == " ":
+				# space, bump count.
+				spaces += 1
+				continue
+			elif spaces:
+				# Print regular spaces.
+				yield (" " * spaces, color, -1024, normalstyle)
+				spaces = 0
+			yield (x, color, -1024, normalstyle)
+		else:
+			# trailing spaces
+			if spaces:
+				yield ("#" * spaces, 0xaf0000, -1024, underlined)
+
+	def quotation(self, q, iterator, color=palette.theme['quotation'], cell=palette.theme['cell']):
 		"""
 		# Draw the quotation.
 		"""
-		yield (q.value(), (), color)
+
+		yield (q.value(), color, cell, normalstyle)
+
+		spaces = 0
 		for path, x in iterator:
-			yield (x.value(), (), color)
+			if x.empty:
+				continue
+
+			val = str(x)
+
+			if x == " ":
+				# space, bump count.
+				spaces += 1
+				continue
+			elif spaces:
+				# Print regular spaces.
+				yield (" " * spaces, color, cell, normalstyle)
+				spaces = 0
+
+			yield (x, color, cell, normalstyle)
+
 			if x == q:
 				break
+		else:
+			# trailing spaces
+			if spaces:
+				yield ("#" * spaces, 0xaf0000, cell, underlined)
 
-	def draw(self, unit,
+	def specify(self, line,
 			Indent=fields.Indentation,
 			Constant=fields.Constant,
 			quotation=palette.theme['quotation'],
 			indent_cv=palette.theme['indent'],
 			theme=palette.theme,
+			defaultcell=palette.theme['cell'],
+			defaulttraits=matrix.Traits(0),
 			isinstance=isinstance,
 			len=len, hasattr=hasattr,
 			iter=iter, next=next,
 		):
 		"""
-		# Draw an individual unit for rendering.
+		# Yield the WordSpecifications for constructing a Phrase.
 		"""
 		fs = 0
 
-		if len(unit) > 1:
-			uline = unit[1]
+		if len(line) > 1:
+			uline = line[1]
 			classify = uline.classifications
 		else:
 			classify = ()
 			uline = None
 
-		i = iter(unit.subfields())
-		path, x = next(i)
+		i = iter(line.subfields())
+		path, x = next(i) # grab indentation
 
 		if isinstance(x, Indent):
 			if x > 0:
-				if self.has_content(unit):
-					yield (self.tab(x, size=x.size), (), None)
+				if self.has_content(line):
+					yield (self.tab(x, size=x.size), -1024, defaultcell, defaulttraits)
 				else:
-					yield (self.visible_tab(x, size=x.size), (), indent_cv)
+					yield (self.visible_tab(x, size=x.size), indent_cv, defaultcell, defaulttraits)
 
 		spaces = 0
 
@@ -765,73 +819,77 @@ class Fields(core.Refraction):
 				continue
 			elif spaces:
 				# Regular spaces.
-				yield (" " * spaces, (), None)
+				yield (" " * spaces, -1024, defaultcell, defaulttraits)
 				spaces = 0
 
 			if x in {"#", "//"}:
-				yield from self.comment(x, i)
+				yield (x.value(), -(512+8), defaultcell, defaulttraits)
+				yield from self.comment(i) # progresses internally
+				break
 			elif x in uline.quotations:
-				yield from self.quotation(x, i)
-			elif val.isdigit() or (val.startswith('0x') and val[2:].isdigit()):
-				yield (x.value(), (), quotation)
+				yield from self.quotation(x, i) # progresses internally
+			elif val.isdigit() or val.startswith('0x'):
+				yield (x.value(), quotation, defaultcell, defaulttraits)
 			elif x is self.separator:
 				fs += 1
-				yield (str(fs), (), 0x202020)
+				yield (str(fs), 0x202020, defaultcell, defaulttraits)
 			else:
 				color = theme[classify.get(x, 'identifier')]
-				yield (x, (), color)
+				yield (x, color, defaultcell, defaulttraits)
 		else:
 			# trailing spaces
 			if spaces:
-				yield ("#" * spaces, ('underline',), 0xaf0000, None)
+				yield ("#" * spaces, 0xaf0000, defaultcell, underlined)
+
+	def phrase(self, line, Constructor=functools.lru_cache(512)(matrix.Phrase.construct)):
+		return Constructor(self.specify(line))
 
 	# returns the text for the stop, position, and stop indicators.
 	def calculate_horizontal_start_indicator(self, empty, text, style, positions):
-		return (text or ' ',) + style
+		return matrix.Phrase.construct(((text, *style),))
 
 	def calculate_horizontal_stop_indicator(self, empty, text, style, positions,
-			combining_wedge = symbols.combining['low']['wedge-left'],
+			combining_wedge=symbols.combining['low']['wedge-left'],
 		):
-		return (text or ' ',) + style
+		return matrix.Phrase.construct(((text, style[0], style[1], normalstyle),))
 
 	def calculate_horizontal_position_indicator(self, empty, text, style, positions,
-			vc = symbols.combining['right']['vertical-line'],
-			fs = symbols.combining['full']['forward-slash'],
-			xc = symbols.combining['high']['wedge-right'],
-			range_color_palette = palette.range_colors,
+			vc=symbols.combining['right']['vertical-line'],
+			fs=symbols.combining['full']['forward-slash'],
+			xc=symbols.combining['high']['wedge-right'],
+			range_color_palette=palette.range_colors,
+			cursortext=palette.theme['cursor-text'],
 		):
-		invert = True
+		swap = True
 		mode = self.keyboard.current[0]
-		if not text:
-			text = ' '
 
 		if mode == 'edit':
-			style = ('underline',)
-			invert = False
+			style = underlined
+			swap = False
 		else:
-			style = ()
+			style = style[-1]
 
 		if empty:
-			color = (range_color_palette['clear'], 0)
+			color = (range_color_palette['clear'], cursortext)
 		elif positions[1] >= positions[2]:
 			# after or at exclusive stop
-			color = (range_color_palette['stop-exclusive'], 0)
+			color = (range_color_palette['stop-exclusive'], cursortext)
 		elif positions[1] < positions[0]:
 			# before start
-			color = (range_color_palette['start-exclusive'], 0)
+			color = (range_color_palette['start-exclusive'], cursortext)
 		elif positions[0] == positions[1]:
 			# position is on start
-			color = (range_color_palette['start-inclusive'], 0)
+			color = (range_color_palette['start-inclusive'], cursortext)
 		elif positions[2]-1 == positions[1]:
 			# last included character
-			color = (range_color_palette['stop-inclusive'], 0)
+			color = (range_color_palette['stop-inclusive'], cursortext)
 		else:
-			color = (range_color_palette['offset-active'], 0)
+			color = (range_color_palette['offset-active'], cursortext)
 
-		if invert:
+		if swap:
 			color = (color[1], color[0])
 
-		return (text, style,) + color
+		return matrix.Phrase.construct(((text, *color, style),))
 
 	# modification to text string
 	horizontal_transforms = {
@@ -847,8 +905,8 @@ class Fields(core.Refraction):
 			address=fields.address,
 		):
 		"""
-		# Collect the fragments of the horizontal range from the rendered unit.
-		# Used to draw the horizontal range background.
+		# Collect the fragments of the horizontal range from the Phrase.
+
 		# Nearly identical to &libc.Segments.select()
 		"""
 		llen = len(line)
@@ -856,19 +914,17 @@ class Fields(core.Refraction):
 		astop = positions[-1]
 
 		if astart < astop:
-			start, stop = address([x[0] for x in line], astart, astop)
+			start, stop = address([x[1] for x in line], astart, astop)
 		else:
-			#astart += 1
-			#astop -= 1
-			start, stop = address([x[0] for x in line], astop, astart)
+			start, stop = address([x[1] for x in line], astop, astart)
 
 		n = stop[0] - start[0]
-		if not n:
+		if n == 0:
 			# same sequence; simple slice
 			if line and start[0] < llen:
 				only = line[start[0]]
-				text = only[0][start[1] : stop[1]]
-				hrange = [(text,) + only[1:]]
+				text = only[1][start[1]:stop[1]]
+				hrange = [(text, *only[2])]
 			else:
 				# empty range
 				hrange = []
@@ -878,25 +934,26 @@ class Fields(core.Refraction):
 			slices.append((stop[0], slice(0, stop[1])))
 
 			hrange = [
-				(line[p][0][pslice],) + line[p][1:] for p, pslice in slices
-				if line[p][0][pslice]
+				(line[p][1][pslice], *line[p][2])
+				for p, pslice in slices
+				if line[p][1][pslice]
 			]
 
-		prefix = [line[i] for i in range(start[0])]
+		prefix = [(line[i][1], *line[i][2]) for i in range(start[0])]
 		if start[0] < llen:
 			prefix_part = line[start[0]]
-			prefix.append((prefix_part[0][:start[1]],) + prefix_part[1:])
+			prefix.append((prefix_part[1][:start[1]], *prefix_part[2]))
 
 		if stop[0] < llen:
 			suffix_part = line[stop[0]]
-			suffix = [(suffix_part[0][stop[1]:],) + suffix_part[1:]]
-			suffix.extend([line[i] for i in range(stop[0]+1, len(line))])
+			suffix = [(suffix_part[1][stop[1]:], *suffix_part[2])]
+			suffix.extend([(line[i][1], *line[i][2]) for i in range(stop[0]+1, len(line))])
 		else:
 			suffix = []
 
 		return ((astart, astop, hrange), prefix, suffix)
 
-	def collect_horizontal_positions(self, line, positions,
+	def collect_horizontal_positions(self, phrase, positions,
 			len=len, list=list, set=set,
 			iter=iter, range=range, tuple=tuple,
 		):
@@ -906,30 +963,42 @@ class Fields(core.Refraction):
 
 		# Used to draw range boundaries and the cursor.
 		"""
-
 		hr = list(set(positions)) # list of positions and size
 		hr.sort(key = lambda x: x[0])
 
-		l = len(line)
+		l = len(phrase)
 		offset = 0
-		roffset = None
+		roffset = 0
 
 		li = iter(range(l))
 		fl = 0
 
-		areas = {}
+		panes = {}
+
 		for x, size in hr:
+			grapheme = ""
+			style = (-1024, -1024, normalstyle)
+
 			if x >= offset and x < (offset + fl):
-				# between offset and offset + len(f[0])
+				# continuation of word.
 				roffset = (x - offset)
+				text = f[1]
+				if text:
+					grapheme = text[matrix.Phrase.grapheme(text, roffset)]
+				style = f[2]
 			else:
 				offset += fl
 
 				for i in li: # iterator remains at position
-					f = line[i]
-					fl = len(f[0])
+					f = phrase[i]
+					fl = len(f[1])
 					if x >= offset and x < (offset + fl):
 						roffset = (x - offset)
+
+						text = f[1]
+						if text:
+							grapheme = text[matrix.Phrase.grapheme(text, roffset)]
+						style = f[2]
 						break
 					else:
 						# x >= (offset + fl)
@@ -939,73 +1008,65 @@ class Fields(core.Refraction):
 					offset += fl
 					roffset = fl
 					fl = 0
-					f = ("", (), None, None)
 
-				text, *style = f
-				while len(style) < 3:
-					style.append(None)
-				style = tuple(style)
+			panes[x] = (x, size, grapheme, style)
 
-			areas[x] = (x, size, text[roffset:roffset+size], style)
-
-		slices = [areas[k[0]] for k in positions]
+		slices = [panes[k[0]] for k in positions]
 		return slices
 
-	def clear_horizontal_indicators(self, starmap=itertools.starmap, cells=matrix.text.cells):
+	def clear_horizontal_indicators(self, cells=matrix.text.cells):
 		"""
 		# Called to clear the horizontal indicators for line switches.
 		"""
-		area = self.view.area
-		shr = area.seek_horizontal_relative
-		astyle = area.style
+		v = self.view
+		vi = self.vertical_index
+		wl = self.window_line(vi)
 
-		wl = self.window_line(self.vertical_index)
-
-		if wl >= self.view.height or wl < 0:
+		if wl >= v.height or wl < 0:
 			# scrolled out of view
 			self.horizontal_positions.clear()
 			self.horizontal_range = None
-			return
-
-		events = [area.seek((0, wl))]
-		append = events.append
+			return ()
 
 		# cursor
-		for k, v in self.horizontal_positions.items():
-			offset, old = v
-			# don't bother if it's inside the range.
-			append(shr(offset))
-			oldtext = old[2] or ' '
-			oldstyle = old[3]
-			append(astyle(oldtext, *oldstyle))
-			append(shr(-(offset+cells(oldtext))))
+		clearing = [v.seek((0, wl))]
+		for k, (offset, p) in self.horizontal_positions.items():
+			if offset is None:
+				try:
+					offset = self.horizontal_line_cache.cellcount()
+				except AttributeError:
+					self.transcript_write("`horizontal_line_cache` not present on clear.\n")
+					continue
+			index, size, text, style = p
+			text = text or ' '
+			ph = matrix.Phrase.construct([(text, *style)])
+			clearing.append(v.seek_horizontal_relative(offset))
+			clearing.append(v.reset_text())
+			clearing.append(b''.join(v.render(ph)))
+			clearing.append(v.seek_horizontal_relative(-(offset+cells(text))))
 
-		# horizontal selection
-		if self.horizontal_range is not None:
-			rstart, rstop, (starti, stopi, text) = self.horizontal_range
-
-			append(shr(rstart))
-			append(b''.join(starmap(astyle, text)))
-			append(shr(-((rstop - rstart) + rstart)))
-
+		self.controller.f_emit(clearing)
 		self.horizontal_positions.clear()
 		self.horizontal_range = None
 
-		self.controller.f_emit(events)
+		return self.update(vi, vi+1)
 
 	def render_horizontal_indicators(
 			self, unit, horizontal,
 			names=('start', 'position', 'stop'),
-			#range_color=0x262626,
-			range_color=None,
 			starmap=itertools.starmap,
 			cells=matrix.text.cells,
-			offsets=matrix.offsets,
 			list=list, len=len, tuple=tuple, zip=zip
 		):
 		"""
 		# Changes the horizontal position indicators surrounding the portal.
 		"""
+
+		if not self.focused:
+			# XXX: Workaround; should not be called if not focused.
+			return ()
+
+		hr_changed = False
 
 		if horizontal[0] > horizontal[2]:
 			horizontal = (horizontal[2], horizontal[1], horizontal[0])
@@ -1014,14 +1075,14 @@ class Fields(core.Refraction):
 			inverted = False
 
 		window = self.window.horizontal
-		area = self.view.area
-		shr = area.seek_horizontal_relative
-		astyle = area.style
-		width = self.dimensions[0] - 1
+		v = self.view
+		width = v.width
 
-		line = list(self.draw(unit or fields.Text()))
+		shr = v.seek_horizontal_relative
+
+		line = self.phrase(unit or fields.Text())
 		for x in line:
-			if len(x[0]) > 0:
+			if len(x[1]) > 0:
 				empty = False
 				break
 		else:
@@ -1032,90 +1093,98 @@ class Fields(core.Refraction):
 		hr, prefix, suffix = self.collect_horizontal_range(line, hs)
 
 		if self.keyboard.mapping == 'edit':
-			range_style = ()
+			range_style = normalstyle
 		else:
-			range_style = ('underline',)
+			range_style = underlined
 
-		if self.horizontal_range != hr:
-			if self.horizontal_range is not None:
-				rstart, rstop, (starti, stopi, text) = self.horizontal_range
+		if self.horizontal_range is None or self.horizontal_range[2] != hr:
+			hr_changed = True
 
-				clear_range = [
-					shr(rstart),
-					b''.join(starmap(astyle, text)),
-					shr(-((rstop - rstart) + rstart)),
-				]
+			rstart, rstop, subphrase = hr
+			if line:
+				rstarto, rstopo = line.translate(rstart, rstop)
 			else:
-				clear_range = []
+				rstarto = rstopo = 0
 
-			rstart, rstop, text = hr
-			rstarto, rstopo = offsets(line, rstart, rstop)
 			range_part = [
-				x[:1] + (x[1] + range_style, (x[2] or 0xAAAAAA), range_color,)
-				for x in text
+				(x[0], x[1], x[2], range_style)
+				for x in subphrase
 			]
 
 			self.horizontal_range = (rstarto, rstopo, hr)
 
+			# rline is the unit line with the range changes
+			rline = matrix.Phrase.construct(prefix + range_part + suffix)
+			self.horizontal_line_cache = rline
+			rlcc = rline.cellcount()
+			if rlcc > width:
+				trim = rlcc - width
+			else:
+				trim = 0
+
 			set_range = [
-				shr(rstarto),
-				b''.join(starmap(astyle, range_part)),
-				shr(-((rstopo - rstarto) + rstarto)),
+				v.reset_text(),
+				b''.join(v.render(rline.rstripcells(trim))),
+				shr(-(rlcc-trim)),
 			]
 		else:
-			range_part = [x[:1] + (x[1] + range_style, (x[2] or 0xAAAAAA), range_color,) for x in hr[2]]
-			clear_range = []
+			rline = self.horizontal_line_cache
 			set_range = []
 
-		# rline is the unit line with the range changes
-		rline = prefix + range_part + suffix
+		position_events = []
+		if not hr_changed and self.horizontal_positions:
+			# Only clear the positions if the hrange is the same.
+			# If hr changed, a fresh line will be rendered.
+			for k, (offset, p) in self.horizontal_positions.items():
+				if offset is None:
+					offset = rline.cellcount()
+				index, size, text, style = p
+				text = text or ' '
+				ph = matrix.Phrase.construct([(text, *style)])
+				position_events.append(v.reset_text())
+				position_events.append(v.seek_horizontal_relative(offset))
+				position_events.append(b''.join(v.render(ph)))
+				position_events.append(v.seek_horizontal_relative(-(offset+cells(text))))
 
-		# now the positions
+		# Set Cursor Positions
 		offset_and_size = tuple(zip(hs, (1,1,1)))
 		hp = self.collect_horizontal_positions(rline, offset_and_size)
 
 		# map the positions to names for the dictionary state
-		new_hp = [(names[i], (tuple(offsets(line, x[0]))[0], x,)) for i, x in zip(range(3), hp)]
+		new_hp = [
+			(names[i], (tuple(rline.translate(x[0]))[0], x,))
+			for i, x in zip(range(3), hp)
+		]
 		# put position at the end for proper layering of cursor
 		new_hp.append(new_hp[1])
 		del new_hp[1]
 
-		clear_positions = []
-		set_positions = []
-		for k, (offset, v) in new_hp:
-
-			# clear old position if different
-			oldoffset, old = self.horizontal_positions.get(k, (None, None))
-			if old is not None and old != v:
-				if old[:2] != v[:2]:
-					# completely new position, clear
-					clear_positions.append(shr(oldoffset))
-					oldtext = old[2] or ' '
-					oldstyle = old[3]
-					clear_positions.append(astyle(oldtext, *oldstyle))
-					clear_positions.append(shr(-(oldoffset+cells(oldtext))))
-
-			# new indicator
-			index, size, text, style = v
+		for k, (offset, p) in new_hp:
+			# new cursor
+			if offset is None:
+				offset = rline.cellcount()
+			index, size, text, style = p
 			s = self.horizontal_transforms[k](self, empty, text.ljust(size, ' '), style, hs)
 
-			set_positions.append(shr(offset))
-			set_positions.append(astyle(*s))
-			set_positions.append(shr(-(offset+cells(s[0]))))
+			position_events.append(v.reset_text())
+			position_events.append(shr(offset))
+			position_events.append(b''.join(v.render(s)))
+			position_events.append(shr(-(offset+s.cellcount())))
 
 		self.horizontal_positions.update(new_hp)
 
-		return clear_positions + clear_range + set_range + set_positions
+		return set_range + position_events
 
 	def current_horizontal_indicators(self):
+		v = self.view
 		wl = self.window_line(self.vertical_index)
 
-		if wl < self.view.height and wl >= 0:
+		if wl < v.height and wl >= 0:
 			h = self.horizontal
 			if self.horizontal_focus is not None:
 				h.limit(0, self.horizontal_focus.characters())
 
-			events = [self.view.area.seek((0, wl))]
+			events = [v.reset_text(), v.seek((0, wl))]
 			events.extend(self.render_horizontal_indicators(self.horizontal_focus, h.snapshot()))
 			return events
 
@@ -1173,42 +1242,51 @@ class Fields(core.Refraction):
 		rstop = stop - top
 		relr = range(rstart, rstop)
 
-		seq = self.view.sequence
+		seq = self.page
 
 		# Draw the unit into the Line in the view.
-		draw = self.draw
-		units = self.units
+		phrase = self.phrase
+		getline = self.units.__getitem__
 		for i, ri in zip(r, relr):
-			seq[ri].update(list(draw(units[i])))
+			ph = self.page[ri] = phrase(getline(i))
+			self.page_cells[ri] = ph.cellcount()
 
 		return (rstart, rstop)
 
-	def display(self, start, stop, list=list):
+	def update(self, start, stop, slice=slice):
 		"""
-		# Send the given line range to the display.
+		# Recognize the dirty range, update the local page,
+		# and emit the printed page to the terminal.
 		"""
 
-		self.controller.f_emit(list(self.view.render(*self.render(start, stop))))
+		rlines = self.render(start, stop)
+		s = slice(rlines[0], rlines[1])
+		lines = self.page[s]
+		cellc = self.page_cells[s]
 
-	def refresh(self, start=0, list=list):
+		dcommands = [self.view.seek((0, rlines[0]))]
+		dcommands.extend(self.view.print(lines, cellc))
+		self.controller.f_emit(dcommands)
+		return ()
+
+	def refresh(self, start=0, len=len, range=range, list=list, min=min, islice=itertools.islice):
 		origin, top, bottom = self.window.vertical.snapshot()
 		ub = len(self.units)
 		rl = min(bottom, ub)
 		r = range(top + start, rl)
-		seq = self.view.sequence
 
-		draw = self.draw
-		units = self.units
-		for i in r:
-			u = units[i]
-			seq[i-top].update(list(draw(u)))
+		hzero, offset, hstop = self.window.horizontal.snapshot()
+		v = self.view
+		width = v.dimensions[0]
 
-		u = self.out_of_bounds
-		for i in range(rl-top, bottom-top):
-			seq[i].update(list(self.draw(self.out_of_bounds)))
+		vacancies = (bottom-top) - (rl-top)
 
-		rendered = list(self.view.render())
-		return rendered
+		self.page[start:] = map(self.phrase, self.units[top+start:rl] + ([self.out_of_bounds] * vacancies))
+		self.page_cells[start:] = [x.cellcount() for x in self.page[start:]]
+
+		out = [v.seek((0, start))]
+		out.extend(v.print(islice(self.page, start, None), islice(self.page_cells, start, None)))
+		return out
 
 	def insignificant(self, path, field):
 		"""
@@ -1217,7 +1295,7 @@ class Fields(core.Refraction):
 		return isinstance(field, (fields.Formatting, fields.Constant)) or str(field) == " "
 
 	def rotate(self, direction, horizontal, unit, sequence, quantity,
-			filtered=None, iter=iter
+			filtered=None, iter=iter, cells=matrix.text.cells
 		):
 		"""
 		# Select the next *significant* field, skipping the given quantity.
@@ -1272,7 +1350,8 @@ class Fields(core.Refraction):
 
 		if n is not None:
 			offset = self.horizontal_focus.offset(path, n)
-			horizontal.configure(offset or 0, n.length(), 0)
+			cc = cells(str(n))
+			horizontal.configure(offset or 0, cc, 0)
 			self.update_horizontal_indicators()
 			self.movement = True
 
@@ -1304,7 +1383,7 @@ class Fields(core.Refraction):
 		sel[-2].delete(sel[-1])
 
 	def event_delta_delete_line(self, event):
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		record = self.truncate_vertical(self.vertical_index, self.vertical_index+1)
 		self.log(record, IRange.single(self.vertical_index))
 		self.movement = True
@@ -1315,33 +1394,18 @@ class Fields(core.Refraction):
 		# Remove a vertical range from the refraction.
 		"""
 
-		# delete range
-		units = self.units[start:stop]
+		deleted_lines = self.units[start:stop]
+
 		self.units.delete(start, stop)
-
-		self.display(start, None)
-
-		# handle case where the window extends beyond the document.
-		# lines that once had content are now empty, so they need
-		# to be cleared if the visible units is less than the view's height.
-		nunits = len(self.units)
-		vunits = nunits - self.window.vertical.get()
-		if vunits < self.view.height:
-			# erase any lines not updated beyond the EOF
-			v = self.view
-			wl = self.window_line(nunits)
-			stop = wl + (stop-start)
-			v.clear(wl, stop)
-			self.controller.f_emit(list(v.render(wl, stop)))
-
+		self.controller.f_emit(self.refresh(self.window_line(start)))
 		self.update_vertical_state()
 
-		return (self.insert_vertical, (start, units))
+		return (self.insert_vertical, (start, deleted_lines))
 
 	def insert_vertical(self, offset, sequence):
 		self.units.insert(offset, sequence)
 		self.update_unit()
-		self.display(offset, None)
+		self.update(offset, None)
 		return (self.truncate_vertical, (offset, offset + len(sequence)))
 
 	def translocate_vertical(self, index, units, target, start, stop):
@@ -1371,14 +1435,14 @@ class Fields(core.Refraction):
 		r = IRange.single(index)
 		self.log(unit[1].insert(target, fields.String(seq)), r)
 		unit[1].reformat()
-		self.display(*r.exclusive())
+		self.update(*r.exclusive())
 
 	def event_delta_translocate(self, event):
 		"""
 		# Relocate the range to the current position.
 		"""
 		axis = self.last_axis
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		if axis == 'vertical':
 			start, position, stop = self.vertical.snapshot()
@@ -1415,7 +1479,7 @@ class Fields(core.Refraction):
 		self.checkpoint()
 
 	def event_delta_transpose_vertical(self, event):
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		s1 = self.vertical.snapshot()
 
 		self.event_navigation_range_dequeue(None)
@@ -1437,7 +1501,7 @@ class Fields(core.Refraction):
 		self.checkpoint()
 
 	def event_delta_transpose_horizontal(self, event):
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		axis, dominate, current, range = self.range_queue.popleft()
 		if axis == 'vertical':
@@ -1483,7 +1547,7 @@ class Fields(core.Refraction):
 
 			adjust = - ((s1_range[1] - s1_range[0]) - (s2_range[1] - s2_range[0]))
 			self.movement = True
-			self.display(*ir.exclusive())
+			self.update(*ir.exclusive())
 		else:
 			s1_text = str(s1_unit[1])[s1_range[0]:s1_range[1]]
 			inverse = s1_unit[1].delete(s1_range[0], s1_range[1])
@@ -1504,8 +1568,8 @@ class Fields(core.Refraction):
 			s2_unit[1].reformat()
 
 			self.movement = True
-			self.display(*s1_changelines.exclusive())
-			self.display(*s2_changelines.exclusive())
+			self.update(*s1_changelines.exclusive())
+			self.update(*s2_changelines.exclusive())
 
 		self.horizontal.configure(adjust + s2_adjust + s2_range[0], s1_range[1] - s1_range[0])
 		self.checkpoint()
@@ -1529,7 +1593,7 @@ class Fields(core.Refraction):
 		# Remove the range of the last axis.
 		"""
 		axis = self.last_axis
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		if axis == 'vertical':
 			start, position, stop = self.vertical.snapshot()
@@ -1547,7 +1611,7 @@ class Fields(core.Refraction):
 			abs = self.horizontal.get()
 			self.horizontal.contract(0, stop - start)
 			self.horizontal.set(abs)
-			self.display(*r.exclusive())
+			self.update(*r.exclusive())
 			self.movement = True
 		else:
 			pass
@@ -1565,7 +1629,7 @@ class Fields(core.Refraction):
 		adjust = self.horizontal_focus[0].length()
 		ul = self.horizontal_focus.length()
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		h.configure(adjust, ul - adjust)
 		self.vector_last_axis = h
@@ -1642,12 +1706,12 @@ class Fields(core.Refraction):
 		# Map the absolute position to the relative position and
 		# perform the &event_select_series operation.
 		"""
-		sx, sy = self.area.point
+		sx, sy = self.view.point
 		rx = ax - sx
 		ry = ay - sy
 		ry += self.window.vertical.get()
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.vector.vertical.set(ry-1)
 		self.vector.horizontal.set(rx-1)
 		self.update_unit()
@@ -1737,7 +1801,7 @@ class Fields(core.Refraction):
 		self.movement = True
 
 	def event_place_center(self, event):
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		a = self.axis
 		a.bisect()
 
@@ -1745,12 +1809,12 @@ class Fields(core.Refraction):
 		self.movement = True
 
 	def event_navigation_move_bol(self, event):
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		offset = self.indentation_adjustments(self.horizontal_focus)
 		self.horizontal.move((-self.horizontal.datum)+offset, 1)
 
 	def event_navigation_move_eol(self, event):
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		offset = self.indentation_adjustments(self.horizontal_focus)
 		self.horizontal.move(offset + self.horizontal_focus[1].characters(), 0)
 
@@ -1760,24 +1824,24 @@ class Fields(core.Refraction):
 		# Move the position to the next line.
 		"""
 		v = self.vertical
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		v.move(quantity)
 		self.vector_last_axis = v
 		self.update_vertical_state()
 		self.movement = True
 
-	def event_navigation_vertical_backward(self, event, quantity = 1):
+	def event_navigation_vertical_backward(self, event, quantity=1):
 		"""
 		# Move the position to the previous line.
 		"""
 		v = self.vertical
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		v.move(-quantity)
 		self.vector_last_axis = v
 		self.update_vertical_state()
 		self.movement = True
 
-	def event_navigation_vertical_paging(self, event, quantity = 1):
+	def event_navigation_vertical_paging(self, event, quantity=1):
 		"""
 		# Modify the vertical range query for paging.
 		"""
@@ -1790,7 +1854,7 @@ class Fields(core.Refraction):
 		self.update_vertical_state()
 		self.movement = True
 
-	def event_navigation_vertical_sections(self, event, quantity = 1):
+	def event_navigation_vertical_sections(self, event, quantity=1):
 		v = self.vector.vertical
 		win = self.window.vertical.snapshot()
 		height = abs(int((win[2] - win[0]) / 2.5))
@@ -1805,7 +1869,7 @@ class Fields(core.Refraction):
 		"""
 		# Adjust the horizontal position of the window forward by the given quantity.
 		"""
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.window.horizontal.move(quantity)
 		self.movement = True
 		self.scrolled()
@@ -1814,7 +1878,7 @@ class Fields(core.Refraction):
 		"""
 		# Adjust the horizontal position of the window forward by the given quantity.
 		"""
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.window.horizontal.move(-quantity)
 		self.movement = True
 		self.scrolled()
@@ -1824,7 +1888,7 @@ class Fields(core.Refraction):
 		# Adjust the vertical position of the window forward by the
 		# given quantity.
 		"""
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.window.vertical.move(quantity)
 		self.movement = True
 		self.scrolled()
@@ -1834,7 +1898,7 @@ class Fields(core.Refraction):
 		# Adjust the vertical position of the window backward by the
 		# given quantity. (Moves view port).
 		"""
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.window.vertical.move(-quantity)
 		self.movement = True
 		self.scrolled()
@@ -1844,7 +1908,7 @@ class Fields(core.Refraction):
 		# Adjust the vertical position of the window forward by the
 		# given quantity.
 		"""
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.window.vertical.move(quantity)
 		self.movement = True
 		self.scrolled()
@@ -1854,7 +1918,7 @@ class Fields(core.Refraction):
 		# Adjust the vertical position of the window backward by the
 		# given quantity. (Moves view port).
 		"""
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.window.vertical.move(-quantity)
 		self.movement = True
 		self.scrolled()
@@ -1902,7 +1966,7 @@ class Fields(core.Refraction):
 		"""
 		v = self.vertical
 		self.vector_last_axis = v
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		if v.offset <= 0 or self.vertical_query == 'pattern':
 			# already at beginning, imply previous block at same level
@@ -1953,7 +2017,7 @@ class Fields(core.Refraction):
 	def event_navigation_vertical_stop(self, event):
 		v = self.vertical
 		self.vector_last_axis = v
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		if (v.offset+1) >= v.magnitude or self.vertical_query == 'pattern':
 			# already at end, imply next block at same level
@@ -1967,7 +2031,7 @@ class Fields(core.Refraction):
 
 	# horizontal
 
-	def event_navigation_horizontal_forward(self, event, quantity = 1):
+	def event_navigation_horizontal_forward(self, event, quantity=1):
 		"""
 		# Move the selection to the next significant field.
 		"""
@@ -1975,7 +2039,7 @@ class Fields(core.Refraction):
 		self.vector_last_axis = h
 		self.rotate(1, h, self.horizontal_focus, self.horizontal_focus.subfields(), quantity)
 
-	def event_navigation_horizontal_backward(self, event, quantity = 1):
+	def event_navigation_horizontal_backward(self, event, quantity=1):
 		"""
 		# Move the selection to the previous significant field.
 		"""
@@ -2036,7 +2100,7 @@ class Fields(core.Refraction):
 
 		self.movement = True
 
-	def event_navigation_forward_character(self, event, quantity = 1):
+	def event_navigation_forward_character(self, event, quantity=1):
 		h = self.horizontal
 		self.vector_last_axis = h
 
@@ -2045,7 +2109,7 @@ class Fields(core.Refraction):
 		self.movement = True
 	event_control_space = event_navigation_forward_character
 
-	def event_navigation_backward_character(self, event, quantity = 1):
+	def event_navigation_backward_character(self, event, quantity=1):
 		h = self.vector.horizontal
 		self.vector_last_axis = h
 
@@ -2054,14 +2118,14 @@ class Fields(core.Refraction):
 		self.movement = True
 	event_control_backspace = event_navigation_forward_character
 
-	def indentation_adjustments(self, unit = None):
+	def indentation_adjustments(self, unit=None):
 		"""
 		# Construct a string of tabs reprsenting the indentation of the given unit.
 		"""
 
 		return self.indentation(unit or self.horizontal_focus).characters()
 
-	def event_navigation_jump_character(self, event, quantity = 1):
+	def event_navigation_jump_character(self, event, quantity=1):
 		"""
 		# Horizontally move the cursor to the character in the event.
 		"""
@@ -2086,7 +2150,7 @@ class Fields(core.Refraction):
 			h.set(offset + il)
 		self.movement = True
 
-	def select_void(self, linerange):
+	def select_void(self, linerange, direction=1):
 		"""
 		# Select the first empty line without indentation.
 		"""
@@ -2100,9 +2164,12 @@ class Fields(core.Refraction):
 				break
 		else:
 			# eof
-			i += 1
+			if direction == -1:
+				i = 0
+			else:
+				i += 1
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		v.move(i-v.get())
 		self.horizontal.configure(0, 0, 0)
 		self.update_vertical_state()
@@ -2110,10 +2177,10 @@ class Fields(core.Refraction):
 		self.movement = True
 
 	def event_navigation_void_forward(self, event):
-		self.select_void(range(self.vertical_index+1, len(self.units)))
+		self.select_void(range(self.vertical_index+1, len(self.units)), direction=1)
 
 	def event_navigation_void_backward(self, event):
-		self.select_void(range(self.vertical_index-1, -1, -1))
+		self.select_void(range(self.vertical_index-1, -1, -1), direction=-1)
 
 	def range_enqueue(self, vector, axis):
 		position = getattr(self.vector, axis)
@@ -2141,7 +2208,7 @@ class Fields(core.Refraction):
 		axis, dominate, current, range = self.range_queue.popleft()
 
 		if axis == 'horizontal':
-			self.clear_horizontal_indicators()
+			self.controller.f_emit(self.clear_horizontal_indicators())
 			self.vertical.set(dominate)
 			self.horizontal.restore((range[0], self.horizontal.get(), range[1]+1))
 			self.update_vertical_state()
@@ -2198,7 +2265,7 @@ class Fields(core.Refraction):
 		"""
 		h = self.horizontal
 		hs = h.snapshot()
-		self.clear_horizontal_indicators()
+		self.f_controller.f_emit(self.clear_horizontal_indicators())
 
 		adjustment = self.indentation_adjustments(self.horizontal_focus)
 		start, position, stop = map((-adjustment).__add__, hs)
@@ -2218,7 +2285,7 @@ class Fields(core.Refraction):
 		self.log(new.insert(0, remainder), nr)
 		new.reformat()
 
-		self.display(self.vertical_index-1, None)
+		self.update(self.vertical_index-1, None)
 		self.movement = True
 
 	def event_edit_return(self, event, quantity = 1):
@@ -2251,8 +2318,8 @@ class Fields(core.Refraction):
 		self.log(inverse, r)
 
 		h.zero()
-		self.clear_horizontal_indicators()
-		self.display(*r.exclusive())
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(*r.exclusive())
 		self.transition_keyboard('edit')
 
 	def event_delta_substitute_previous(self, event):
@@ -2263,7 +2330,7 @@ class Fields(core.Refraction):
 		focus = self.horizontal_focus
 		start, position, stop = self.extract_horizontal_range(focus, h)
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		self.horizontal_focus[1].delete(start, stop)
 		le = self.last_edit
@@ -2272,8 +2339,8 @@ class Fields(core.Refraction):
 
 		h.configure(start, len(le))
 
-		self.clear_horizontal_indicators()
-		self.display(*self.current_vertical.exclusive())
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(*self.current_vertical.exclusive())
 		self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
 
 	def insert_characters(self, characters,
@@ -2304,8 +2371,8 @@ class Fields(core.Refraction):
 
 		h.expand(h.offset, len(chars))
 
-		self.clear_horizontal_indicators()
-		self.display(*r.exclusive())
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(*r.exclusive())
 
 	def delete_characters(self, quantity):
 		"""
@@ -2368,7 +2435,7 @@ class Fields(core.Refraction):
 		r = (index, index+nl)
 		if r[0] <= self.vertical_index < r[1]:
 			self.movement = True
-			self.clear_horizontal_indicators()
+			self.controller.f_emit(self.clear_horizontal_indicators())
 			self.update_unit()
 			self.update_window()
 
@@ -2377,7 +2444,7 @@ class Fields(core.Refraction):
 		self.checkpoint()
 
 		self.update_vertical_state(force=True)
-		self.display(r[0], None)
+		self.update(r[0], None)
 
 	def event_delta_insert_character(self, event):
 		"""
@@ -2402,8 +2469,8 @@ class Fields(core.Refraction):
 		if key.type == 'literal':
 			self.insert_characters(key.string)
 			r = self.delete_characters(1)
-			self.clear_horizontal_indicators()
-			self.display(*r.exclusive())
+			self.controller.f_emit(self.clear_horizontal_indicators())
+			self.update(*r.exclusive())
 			self.movement = True
 
 		self.transition_keyboard(self.previous_keyboard_mode)
@@ -2437,9 +2504,9 @@ class Fields(core.Refraction):
 		r = IRange.single(self.vertical.get())
 		self.log(inverse, r)
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.horizontal.set(adjustments)
-		self.display(*r.exclusive())
+		self.update(*r.exclusive())
 
 	def event_delta_delete_toeol(self, event):
 		"""
@@ -2455,8 +2522,8 @@ class Fields(core.Refraction):
 		r = IRange.single(self.vertical.get())
 		self.log(inverse, r)
 
-		self.clear_horizontal_indicators()
-		self.display(*r.exclusive())
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(*r.exclusive())
 
 	def event_delta_delete_backward_adjacent_class(self, event,
 			classify=query.classify
@@ -2484,7 +2551,7 @@ class Fields(core.Refraction):
 		if old_mode == mode:
 			return
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.keyboard.set(mode)
 
 	def event_transition_control(self, event):
@@ -2558,13 +2625,13 @@ class Fields(core.Refraction):
 			# ignore indent if the line is empty and deltas are being distributed
 			return
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.indent(self.horizontal_focus, quantity)
 
 		r = IRange.single(self.vertical_index)
 		self.log((self.indent, (self.horizontal_focus, -quantity)), r)
 
-		self.display(*r.exclusive())
+		self.update(*r.exclusive())
 		self.constrain_horizontal_range()
 
 	def event_delta_indent_decrement(self, event, quantity = 1):
@@ -2575,13 +2642,13 @@ class Fields(core.Refraction):
 			# ignore indent if the line is empty and deltas are being distributed
 			return
 
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		self.indent(self.horizontal_focus, -quantity)
 
 		r = IRange.single(self.vertical_index)
 		self.log((self.indent, (self.horizontal_focus, quantity)), r)
 
-		self.display(*r.exclusive())
+		self.update(*r.exclusive())
 		self.constrain_horizontal_range()
 
 	def event_delta_indent_void(self, event, quantity = None):
@@ -2606,21 +2673,24 @@ class Fields(core.Refraction):
 		)
 		l.append('')
 		self.transcript_write('\n'.join(l))
+		import pprint
+		s = pprint.pformat(self.phrase(hf))
+		self.transcript_write(s+'\n')
 
 	def event_delta_delete_backward(self, event, quantity = 1):
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		r = self.delete_characters(-1*quantity)
 		self.constrain_horizontal_range()
 		if r is not None:
-			self.display(*r.exclusive())
+			self.update(*r.exclusive())
 			self.movement = True
 
 	def event_delta_delete_forward(self, event, quantity = 1):
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		r = self.delete_characters(quantity)
 		self.constrain_horizontal_range()
 		if r is not None:
-			self.display(*r.exclusive())
+			self.update(*r.exclusive())
 			self.movement = True
 
 	def event_copy(self, event):
@@ -2643,7 +2713,7 @@ class Fields(core.Refraction):
 		"""
 		h = self.horizontal
 		hs = h.snapshot()
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 		adjustment = self.indentation_adjustments(self.horizontal_focus)
 		start, position, stop = map((-adjustment).__add__, hs)
@@ -2663,7 +2733,7 @@ class Fields(core.Refraction):
 		self.log(new.insert(0, remainder), nr)
 		new.reformat()
 
-		self.display(self.vertical_index-1, None)
+		self.update(self.vertical_index-1, None)
 		self.movement = True
 
 	def event_delta_join(self, event):
@@ -2681,7 +2751,7 @@ class Fields(core.Refraction):
 
 		self.log(self.truncate_vertical(collapse, collapse+1), IRange.single(collapse))
 
-		self.display(self.vertical_index, None)
+		self.update(self.vertical_index, None)
 		h = self.horizontal.set(ulen)
 
 		self.movement = True
@@ -2712,7 +2782,7 @@ class Fields(core.Refraction):
 	def event_paste_into(self, event):
 		raise RuntimeError("paste into horizontal and vertical position")
 
-	def indent(self, sequence, quantity = 1, ignore_empty = False):
+	def indent(self, sequence, quantity=1, ignore_empty=False):
 		"""
 		# Increase or decrease the indentation level of the given sequence.
 
@@ -2734,7 +2804,7 @@ class Fields(core.Refraction):
 				level = 0
 			new = sequence[0] = IClass(level)
 
-		# contract or expand based on tabsize
+		# contract or expand
 		h.datum += (new.length() - l)
 		if h.datum < 0:
 			h.datum = 0
@@ -2746,7 +2816,7 @@ class Fields(core.Refraction):
 		"""
 		v = self.vector.vertical
 		d, o, m = v.snapshot()
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		v.restore((d, vertical_index, m))
 		self.update_vertical_state()
 		self.movement = True
@@ -2764,9 +2834,9 @@ class Fields(core.Refraction):
 		# by the &line_separator and processed independently
 
 		# [ Parameters ]
-		# /string
+		# /string/
 			# The data to write.
-		# /line_separator
+		# /line_separator/
 			# The line terminator to split on.
 		"""
 		index = self.vector.vertical.snapshot()[1]
@@ -2785,7 +2855,7 @@ class Fields(core.Refraction):
 
 	def blur(self):
 		super().blur()
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 	def sequence(self, unit):
 		current = ""
@@ -2862,8 +2932,8 @@ class Status(Fields):
 	from fault.terminal.format.path import f_route_absolute as format_route
 	format_route = staticmethod(format_route)
 
-	status_open_resource = fields.Styled('[', None)
-	status_close_resource = fields.Styled(']', None)
+	status_open_resource = fields.Styled('[', -1024)
+	status_close_resource = fields.Styled(']', -1024)
 
 	def __init__(self):
 		super().__init__()
@@ -2871,7 +2941,7 @@ class Status(Fields):
 			fields.Sequence([fields.String("initializing")])
 		]
 
-	def draw(self, unit, getattr=getattr):
+	def specify(self, unit, getattr=getattr):
 		for path, x in unit.subfields():
 			yield x.terminal()
 
@@ -2883,7 +2953,7 @@ class Status(Fields):
 
 		title = fields.Styled(
 			self.refraction_type.__name__ or "unknown",
-			fg = palette.colors['pastel-blue']
+			fg = palette.theme['refraction-type']
 		)
 
 		path = getattr(new, 'source', None) or '/dev/null'
@@ -2933,7 +3003,7 @@ class Prompt(Lines):
 		self.window.vertical.move(1)
 		self.scrolled()
 		self.transition_keyboard('control')
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 
 	event_edit_return = execute
 	event_control_return = execute
@@ -2942,7 +3012,7 @@ class Prompt(Lines):
 		"""
 		# Set the command line to a sequence of fields.
 		"""
-		self.clear_horizontal_indicators()
+		self.controller.f_emit(self.clear_horizontal_indicators())
 		l = list(itertools.chain.from_iterable(
 			zip(fields, itertools.repeat(self.separator, len(fields)))
 		))
@@ -3037,7 +3107,7 @@ class Prompt(Lines):
 		new.units = libc.Segments(i)
 
 		new.subresource(self.controller)
-		console.panes.append(new)
+		console.selected_refractions.append(new)
 
 		new.vertical_index = 0
 		new.horizontal_focus = new.units[0]
@@ -3079,16 +3149,16 @@ class Prompt(Lines):
 		console = self.controller
 
 		p = console.visible[console.pane]
-		if len(console.visible) <= len(console.panes):
+		if len(console.visible) <= len(console.selected_refractions):
 			# No other panes to take its place, so create an Empty().
 			ep = Empty()
 			ep.subresource(console)
-			console.panes.append(ep)
+			console.selected_refractions.append(ep)
 
 		console.event_pane_rotate_refraction(None)
-		if p is not console.transcript and p in console.panes:
+		if p is not console.transcript and p in console.selected_refractions:
 			# Transcript is eternal.
-			console.panes.remove(p)
+			console.selected_refractions.remove(p)
 
 	def command_chsrc(self, target:libroutes.File):
 		"""
@@ -3168,17 +3238,6 @@ class Transcript(core.Refraction):
 	# transcript is always available for critical messages.
 	"""
 
-	@staticmethod
-	def system():
-		"""
-		# Get system data.
-		"""
-		import platform, getpass
-		return {
-			'user': getpass.getuser(),
-			'host': platform.node(),
-		}
-
 	def __init__(self):
 		super().__init__()
 		self.lines = ['']
@@ -3219,7 +3278,9 @@ class Transcript(core.Refraction):
 		self.bottom += lines
 
 	def update(self):
-		height = self.view.height
+		v = self.view
+
+		height = v.height
 		if height >= self.bottom:
 			top = 0
 		else:
@@ -3237,18 +3298,20 @@ class Transcript(core.Refraction):
 
 			yield from self.view.render(start - top, stop - top)
 
+	def phrase(self, line):
+		return matrix.Phrase.construct([(line, -1024, -1024, normalstyle)])
+
 	def refresh(self):
-		# don't bother using the view's scroll.
 		height = self.view.height
 		start = self.bottom - height
-		seq = self.view.sequence
+		yield self.view.seek_first()
+		yield self.view.reset_text()
 
 		for i, j in zip(range(0 if start < 0 else start, self.bottom), range(height)):
-			seq[j].update(((self.lines[i],),))
+			yield from self.view.render(self.phrase(self.lines[i]))
+			yield self.view.seek_next_line()
 
-		return self.view.render()
-
-def output(flow, queue, tty):
+def output(flow, queue, tty, bytearray=bytearray):
 	"""
 	# Thread transformer function receiving display transactions and writing to the terminal.
 	"""
@@ -3397,8 +3460,8 @@ class Empty(Lines):
 	# Space holder for empty panes.
 
 	# [ Engineering ]
-	# This class will manage the display of random usage tips, and
-	# likely recently used files display.
+	# This placeholder could leverage the space providing access to recent documents
+	# or other information that is not suited for the transcript.
 	"""
 	pass
 
@@ -3411,7 +3474,7 @@ class Console(flows.Channel):
 	"""
 
 	def __init__(self):
-		self.display = matrix.Screen() # used to draw the frame.
+		self.view = matrix.Screen() # used to draw the frame.
 		self.id_state = IDeviceState()
 		self.id_scroll_timeout_deferred = False
 		self.tty = None
@@ -3430,28 +3493,28 @@ class Console(flows.Channel):
 		self.refreshing = set() # set of panes to be refreshed
 		self.motion = set() # set of panes whose position indicators changed
 
-		self.areas = {
+		self.panes = {
 			'status': matrix.Context(),
 			'prompt': matrix.Context(),
-			'panes': (matrix.Context(), matrix.Context(), matrix.Context()),
+			'documents': (matrix.Context(), matrix.Context(), matrix.Context()),
 		}
 
-		self.panes = [Empty(), Empty(), self.transcript]
+		self.selected_refractions = [Empty(), Empty(), self.transcript]
 		self.rotation = 0
 		self.count = 3
-		self.visible = list(self.panes[:3])
+		self.visible = list(self.selected_refractions[:3])
 
 		self.pane = 0 # focus pane (visible)
-		self.refraction = self.panes[0] # focus refraction; receives events
+		self.refraction = self.selected_refractions[0] # focus refraction; receives events
 
 	def con_connect_tty(self, tty):
 		self.tty = tty
-		self.dimensions = tty.get_window_dimensions()
+		self.view.context_set_dimensions(tty.get_window_dimensions())
 
-		self.prompt.connect(paging.View(self.areas['prompt']))
-		self.c_status.view = paging.View(self.areas['status'])
-		for x, a in zip(self.panes, self.areas['panes']):
-			x.connect(paging.View(a))
+		self.prompt.connect(self.panes['prompt'])
+		self.c_status.view = self.panes['status']
+		for x, a in zip(self.selected_refractions, self.panes['documents']):
+			x.connect(a)
 
 	def display_refraction(self, pane, refraction):
 		"""
@@ -3470,7 +3533,7 @@ class Console(flows.Channel):
 		v = current.view
 		current.connect(None)
 
-		self.f_emit([v.area.clear()])
+		self.f_emit([v.clear()])
 
 		self.visible[pane] = refraction
 		refraction.pane = pane
@@ -3479,14 +3542,15 @@ class Console(flows.Channel):
 		if self.refraction is current:
 			self.refraction = refraction
 
-		refraction.calibrate(v.area.dimensions)
+		refraction.calibrate(v.dimensions)
 		refraction.reveal()
-		self.f_emit([self.set_position_indicators(refraction)])
+		if refraction.focused:
+			self.f_emit([self.set_position_indicators(refraction)])
 		self.f_emit(refraction.refresh())
 
 		if isinstance(current, Empty):
 			# Remove the empty refraction.
-			self.panes.remove(current)
+			self.selected_refractions.remove(current)
 
 	def pane_verticals(self, index):
 		"""
@@ -3495,14 +3559,15 @@ class Console(flows.Channel):
 		if index is None:
 			return None
 
+		v = self.view
 		n = self.count
-		width = self.dimensions[0] - (n+1) # substract framing
+		width = v.dimensions[0] - (n+1) # substract framing
 		pane_size = width // n # remainder goes to last pane
 
 		pane_size += 1 # include initial
 		left = pane_size * index
 		if index == n - 1:
-			right = self.dimensions[0]
+			right = v.dimensions[0]
 		else:
 			right = pane_size * (index+1)
 		return (left, right)
@@ -3512,6 +3577,8 @@ class Console(flows.Channel):
 		# The window changed and the views and controls need to be updated.
 		"""
 
+		v = self.view
+		v.context_set_dimensions(dimensions)
 		width, height = dimensions
 		n = self.count = max(width // 93, 1)
 		nvis = len(self.visible)
@@ -3523,10 +3590,10 @@ class Console(flows.Channel):
 
 		new = n - nvis
 		if new > 0:
-			for vi in zip(self.areas['panes'][-new:]):
+			for vi in zip(self.panes['documents'][-new:]):
 				e = Empty()
 				self.visible.append(e)
-				self.panes.append(e)
+				self.selected_refractions.append(e)
 				e.connect(vi)
 
 		# for status and prompt
@@ -3539,7 +3606,9 @@ class Console(flows.Channel):
 			p.pane = i
 			left, right = self.pane_verticals(i)
 			left += 1
-			p.adjust((left, 0), (min(right - left, (width-1) - left), pheight))
+			if p.view is not None:
+				p.view.context_set_position((left, 1))
+				p.view.context_set_dimensions((min(right - left, (width-1) - left), pheight-1))
 
 		return self.frame()
 
@@ -3548,8 +3617,9 @@ class Console(flows.Channel):
 		# Return the refraction that contains the given point.
 		"""
 
+		v = self.view
 		x, y = point
-		width, height = self.dimensions
+		width, height = v.dimensions
 
 		# status and prompt consume the entire horizontal
 		if y == height:
@@ -3563,50 +3633,59 @@ class Console(flows.Channel):
 
 		return self.visible[x // size]
 
-	def frame(self, color=palette.theme['border'], nomap=str.maketrans({})):
+	def frame(self, offset=0, color=palette.theme['border'], nomap=str.maketrans({})):
 		"""
 		# Draw the frame of the console. Vertical separators and horizontal.
+
+		# [ Parameters ]
+		# /offset/
+			# The offset from the top of the screen.
 		"""
-		display = self.display
-		seek = display.seek
-		style = display.style
+
+		screen = self.view
+		width, height = screen.dimensions
 
 		n = self.count
-		width, height = self.dimensions
 		pane_size = width // n
 		vh = height - 3 # vertical separator height and horizontal position
 
-		# horizontal
-		yield seek((0, vh))
-		yield style(symbols.lines['horizontal'] * self.dimensions[0], textcolor = color)
-
-		# verticals
-		seq = symbols.lines['vertical'] + '\n\b'
-		top = symbols.lines['vertical'] + '\n\b'
+		horiz = symbols.lines['horizontal']
+		vert = symbols.lines['vertical']
+		top = symbols.intersections['top']
 		bottom = symbols.intersections['bottom']
-		bottom_left = symbols.corners['bottom-left']
-		bottom_right = symbols.corners['bottom-right']
-		seq = style((seq * vh) + bottom, textcolor = color, control_map = nomap)
 
-		# initial vertical
-		yield seek((0, 0)) + seq
+		yield screen.set_text_color(color)
 
-		last = None
-		for i in range(0, n-1):
-			left, right = self.pane_verticals(i)
-			if last != left:
-				yield seek((left, 0)) + seq
-			yield seek((right, 0)) + seq
-			last = right
+		# horizontal top
+		yield screen.seek((0, offset))
+		yield screen.draw_unit_horizontal(symbols.corners['top-left'])
+		yield screen.draw_segment_horizontal(horiz, width)
+		yield screen.draw_unit_horizontal(symbols.corners['top-right'])
 
-		# edge of screen; no need to backspace
-		seq = symbols.lines['vertical'] + '\n'
-		seq = style((seq * vh) + bottom, textcolor = color, control_map = nomap)
+		# horizontal bottom
+		yield screen.seek((0, vh))
+		yield screen.draw_unit_horizontal(symbols.corners['bottom-left'])
+		yield screen.draw_segment_horizontal(horiz, width)
+		yield screen.draw_unit_horizontal(symbols.corners['bottom-right'])
 
-		yield seek((width, 0)) + seq
-		# corners
-		yield seek((width, height - 3)) + style(bottom_right, textcolor = color, control_map = nomap)
-		yield seek((0, height - 3)) + style(bottom_left, textcolor = color, control_map = nomap)
+		vlength = vh - offset
+
+		# left vertical
+		yield screen.seek((0, offset+1))
+		yield screen.draw_segment_vertical(vert, vlength)
+
+		# middle verticals
+		verticals = set(itertools.chain(*[self.pane_verticals(i) for i in range(0, n-1)]))
+		verticals.discard(1)
+		for vposition in verticals:
+			yield screen.seek((vposition, offset+0))
+			yield screen.draw_unit_vertical(top)
+			yield screen.draw_segment_vertical(vert, vlength)
+			yield screen.draw_unit_vertical(bottom)
+
+		# right vertical
+		yield screen.seek((width, offset+1))
+		yield screen.draw_segment_vertical(vert, vlength)
 
 	def set_position_indicators(self, refraction,
 			colors=(0x008800, 0xF0F000, 0x880000),
@@ -3616,74 +3695,105 @@ class Console(flows.Channel):
 			vwedges=(symbols.wedges['right'], symbols.wedges['left']),
 			hproceed=symbols.wedges['left'],
 			hprecede=symbols.wedges['right'],
-			#vwedges=(symbols.lines['vertical'],)*2,
-			#hproceed=symbols.lines['vertical'],
-			#hprecede=symbols.lines['vertical'],
 			zip=zip,
-			bytearray=bytearray
+			bytearray=bytearray,
 		):
+
+		if not refraction.focused:
+			# XXX: Workaround; set should only get called against focused.
+			return b''
 
 		events = bytearray()
 		verticals = self.pane_verticals(refraction.pane)
 		win = refraction.window
-		vec = refraction.vector
+		cursor = refraction.vector
 
-		seek = self.display.seek
-		style = self.display.style
+		screen = self.view
+		seek = screen.seek
+		set_text_color = screen.set_text_color
+		draw = screen.draw_words
+		events += screen.reset_text()
 
-		v_limit = self.dimensions[1] - 3
+		v_start = refraction.view.point[1]
+		v_stop = v_start + refraction.view.dimensions[1]
+		v_limit = v_stop - 1
 
 		if verticals is not None:
 			h_offset, h_limit = verticals
+			h_limit -= 1
 			hpointer = symbols.wedges['up']
 			vtop = win.vertical.get()
-			v_last = vec.vertical.snapshot()[-1] - 1
+			v_last = cursor.vertical.snapshot()[-1] - 1
 
 			for side, wedge in zip(verticals, vwedges):
-				for y, color in zip(vec.vertical.snapshot(), colors):
-					if y is not None:
-						ry = y - vtop
-						pointer = wedge
+				for y, color in zip(cursor.vertical.snapshot(), colors):
+					if y is None:
+						continue
 
-						if ry < 0:
-							# position is above the window
-							pointer = vprecede
-							ry = 0
-						elif ry >= v_limit:
-							# position is below the window
-							pointer = vproceed
-							ry = v_limit - 1
-						elif y == v_last:
-							color = range_color_palette['stop-inclusive']
+					ry = y - vtop
+					pointer = wedge
 
-						events += seek((side, ry))
-						events += style(pointer, textcolor = color)
+					if ry < 0:
+						# position is above the window
+						pointer = vprecede
+						ry = 0
+					elif ry >= v_limit:
+						# position is below the window
+						pointer = vproceed
+						ry = v_limit - 1
+					elif y == v_last:
+						color = range_color_palette['stop-inclusive']
+
+					events += seek((side, ry+v_start))
+					events += set_text_color(color)
+					events += draw(pointer)
 
 			# adjust for horizontal sets
 			h_offset += 1 # avoid intersection with vertical
 		else:
+			v_stop = screen.height - 3
 			hpointer = symbols.wedges['down']
+			# Entire screen (prompt/status indicators)
 			h_offset = 0
-			h_limit = refraction.dimensions[0]
+			h_limit = screen.width
 
-		horiz = vec.horizontal.snapshot()
+		horiz = cursor.horizontal.snapshot()
 		for x, color in zip(horiz, colors):
 			if x is not None:
 				if x < 0:
 					pointer = hprecede
 					x = h_offset
-				elif x > h_limit:
+				elif x >= h_limit:
 					pointer = hproceed
 					x = h_limit
 				else:
 					pointer = hpointer
 					x += h_offset
 
-				events += seek((x, v_limit))
-				events += style(pointer, textcolor = color)
+				events += seek((x, v_stop))
+				events += set_text_color(color)
+				events += draw(pointer)
+
+		if refraction not in {self.prompt, self.status}:
+			hpointer = symbols.wedges['down']
+			for x, color in zip(horiz, colors):
+				if x is not None:
+					if x < 0:
+						pointer = hprecede
+						x = h_offset
+					elif x >= h_limit:
+						pointer = hproceed
+						x = h_limit
+					else:
+						pointer = hpointer
+						x += h_offset
+
+					events += seek((x, v_start-1))
+					events += set_text_color(color)
+					events += draw(pointer)
 
 		# record the setting for subsequent clears
-		refraction.snapshot = (vec.snapshot(), win.snapshot())
+		refraction.snapshot = (cursor.snapshot(), win.snapshot())
 		return events
 
 	def clear_position_indicators(self, refraction,
@@ -3704,22 +3814,27 @@ class Console(flows.Channel):
 		if refraction.snapshot is None:
 			return events
 
-		seek = self.display.seek
-		style = self.display.style
+		v = self.view
+		seek = v.seek
+		set_text_color = v.set_text_color
+		draw = v.draw_words
 
 		# (horiz, vert) tuples
 		vec, win = refraction.snapshot # stored state
 
 		verticals = self.pane_verticals(refraction.pane)
-		v_limit = self.dimensions[1] - 3
+		v_start = refraction.view.point[1]
+		v_stop = v_start + refraction.view.dimensions[1]
+		v_limit = v_stop - 1
 
 		vtop = win[1][1]
+		events += v.reset_text()
 
 		# verticals is None when it's a prompt
 		if verticals is not None:
-			r = style(v_line, textcolor = color)
+			r = set_text_color(color) + draw(v_line)
 
-			for v in verticals:
+			for v_position in verticals:
 				for y in vec[1]:
 					if y is not None:
 						y = y - vtop
@@ -3728,16 +3843,18 @@ class Console(flows.Channel):
 						elif y >= v_limit:
 							y = v_limit - 1
 
-						events += seek((v, y))
+						events += seek((v_position, y+1))
 						events += r
 
 			h_offset, h_limit = verticals
+			h_limit -= 1
 			h_offset += 1 # for horizontals
 			vertical_set = () # panes don't intersect with the joints
 		else:
 			# it's a prompt or status
+			v_limit = v.height - 4
 			h_offset = 0
-			h_limit = self.dimensions[0]
+			h_limit = v.dimensions[0]
 
 			# identifies intersections
 			vertical_set = set()
@@ -3746,14 +3863,12 @@ class Console(flows.Channel):
 				vertical_set.add(left)
 				vertical_set.add(right)
 
-		h_vertical = self.dimensions[1] - 3 # status and prompt
-
-		corners = {0: h_bottom_left, self.dimensions[0]: h_bottom_right}
+		corners = {0: h_bottom_left, v.dimensions[0]: h_bottom_right}
 
 		for x in vec[0]:
 			if x < 0:
 				x = h_offset
-			elif x > h_limit:
+			elif x >= h_limit:
 				x = h_limit
 			else:
 				x += h_offset
@@ -3763,8 +3878,24 @@ class Console(flows.Channel):
 			else:
 				sym = h_line
 
-			events += seek((x, v_limit))
-			events += style(sym, textcolor = color)
+			events += seek((x, v_limit+1))
+			events += set_text_color(color)
+			events += draw(sym)
+
+		if refraction not in {self.prompt, self.status}:
+			# Clear top indicators.
+			sym = h_line
+			for x in vec[0]:
+				if x < 0:
+					x = h_offset
+				elif x >= h_limit:
+					x = h_limit
+				else:
+					x += h_offset
+
+				events += seek((x, v_start-1))
+				events += set_text_color(color)
+				events += draw(sym)
 
 		refraction.snapshot = None
 		return events
@@ -3774,11 +3905,12 @@ class Console(flows.Channel):
 		# The terminal window changed in size. Get the new dimensions and refresh the entire
 		# screen.
 		"""
-		self.dimensions = self.tty.get_window_dimensions()
+		dimensions = self.tty.get_window_dimensions()
+		v = self.view
 
 		initialize = [
-			self.display.clear(),
-			b''.join(self.adjust(self.dimensions)),
+			v.clear(),
+			b''.join(self.adjust(dimensions)),
 		]
 
 		for x in self.visible:
@@ -3789,6 +3921,7 @@ class Console(flows.Channel):
 		self.f_emit(initialize)
 
 	def actuate(self):
+		v = self.view
 		inv = self.context.process.invocation
 		if 'system' in inv.parameters:
 			name = inv.parameters['system'].get('name', None)
@@ -3799,17 +3932,17 @@ class Console(flows.Channel):
 			args = ()
 			initdir = None
 
-		for x in self.panes:
+		for x in self.selected_refractions:
 			x.subresource(self)
 		self.c_status.subresource(self)
 		self.prompt.subresource(self)
 
 		initialize = [
-			self.display.clear(),
-			b''.join(self.adjust(self.dimensions)),
+			v.clear(),
+			b''.join(self.adjust(self.tty.get_window_dimensions())),
 		]
 
-		initialize.extend(self.c_status.refraction_changed(self.panes[0]))
+		initialize.extend(self.c_status.refraction_changed(self.selected_refractions[0]))
 
 		for x in self.visible:
 			initialize.extend(x.refresh())
@@ -3823,9 +3956,6 @@ class Console(flows.Channel):
 		process.log = wr
 		process.system_event_connect(('signal', 'terminal.delta'), self, self.delta)
 
-		self.tty.set_raw()
-
-		sys.excepthook = print_except_with_crlf
 		self.f_emit(initialize)
 
 		initial = \
@@ -3842,15 +3972,14 @@ class Console(flows.Channel):
 			("Mouse Support\n") + \
 			(" Primary Click: Control and Edit Mode will move cursor.\n") + \
 			(" Secondary Click: Opens Contextual Menu when in focus pane; otherwise focuses unfocused pane.\n") + \
-			(" Scroll: Scrolls the pane regardless of focus state.\n")
+			(" Scroll: Scrolls the pane regardless of focus state.\n") + \
+			("opened by: [" + sys.executable + "] " + name + " " + " ".join(args) + "\n")
 
 		self.transcript.write(initial)
-		self.panes[0].focus()
+		self.selected_refractions[1].focus()
 
 		for x in args:
 			self.prompt.command_open(x)
-
-		self.transcript.write("opened by: [" + sys.executable + "] " + name + " " + " ".join(args) + "\n")
 
 	def focus(self, refraction):
 		"""
@@ -3934,7 +4063,7 @@ class Console(flows.Channel):
 		pid = self.pane
 		visibles = self.visible
 		current = self.visible[pid]
-		npanes = len(self.panes)
+		npanes = len(self.selected_refractions)
 
 		if direction > 0:
 			start = 0
@@ -3947,7 +4076,7 @@ class Console(flows.Channel):
 		i = itertools.chain(range(rotation, stop, direction), range(start, rotation, direction))
 
 		for r in i:
-			p = self.panes[r]
+			p = self.selected_refractions[r]
 
 			if p in visibles:
 				continue
@@ -4089,6 +4218,7 @@ def initialize(unit):
 	"""
 	# Initialize the given unit with a console.
 	"""
+	sys.excepthook = print_except_with_crlf
 
 	s = libkernel.Sector()
 	s.subresource(unit)
@@ -4097,15 +4227,14 @@ def initialize(unit):
 
 	tty = control.setup() # Cursor will be hidden and raw mode is enabled.
 
-	input_thread = flows.Parallel(input, tty)
-	output_thread = flows.Parallel(output, tty)
-
 	c = Console()
 	c.con_connect_tty(tty)
 
 	# terminal input -> console -> terminal output
-	input_thread.f_connect(c)
+	output_thread = flows.Parallel(output, tty)
 	c.f_connect(output_thread)
+	input_thread = flows.Parallel(input, tty)
+	input_thread.f_connect(c)
 
 	s.scheduling()
 	s.dispatch(output_thread)
