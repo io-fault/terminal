@@ -21,7 +21,6 @@ keyword_list = [
 	'for',
 	'goto',
 	'if',
-	'inline',
 	'int',
 	'long',
 	'register',
@@ -38,6 +37,20 @@ keyword_list = [
 	'void',
 	'volatile',
 	'while',
+
+	'inline',
+	'restrict',
+
+	'_Alignas',
+	'_Alignof',
+	'_Atomic',
+	'_Bool',
+	'_Complex',
+	'_Generic',
+	'_Imaginary',
+	'_Noreturn',
+	'_Static_assert',
+	'_Thread_local',
 ]
 
 core_list = [
@@ -119,9 +132,43 @@ core_list = [
 	'ssize_t',
 	'offset_t',
 
+	'alignas',
+	'alignof',
+	'bool',
+	'complex',
+	'imaginary',
+	'noreturn',
+	'static_assert',
+	'thread_local',
+
+	'wchar_t',
+	'char16_t',
+	'char32_t',
+
 	'setjmp',
 	'longjmp',
 	'jmp_buf',
+
+	'__func__',
+	'__FILE__',
+	'__LINE__',
+	'__DATE__',
+	'__TIME__',
+
+	'__STDC__',
+	'__STDC_VERSION__',
+	'__STDC_HOSTED__',
+
+	'__STDC_ANALYZABLE__',
+	'__STDC_LIB_EXT1__',
+	'__STDC_NO_THREADS__',
+	'__STDC_NO_ATOMICS__',
+	'__STDC_IEC_559__',
+	'__STDC_IEC_559_COMPLEX__',
+	'__STDC_NO_COMPLEX__',
+	'__STDC_NO_VLA__',
+
+	'_Pragma',
 ]
 
 exoword_list = [
