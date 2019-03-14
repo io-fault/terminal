@@ -984,7 +984,7 @@ class Fields(core.Refraction):
 				roffset = (x - offset)
 				text = f[1]
 				if text:
-					grapheme = text[matrix.Phrase.grapheme(text, roffset)]
+					grapheme = text[matrix.core.grapheme(text, roffset)]
 				style = f[2]
 			else:
 				offset += fl
@@ -997,7 +997,7 @@ class Fields(core.Refraction):
 
 						text = f[1]
 						if text:
-							grapheme = text[matrix.Phrase.grapheme(text, roffset)]
+							grapheme = text[matrix.core.grapheme(text, roffset)]
 						style = f[2]
 						break
 					else:
