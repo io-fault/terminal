@@ -59,8 +59,8 @@ from . import lines as liblines
 from . import core
 from . import palette
 
-underlined = matrix.Traits.construct('underline')
-normalstyle = matrix.Traits.none()
+underlined = matrix.Context.Traits.construct('underline')
+normalstyle = matrix.core.NoTraits
 
 def print_except_with_crlf(exc, val, tb):
 	# Used to allow reasonable exception displays.
@@ -3677,6 +3677,7 @@ class Console(flows.Channel):
 		# middle verticals
 		verticals = set(itertools.chain(*[self.pane_verticals(i) for i in range(0, n-1)]))
 		verticals.discard(0)
+		verticals.discard(width)
 		for vposition in verticals:
 			yield screen.seek((vposition, offset+0))
 			yield screen.draw_unit_vertical(top)
