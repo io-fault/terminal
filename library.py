@@ -777,7 +777,7 @@ class Fields(core.Refraction):
 			indent_cv=palette.theme['indent'],
 			theme=palette.theme,
 			defaultcell=palette.theme['cell'],
-			defaulttraits=matrix.Traits(0),
+			defaulttraits=matrix.core.Traits(0),
 			isinstance=isinstance,
 			len=len, hasattr=hasattr,
 			iter=iter, next=next,
@@ -840,17 +840,17 @@ class Fields(core.Refraction):
 			if spaces:
 				yield ("#" * spaces, 0xaf0000, defaultcell, underlined)
 
-	def phrase(self, line, Constructor=functools.lru_cache(512)(matrix.Phrase.construct)):
+	def phrase(self, line, Constructor=functools.lru_cache(512)(matrix.Context.Phrase.construct)):
 		return Constructor(self.specify(line))
 
 	# returns the text for the stop, position, and stop indicators.
 	def calculate_horizontal_start_indicator(self, empty, text, style, positions):
-		return matrix.Phrase.construct(((text, *style),))
+		return matrix.Context.Phrase.construct(((text, *style),))
 
 	def calculate_horizontal_stop_indicator(self, empty, text, style, positions,
 			combining_wedge=symbols.combining['low']['wedge-left'],
 		):
-		return matrix.Phrase.construct(((text, style[0], style[1], normalstyle),))
+		return matrix.Context.Phrase.construct(((text, style[0], style[1], normalstyle),))
 
 	def calculate_horizontal_position_indicator(self, empty, text, style, positions,
 			vc=symbols.combining['right']['vertical-line'],
@@ -888,7 +888,7 @@ class Fields(core.Refraction):
 		if swap:
 			color = (color[1], color[0])
 
-		return matrix.Phrase.construct(((text, *color, style),))
+		return matrix.Context.Phrase.construct(((text, *color, style),))
 
 	# modification to text string
 	horizontal_transforms = {
@@ -1038,7 +1038,7 @@ class Fields(core.Refraction):
 					continue
 			index, size, text, style = p
 			text = text or ' '
-			ph = matrix.Phrase.construct([(text, *style)])
+			ph = matrix.Context.Phrase.construct([(text, *style)])
 			clearing.append(v.seek_horizontal_relative(offset))
 			clearing.append(v.reset_text())
 			clearing.append(b''.join(v.render(ph)))
@@ -1113,7 +1113,7 @@ class Fields(core.Refraction):
 			self.horizontal_range = (rstarto, rstopo, hr)
 
 			# rline is the unit line with the range changes
-			rline = matrix.Phrase.construct(prefix + range_part + suffix)
+			rline = matrix.Context.Phrase.construct(prefix + range_part + suffix)
 			self.horizontal_line_cache = rline
 			rlcc = rline.cellcount()
 			if rlcc > width:
@@ -1139,7 +1139,7 @@ class Fields(core.Refraction):
 					offset = rline.cellcount()
 				index, size, text, style = p
 				text = text or ' '
-				ph = matrix.Phrase.construct([(text, *style)])
+				ph = matrix.Context.Phrase.construct([(text, *style)])
 				position_events.append(v.reset_text())
 				position_events.append(v.seek_horizontal_relative(offset))
 				position_events.append(b''.join(v.render(ph)))
@@ -3298,7 +3298,7 @@ class Transcript(core.Refraction):
 			yield from self.view.render(start - top, stop - top)
 
 	def phrase(self, line):
-		return matrix.Phrase.construct([(line, -1024, -1024, normalstyle)])
+		return matrix.Context.Phrase.construct([(line, -1024, -1024, normalstyle)])
 
 	def refresh(self):
 		height = self.view.height
@@ -3963,20 +3963,16 @@ class Console(flows.Channel):
 		self.f_emit(initialize)
 
 		initial = \
-			("Terminal must support meta-key in order for console to function properly.\n") + \
+			("Meta Escapes should be enabled.\n") + \
 			("Terminal.app: Preferences -> Profile -> Keyboard -> Use option as Meta Key\n") + \
 			("iTerm2: Preferences -> Profiles -> Keys -> +Esc Radio Buttons\n") + \
 			("Alacritty: Bindings must be configured\n") + \
-			("\nExit: [Meta-`] [i-e-x-i-t]; Toggle Console Prompt: Meta-`\n") + \
+			("\nExit: [Meta-`] [e-x-i-t]; Toggle Console Prompt: Meta-`\n") + \
 			("Open file using line editor: Meta-o;\n\n") + \
 			("Pane Management\n") + \
 			(" close: Close the current refraction without saving. (prompt command)\n") + \
 			(" Meta-j: Use current pane to display the Next Refraction\n") + \
 			(" Meta-k: Use current pane to display the Previous Refraction\n") + \
-			("Mouse Support\n") + \
-			(" Primary Click: Control and Edit Mode will move cursor.\n") + \
-			(" Secondary Click: Opens Contextual Menu when in focus pane; otherwise focuses unfocused pane.\n") + \
-			(" Scroll: Scrolls the pane regardless of focus state.\n") + \
 			("opened by: [" + sys.executable + "] " + name + " " + " ".join(args) + "\n")
 
 		self.transcript.write(initial)
