@@ -2,20 +2,21 @@
 # Theme data. Colors and text borders.
 """
 
+# The semantic color names are used but align to sixteen colors indexes.
 colors = (
 	# These are the symbols used to identify the sixteen colors commonly
 	# made available by terminals and emulators. Either this list can be
 	# reorganzied to match a terminal's existing configuration or the
 	# terminal can be reconfigured to match this list's expectations.
 
-	'background-limit', # black (currently unused)
+	'background-limit', # black (used for embossed areas)
 
 	'comment',          # red
 	'endpoint',         # green
 	'highlighter',      # yellow
 	'keyword',          # blue
 	'core',             # purple, normally magenta
-	'literal',          # teal, normally cyan
+	'exception',        # teal, normally cyan (fake text; markers)
 	'gray',             # white (darker default text)
 
 	'dark',             # bright black (lighter default cell)
@@ -39,24 +40,25 @@ theme = {
 	'keyword': -(512 + colors.index('keyword')),
 	'core': -(512 + colors.index('core')),
 	'exoword': -(512 + colors.index('preprocessor')),
-	'identifier': -(1024), #-(512 + colors.index('gray')), # (terminal) default text color
-	'fallback': 0xCCCCCC,
-	'alpha': 0xAAAAAA,
+
+	'identifier': -(1024),
+	'expression': -(1024),
 
 	'cell': -(1024), # (terminal) default cell color
+
 	'border': -(512 + colors.index('dark')),
 	'refraction-type': -(512 + colors.index('blue')),
 	'cursor-text': -(512 + colors.index('background-limit')),
 }
 
 range_colors = {
-	'start-inclusive': 0x00CC00,
-	'stop-inclusive': 0xFF8700, # orange (between yellow and red)
+	'start-inclusive': -(512 + colors.index('start')),
+	'stop-inclusive': -(512 + colors.index('preprocessor')), # orange (between yellow and red)
 
-	'offset-active': 0xF0F000, # yellow, actual position
-	'offset-inactive': 0,
+	'offset-active': -(512 + colors.index('current')), # yellow, actual position
+	'offset-inactive': -(512 + colors.index('gray')),
 
-	'start-exclusive': 0x005F00,
-	'stop-exclusive': 0xFF0000,
+	'start-exclusive': -(512 + colors.index('start')),
+	'stop-exclusive': -(512 + colors.index('stop')),
 	'clear': theme['border'],
 }

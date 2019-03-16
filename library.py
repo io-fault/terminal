@@ -46,7 +46,6 @@ from fault.kernel import library as libkernel
 from fault.kernel import flows
 from fault.range import library as librange
 
-from fault.terminal import control
 from fault.terminal import matrix
 from fault.terminal import events
 from fault.terminal import meta
@@ -60,7 +59,7 @@ from . import core
 from . import palette
 
 underlined = matrix.Context.Traits.construct('underline')
-normalstyle = matrix.core.NoTraits
+normalstyle = matrix.Context.Traits.none()
 
 def print_except_with_crlf(exc, val, tb):
 	# Used to allow reasonable exception displays.
@@ -3689,7 +3688,11 @@ class Console(flows.Channel):
 		yield screen.draw_segment_vertical(vert, vlength)
 
 	def set_position_indicators(self, refraction,
-			colors=(0x008800, 0xF0F000, 0x880000),
+			colors=(
+				palette.range_colors['start-inclusive'],
+				palette.range_colors['offset-active'],
+				palette.range_colors['stop-exclusive'],
+			),
 			range_color_palette=palette.range_colors,
 			vprecede=symbols.wedges['up'],
 			vproceed=symbols.wedges['down'],
@@ -4226,6 +4229,7 @@ def initialize(unit):
 	unit.place(s, 'console-operation')
 	s.actuate()
 
+	from fault.terminal import control
 	tty = control.setup() # Cursor will be hidden and raw mode is enabled.
 
 	c = Console()
