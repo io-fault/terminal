@@ -838,7 +838,7 @@ class Fields(core.Refraction):
 		else:
 			# trailing spaces
 			if spaces:
-				yield ("#" * spaces, 0xaf0000, defaultcell, underlined)
+				yield ("#" * spaces, -521, defaultcell, underlined)
 
 	def phrase(self, line, Constructor=functools.lru_cache(512)(matrix.Context.Phrase.construct)):
 		return Constructor(self.specify(line))
@@ -2958,7 +2958,7 @@ class Status(Fields):
 		path = getattr(new, 'source', None) or '/dev/null'
 		r = libroutes.File.from_absolute(str(path))
 		path_r = [
-			fields.Styled(x[0], x[2])
+			fields.Styled(x[0], x[1])
 			for x in self.format_route(r)
 		]
 		self.units = [
@@ -3431,8 +3431,7 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	emit = flow.f_emit
 	now = libtime.now
 
-	# using incremental decoder to handle partial writes.
-	state = codecs.getincrementaldecoder('utf-8')('replace')
+	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
 	decode = state.decode
 	construct = events.construct_character_events
 	read = os.read
