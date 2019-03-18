@@ -60,11 +60,17 @@ from . import palette
 
 underlined = matrix.Context.Traits.construct('underline')
 normalstyle = matrix.Context.Traits.none()
+exceptions = []
 
-def print_except_with_crlf(exc, val, tb):
+def print_except_with_crlf(exc, val, tb, altbuffer=False):
 	# Used to allow reasonable exception displays.
 	import traceback
 	import pprint
+
+	if not altbuffer:
+		# Expecting alternate screen buffer to be reset atexit.
+		exceptions.append((exc, val, tb))
+		return
 
 	sys.stderr.flush()
 	sys.stderr.write('\r')
@@ -3500,7 +3506,7 @@ class Console(flows.Channel):
 		self.selected_refractions = [Empty(), Empty(), self.transcript]
 		self.rotation = 0
 		self.count = 3
-		self.visible = list(self.selected_refractions[:3])
+		self.visible = list(self.selected_refractions[:self.count])
 
 		self.pane = 0 # focus pane (visible)
 		self.refraction = self.selected_refractions[0] # focus refraction; receives events
@@ -3511,6 +3517,7 @@ class Console(flows.Channel):
 
 		self.prompt.connect(self.panes['prompt'])
 		self.c_status.view = self.panes['status']
+
 		for x, a in zip(self.selected_refractions, self.panes['documents']):
 			x.connect(a)
 
@@ -3575,9 +3582,11 @@ class Console(flows.Channel):
 		# The window changed and the views and controls need to be updated.
 		"""
 
+		# Screen
 		v = self.view
 		v.context_set_dimensions(dimensions)
 		width, height = dimensions
+
 		n = self.count = max(width // 93, 1)
 		nvis = len(self.visible)
 
@@ -3975,7 +3984,6 @@ class Console(flows.Channel):
 			("opened by: [" + sys.executable + "] " + name + " " + " ".join(args) + "\n")
 
 		self.transcript.write(initial)
-		self.selected_refractions[1].focus()
 
 		for x in args:
 			self.prompt.command_open(x)
@@ -4223,6 +4231,18 @@ def initialize(unit):
 	s.subresource(unit)
 	unit.place(s, 'console-operation')
 	s.actuate()
+
+	# control.setup() registers an atexit handler that will
+	# switch the terminal back to the normal buffer. If an exception were
+	# to be printed prior to the switch, the terminal would
+	# effectively clear it. This workaround makes sure the print occurs
+	# afterwards risking some memory bloat.
+	def printall():
+		import traceback
+		for x in exceptions:
+			traceback.print_exception(*x)
+	import atexit
+	atexit.register(printall)
 
 	from fault.terminal import control
 	tty = control.setup() # Cursor will be hidden and raw mode is enabled.
