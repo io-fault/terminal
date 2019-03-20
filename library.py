@@ -3439,7 +3439,7 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 
 	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
 	decode = state.decode
-	construct = events.construct_character_events
+	parse = events.Parser().send
 	read = os.read
 	fileno = tty.fileno()
 
@@ -3451,7 +3451,7 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 		try:
 			# ctl belongs downstream so that timeouts can
 			# introduce events.
-			chars = construct(string)
+			chars = parse((string, True))
 		except ValueError:
 			# read more
 			continue
