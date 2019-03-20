@@ -3446,16 +3446,10 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	string = ""
 	while True:
 		data = read(fileno, maximum_read)
-		rts = now()
-		string += decode(data)
-		try:
-			# ctl belongs downstream so that timeouts can
-			# introduce events.
-			chars = parse((string, True))
-		except ValueError:
-			# read more
-			continue
+		partialread = len(data) < maximum_read
 
+		rts = now()
+		chars = parse((decode(data), partialread))
 		enqueue(partial(emit, (rts, chars)))
 		string = ""
 
