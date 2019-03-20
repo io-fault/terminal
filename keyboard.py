@@ -58,6 +58,7 @@ class Mapping(object):
 
 shift = events.Modifiers.construct(shift=True)
 meta = events.Modifiers.construct(meta=True)
+ctlm = events.Modifiers.construct(control=True)
 shiftmeta = events.Modifiers.construct(meta=True, shift=True)
 
 kmeta = (lambda x: ('literal', x, meta))
@@ -185,8 +186,8 @@ ca(nav('right'), 'refraction', ('window', 'horizontal', 'forward'))
 ca(nav('down'), 'refraction', ('window', 'vertical', 'forward'))
 ca(nav('up'), 'refraction', ('window', 'vertical', 'backward'))
 
-ca(nav('pagedown'), 'refraction', ('window', 'vertical', 'forward', 'jump'))
-ca(nav('pageup'), 'refraction', ('window', 'vertical', 'backward', 'jump'))
+ca(nav('page-down'), 'refraction', ('window', 'vertical', 'forward', 'jump'))
+ca(nav('page-up'), 'refraction', ('window', 'vertical', 'backward', 'jump'))
 ca(nav('home'), 'refraction', ('window', 'vertical', 'start'))
 ca(nav('end'), 'refraction', ('window', 'vertical', 'stop'))
 
@@ -214,15 +215,17 @@ ca(ctl('v'), 'refraction', ('delta', 'indent', 'void'))
 ca(ctl('c', 1), 'control', ('navigation', 'console')) # focus control console
 
 # insert mode
-ea(ctl('@'), 'refraction', ('delta', 'insert', 'space')) # literal space
 ea(ctl('v'), 'refraction', ('edit', 'capture'))
+ea(ctl('@'), 'refraction', ('delta', 'insert', 'space')) # Often Control-[Space]
+ea(ctl(' ', shift), 'refraction', ('delta', 'insert', 'space'))
+ea(ctl(' ', ctlm), 'refraction', ('delta', 'insert', 'space'))
+ea(ctl(' '), 'refraction', ('delta', 'edit', 'insert', 'space'))
 
 ea(ctl('?'), 'refraction', ('delta', 'delete', 'backward'))
 ea(ctl('x'), 'refraction', ('delta', 'delete', 'forward'))
 
 # these are mapped to keyboard names in order to allow class-level overrides
 # and/or context sensitive action selection
-ea(ctl(' '), 'refraction', ('delta', 'edit', 'insert', 'space'))
 ea(ctl('i'), 'refraction', ('delta', 'indent', 'increment'))
 ea(ctl('i', shift), 'refraction', ('delta', 'indent', 'decrement'))
 ea(ctl('m'), 'refraction', ('edit', 'return'))
