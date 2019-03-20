@@ -3440,7 +3440,7 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 
 	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
 	decode = state.decode
-	parse = events.Parser().send
+	parse = events.parser().send
 	read = os.read
 	fileno = tty.fileno()
 
