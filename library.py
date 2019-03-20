@@ -1852,7 +1852,8 @@ class Fields(core.Refraction):
 		"""
 		v = self.vector.vertical
 		win = self.window.vertical.snapshot()
-		v.restore((win[0], v.get(), win[2]))
+		diff = (win[2] - win[1]) // 8
+		v.restore((win[0] + diff, v.get(), win[2] - diff))
 
 		self.vector_last_axis = v
 		self.vertical_query = 'paging'
