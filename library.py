@@ -2349,6 +2349,31 @@ class Fields(core.Refraction):
 		self.update(*self.current_vertical.exclusive())
 		self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
 
+	def line_insert_characters(self, vertical, line, horizontal, characters,
+			isinstance=isinstance, StringField=fields.String
+		):
+		"""
+		# Insert characters at the horizontal focus.
+		"""
+		text = line[1]
+
+		if isinstance(characters, StringField):
+			chars = characters
+		else:
+			if characters in text.constants:
+				chars = text.constants[characters]
+			else:
+				chars = StringField(characters)
+
+		adjustments = self.indentation_adjustments(line)
+		offset = horizontal - adjustments # absolute offset
+
+		inverse = text.insert(offset, chars)
+		r = IRange.single(vertical)
+		self.log(inverse, r)
+
+		return horizontal + len(chars)
+
 	def insert_characters(self, characters,
 			isinstance=isinstance, StringField=fields.String
 		):
@@ -2376,9 +2401,6 @@ class Fields(core.Refraction):
 		self.log(inverse, r)
 
 		h.expand(h.offset, len(chars))
-
-		self.controller.f_emit(self.clear_horizontal_indicators())
-		self.update(*r.exclusive())
 
 	def delete_characters(self, quantity):
 		"""
@@ -2447,10 +2469,40 @@ class Fields(core.Refraction):
 
 		self.units[r[0]:r[0]] = paste
 		self.log((self.truncate_vertical, r), IRange((r[0], r[1]-1)))
-		self.checkpoint()
 
 		self.update_vertical_state(force=True)
 		self.update(r[0], None)
+
+	def breakline(self, line, offset):
+		"""
+		# Create a new line splitting the current line at the horizontal position.
+		"""
+		unit = self.units[line]
+		current = unit[1]
+		relation = current.__class__
+
+		if current.empty:
+			remainder = ""
+		else:
+			position = offset
+			remainder = str(current)[position:]
+
+			r = IRange.single(line)
+			if remainder:
+				self.log(current.delete(position, position+len(remainder)), r)
+
+		new = self.new(Class=relation, indentation=0)
+		newline = line+1
+		self.units[newline:newline] = [new]
+
+		nr = IRange.single(newline)
+		if remainder:
+			new[1].insert(0, remainder)
+			new[1].reformat()
+
+		self.log((self.truncate_vertical, (newline, newline+1)), nr)
+
+		return new
 
 	def event_delta_insert_character(self, event):
 		"""
@@ -2467,6 +2519,68 @@ class Fields(core.Refraction):
 		elif event.type == 'navigation':
 			self.insert_characters(symbols.arrows.get(event.identity))
 			self.movement = True
+
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(self.vertical_index, self.vertical_index+1)
+
+	def event_checkpoint(self, event):
+		self.checkpoint()
+
+	def event_delta_insert_data(self, event):
+		"""
+		# Endpoint for terminal paste events.
+		"""
+		h, v = self.vector
+		lines = event.string.split('\n')
+
+		count = len(lines)
+		if count == 0:
+			return
+
+		self.movement = True
+
+		original_lineno = v.get()
+		self.controller.f_emit(self.clear_horizontal_indicators())
+
+		hf = self.horizontal_focus
+		aoffset = h.get() - self.indentation_adjustments(hf) # absolute offset
+
+		if lines[0]:
+			existing = hf[1].characters()
+			insertion = lines[0].lstrip('\t')
+
+			r = IRange.single(self.vertical_index)
+			self.log(hf[1].insert(aoffset, insertion), r)
+			indent = len(lines[0]) - len(insertion)
+			self.indent(hf, indent)
+			self.log((self.indent, (self.horizontal_focus, -indent)), r)
+		else:
+			insertion = ""
+
+		if count == 1:
+			h.update(len(lines[0]))
+			self.update_horizontal_indicators()
+			return
+
+		nextl = self.breakline(original_lineno, aoffset+len(insertion))
+
+		# Translate leading tabs; breakline logs the split, so no need here.
+		r = IRange.single(original_lineno+1)
+		insertion = lines[-1].lstrip('\t')
+		nextl[1].insert(0, insertion)
+		indent = len(lines[-1]) - len(insertion)
+		self.indent(nextl, indent)
+
+		self.insert_lines(original_lineno+1, lines[1:-1])
+		v.configure(original_lineno, count, count-1)
+		indenta = self.indentation_adjustments(nextl)
+		chars = indenta + len(insertion)
+		h.configure(0, chars, chars)
+
+		self.update_vertical_state(force=True)
+		self.update_horizontal_indicators()
+
+		return self.update(original_lineno, None)
 
 	def transition_insert_character(self, key):
 		"""
@@ -2616,12 +2730,16 @@ class Fields(core.Refraction):
 		"""
 		self.insert_characters(fields.Delimiter(' '))
 		self.movement = True
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_delta_insert_space(self, event):
 		"""
 		# Insert a literal space.
 		"""
 		self.insert_characters(fields.Delimiter((' ')))
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_delta_indent_increment(self, event, quantity = 1):
 		"""
@@ -3031,10 +3149,14 @@ class Prompt(Lines):
 	def event_delta_edit_insert_space(self, event):
 		self.insert_characters(self.separator)
 		self.movement = True
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_edit_tab(self, event):
 		self.insert_characters(fields.space)
 		self.movement = True
+		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_edit_shift_tab(self, event):
 		pass

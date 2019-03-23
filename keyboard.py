@@ -215,6 +215,9 @@ ca(ctl('v'), 'refraction', ('delta', 'indent', 'void'))
 ca(ctl('c', 1), 'control', ('navigation', 'console')) # focus control console
 
 # insert mode
+ea(('paste', 'start', events.Modifiers(0)), 'refraction', ('checkpoint',))
+#ea(('paste', 'stop', events.Modifiers(0)), 'refraction', ('checkpoint',))
+ea(('data', 'paste', events.Modifiers(0)), 'refraction', ('delta', 'insert', 'data'))
 ea(ctl('v'), 'refraction', ('edit', 'capture'))
 ea(ctl('@'), 'refraction', ('delta', 'insert', 'space')) # Often Control-[Space]
 ea(ctl(' ', shift), 'refraction', ('delta', 'insert', 'space'))

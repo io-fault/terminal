@@ -81,7 +81,7 @@ def changelength(delta):
 			l += len(x[1][-1])
 	return l
 
-def address(seq, start, stop, len = len, range = range):
+def address(seq, start, stop, len=len, range=range):
 	"""
 	# Find the address of the absolute slice.
 	"""
@@ -606,14 +606,14 @@ class Sequence(list):
 
 	def insert(self, position, *fields):
 		self[position:position] = fields
-		return (self.deletion, fields)
+		return (self.delete, fields)
 
 	def insertion(self, seq):
 		sinsert = super().insert
 		for p, f in seq:
 			sinsert(p, f)
 
-		return (self.deletion, [x[1] for x in seq])
+		return (self.delete, [x[1] for x in seq])
 
 	def delete(self, *fields, get0=operator.itemgetter(0)):
 		"""
