@@ -425,7 +425,7 @@ class Cache(object):
 		"""
 		self.storage[key].clear()
 
-class Refraction(libkernel.Resource):
+class Refraction(libkernel.Processor):
 	"""
 	# A Refraction of a source onto a connected area of the display.
 

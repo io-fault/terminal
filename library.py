@@ -167,7 +167,7 @@ class Fields(core.Refraction):
 		return IRange((self.vertical_index, self.vertical_index))
 
 	def log(self, message):
-		self.context.process.log(message)
+		self.system.process.log(message)
 
 	def focus(self):
 		super().focus()
@@ -3165,7 +3165,7 @@ class Prompt(Lines):
 		"""
 		# Immediately exit the process. Unsaved files will not be saved.
 		"""
-		self.controller.context.process.terminate(0)
+		self.controller.executable.exe_invocation.exit(0)
 
 	def command_forget(self):
 		"""
@@ -3371,14 +3371,6 @@ class Transcript(core.Refraction):
 		self.lines = ['']
 		self.bottom = 0 # bottom of window
 
-	def reference(self, console):
-		"""
-		# Allocate a reference to the write method paired with a draw.
-		"""
-		def write_reference(data, write = self.write, update = self.refresh, console = console):
-			write(data)
-		return write_reference
-
 	def write(self, text):
 		"""
 		# Append only to in memory line buffer.
@@ -3459,7 +3451,7 @@ def output(flow, queue, tty, bytearray=bytearray):
 						if err.errno == errno.EINTR:
 							continue
 		except BaseException as exception:
-			flow.context.process.exception(flow, exception, "Terminal Output")
+			flow.system.error(flow, exception, "Terminal Output")
 
 class IDeviceState(object):
 	"""
@@ -3556,7 +3548,7 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	"""
 	# Thread transformer function translating input to Character events for &Console.
 	"""
-	enqueue = flow.context.enqueue
+	enqueue = flow.enqueue
 	emit = flow.f_emit
 	now = libtime.now
 
@@ -4051,42 +4043,34 @@ class Console(flows.Channel):
 
 	def actuate(self):
 		v = self.view
-		inv = self.context.process.invocation
-		if 'system' in inv.parameters:
-			name = inv.parameters['system'].get('name', None)
-			args = inv.parameters['system'].get('arguments', ())
-			initdir = inv.parameters['system'].get('directory', None)
-		else:
-			name = "<not invoked via system>"
-			args = ()
-			initdir = None
-
 		for x in self.selected_refractions:
 			x.subresource(self)
 		self.c_status.subresource(self)
 		self.prompt.subresource(self)
 
-		initialize = [
+		ttyinit = [
 			v.clear(),
 			b''.join(self.adjust(self.tty.get_window_dimensions())),
 		]
 
-		initialize.extend(self.c_status.refraction_changed(self.selected_refractions[0]))
+		ttyinit.extend(self.c_status.refraction_changed(self.selected_refractions[0]))
 
 		for x in self.visible:
-			initialize.extend(x.refresh())
-		initialize.extend(self.prompt.refresh())
-		initialize.extend(self.c_status.refresh())
+			ttyinit.extend(x.refresh())
+		ttyinit.extend(self.prompt.refresh())
+		ttyinit.extend(self.c_status.refresh())
 
 		# redirect log to the transcript
-		process = self.context.process
-		wr = self.transcript.reference(self)
+		# XXX: relocate Execution.xact_initialize
+		process = self.system.process
 
-		process.log = wr
+		process.log = self.transcript.write
 		process.system_event_connect(('signal', 'terminal.delta'), self, self.delta)
 
-		self.f_emit(initialize)
+		self.f_emit(ttyinit)
 
+		name = self.executable.exe_command_name
+		args = self.executable.exe_invocation.args
 		initial = \
 			("Meta Escapes should be enabled.\n") + \
 			("Terminal.app: Preferences -> Profile -> Keyboard -> Use option as Meta Key\n") + \
@@ -4101,9 +4085,6 @@ class Console(flows.Channel):
 			("opened by: [" + sys.executable + "] " + name + " " + " ".join(args) + "\n")
 
 		self.transcript.write(initial)
-
-		for x in args:
-			self.prompt.command_open(x)
 
 	def focus(self, refraction):
 		"""
@@ -4238,7 +4219,7 @@ class Console(flows.Channel):
 	def event_method(target, event):
 		return 'event_' + '_'.join(event)
 
-	def process(self, event, source=None,
+	def f_transfer(self, event, source=None,
 			sto=libtime.Measure.of(millisecond=75),
 			sto_soon=libtime.Measure.of(millisecond=50),
 			trap=core.keyboard.trap.event, list=list, tuple=tuple
@@ -4336,46 +4317,62 @@ class Console(flows.Channel):
 		self.id_scroll_timeout_deferred = False
 		if self.id_state.scroll_count > 0 and self.id_state.scroll_flush is False:
 			self.id_state.scroll_flush = True
-			self.process((libtime.now(), ()))
+			self.f_transfer((libtime.now(), ()))
 
-def initialize(unit):
-	"""
-	# Initialize the given unit with a console.
-	"""
-	sys.excepthook = print_except_with_crlf
+class Execution(libkernel.Executable):
+	def xact_initialize(self):
+		"""
+		# Initialize the given unit with a console.
+		"""
 
-	s = libkernel.Sector()
-	s.subresource(unit)
-	unit.place(s, 'console-operation')
-	s.actuate()
+		inv = self.exe_invocation
+		if 'system' in inv.parameters:
+			name = inv.parameters['system'].get('name', None)
+			args = inv.args
+			initdir = inv.parameters['system'].get('directory', None)
+		else:
+			name = "<not invoked via system>"
+			args = ()
+			initdir = None
+		self.exe_command_name = name
 
-	# control.setup() registers an atexit handler that will
-	# switch the terminal back to the normal buffer. If an exception were
-	# to be printed prior to the switch, the terminal would
-	# effectively clear it. This workaround makes sure the print occurs
-	# afterwards risking some memory bloat.
-	def printall():
-		import traceback
-		for x in exceptions:
-			traceback.print_exception(*x)
-	import atexit
-	atexit.register(printall)
+		sys.excepthook = print_except_with_crlf
 
-	from fault.terminal import control
-	tty = control.setup() # Cursor will be hidden and raw mode is enabled.
+		# control.setup() registers an atexit handler that will
+		# switch the terminal back to the normal buffer. If an exception were
+		# to be printed prior to the switch, the terminal would
+		# effectively clear it. This workaround makes sure the print occurs
+		# afterwards risking some memory bloat.
+		def printall():
+			import traceback
+			for x in exceptions:
+				traceback.print_exception(*x)
+			print("\n")
+			for xact, (proc, enq) in libkernel.system.__process_index__.items():
+				proc.xact_context.report(sys.stderr.write)
 
-	c = Console()
-	c.con_connect_tty(tty)
+		import atexit
+		atexit.register(printall)
 
-	# terminal input -> console -> terminal output
-	output_thread = flows.Parallel(output, tty)
-	c.f_connect(output_thread)
-	input_thread = flows.Parallel(input, tty)
-	input_thread.f_connect(c)
+		from fault.terminal import control
+		tty = control.setup() # Cursor will be hidden and raw mode is enabled.
 
-	s.scheduling()
-	s.dispatch(output_thread)
-	s.dispatch(c)
-	s.dispatch(input_thread)
+		c = Console()
+		c.con_connect_tty(tty)
 
-	os.environ['FIO_SYSTEM_CONSOLE'] = str(os.getpid())
+		# terminal input -> console -> terminal output
+		output_thread = flows.Parallel(output, tty)
+		input_thread = flows.Parallel(input, tty)
+		c.f_connect(output_thread)
+		input_thread.f_connect(c)
+
+		s = self.controller
+		s.scheduling()
+		self.xact_dispatch(output_thread)
+		self.xact_dispatch(c)
+		self.xact_dispatch(input_thread)
+
+		os.environ['FIO_SYSTEM_CONSOLE'] = str(os.getpid())
+
+		for x in args:
+			c.prompt.command_open(x)
