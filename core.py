@@ -2,7 +2,7 @@ import functools
 import operator
 import collections
 
-from fault.kernel import library as libkernel
+from fault.kernel import core as kcore
 from fault.terminal import matrix
 
 from . import keyboard
@@ -425,7 +425,7 @@ class Cache(object):
 		"""
 		self.storage[key].clear()
 
-class Refraction(libkernel.Processor):
+class Refraction(kcore.Processor):
 	"""
 	# A Refraction of a source onto a connected area of the display.
 

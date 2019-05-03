@@ -42,7 +42,8 @@ import typing
 from fault.routes import library as libroutes
 from fault.time import library as libtime
 from fault.computation import library as libc
-from fault.kernel import library as libkernel
+from fault.kernel import core as kcore
+from fault.kernel import system as ksystem
 from fault.kernel import flows
 from fault.range import library as librange
 
@@ -131,7 +132,7 @@ actions = dict(
 	),
 )
 
-class Session(libkernel.Processor):
+class Session(kcore.Processor):
 	"""
 	# A set of buffers and execution contexts accessed by a Console.
 
@@ -4319,7 +4320,7 @@ class Console(flows.Channel):
 			self.id_state.scroll_flush = True
 			self.f_transfer((libtime.now(), ()))
 
-class Execution(libkernel.Executable):
+class Execution(kcore.Executable):
 	def xact_initialize(self):
 		"""
 		# Initialize the given unit with a console.
@@ -4348,7 +4349,7 @@ class Execution(libkernel.Executable):
 			for x in exceptions:
 				traceback.print_exception(*x)
 			print("\n")
-			for xact, (proc, enq) in libkernel.system.__process_index__.items():
+			for xact, (proc, enq) in ksystem.__process_index__.items():
 				proc.xact_context.report(sys.stderr.write)
 
 		import atexit
