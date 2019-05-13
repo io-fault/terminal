@@ -3166,7 +3166,8 @@ class Prompt(Lines):
 		"""
 		# Immediately exit the process. Unsaved files will not be saved.
 		"""
-		self.controller.executable.exe_invocation.exit(0)
+		exitnow = self.executable.exe_invocation.exit
+		exitnow(0)
 
 	def command_forget(self):
 		"""
@@ -4070,7 +4071,7 @@ class Console(flows.Channel):
 
 		self.f_emit(ttyinit)
 
-		name = self.executable.exe_command_name
+		name = self.application.exe_command_name
 		args = self.executable.exe_invocation.args
 		initial = \
 			("Meta Escapes should be enabled.\n") + \
@@ -4320,13 +4321,17 @@ class Console(flows.Channel):
 			self.id_state.scroll_flush = True
 			self.f_transfer((libtime.now(), ()))
 
-class Execution(kcore.Executable):
-	def xact_initialize(self):
+class Editor(kcore.Context):
+	def actuate(self):
 		"""
 		# Initialize the given unit with a console.
 		"""
 
-		inv = self.exe_invocation
+		sys.excepthook = print_except_with_crlf
+
+		self.provide('application')
+
+		inv = self.executable.exe_invocation
 		if 'system' in inv.parameters:
 			name = inv.parameters['system'].get('name', None)
 			args = inv.args
@@ -4336,8 +4341,6 @@ class Execution(kcore.Executable):
 			args = ()
 			initdir = None
 		self.exe_command_name = name
-
-		sys.excepthook = print_except_with_crlf
 
 		# control.setup() registers an atexit handler that will
 		# switch the terminal back to the normal buffer. If an exception were
