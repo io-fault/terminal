@@ -45,7 +45,7 @@ from fault.computation import library as libc
 from fault.kernel import core as kcore
 from fault.kernel import system as ksystem
 from fault.kernel import flows
-from fault.range import library as librange
+from fault.range.types import IRange
 
 from fault.terminal import matrix
 from fault.terminal import events
@@ -81,8 +81,6 @@ def print_except_with_crlf(exc, val, tb, altbuffer=False):
 	])))
 	sys.stderr.write('\r\n')
 	sys.stderr.flush()
-
-IRange = librange.IRange
 
 contexts = (
 	'system', # the operating system
