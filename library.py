@@ -39,13 +39,13 @@ import weakref
 import subprocess
 import typing
 
-from fault.routes import library as libroutes
 from fault.time import library as libtime
 from fault.computation import library as libc
 from fault.kernel import core as kcore
 from fault.kernel import system as ksystem
 from fault.kernel import flows
 from fault.range.types import IRange
+from fault.system import files as systemfiles
 
 from fault.terminal import matrix
 from fault.terminal import events
@@ -3080,7 +3080,7 @@ class Status(Fields):
 		)
 
 		path = getattr(new, 'source', None) or '/dev/null'
-		r = libroutes.File.from_absolute(str(path))
+		r = systemfiles.Path.from_absolute(str(path))
 		path_r = [
 			fields.Styled(x[0], x[1])
 			for x in self.format_route(r)
@@ -3194,7 +3194,7 @@ class Prompt(Lines):
 		return
 
 	def command_open(self,
-			source:libroutes.Route,
+			source:systemfiles.Path,
 			type:'type'=None,
 			mechanism:'type'='Lines',
 			encoding:str='utf-8',
@@ -3288,7 +3288,7 @@ class Prompt(Lines):
 			# Transcript is eternal.
 			console.selected_refractions.remove(p)
 
-	def command_chsrc(self, target:libroutes.File):
+	def command_chsrc(self, target:systemfiles.Path):
 		"""
 		# Change the source of the current working pane.
 		"""
