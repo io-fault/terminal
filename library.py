@@ -39,13 +39,15 @@ import weakref
 import subprocess
 import typing
 
-from fault.time import library as libtime
 from fault.computation import library as libc
 from fault.kernel import core as kcore
 from fault.kernel import system as ksystem
 from fault.kernel import flows
 from fault.range.types import IRange
 from fault.system import files as systemfiles
+
+from fault.time import types as timetypes
+from fault.time import sysclock
 
 from fault.terminal import matrix
 from fault.terminal import events
@@ -3550,7 +3552,7 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	"""
 	enqueue = flow.enqueue
 	emit = flow.f_emit
-	now = libtime.now
+	now = sysclock.now
 
 	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
 	decode = state.decode
@@ -4220,8 +4222,8 @@ class Console(flows.Channel):
 		return 'event_' + '_'.join(event)
 
 	def f_transfer(self, event, source=None,
-			sto=libtime.Measure.of(millisecond=75),
-			sto_soon=libtime.Measure.of(millisecond=50),
+			sto=timetypes.Measure.of(millisecond=75),
+			sto_soon=timetypes.Measure.of(millisecond=50),
 			trap=core.keyboard.trap.event, list=list, tuple=tuple
 		):
 		"""
@@ -4317,7 +4319,7 @@ class Console(flows.Channel):
 		self.id_scroll_timeout_deferred = False
 		if self.id_state.scroll_count > 0 and self.id_state.scroll_flush is False:
 			self.id_state.scroll_flush = True
-			self.f_transfer((libtime.now(), ()))
+			self.f_transfer((sysclock.now(), ()))
 
 class Editor(kcore.Context):
 	def actuate(self):
