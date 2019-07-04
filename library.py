@@ -39,7 +39,6 @@ import weakref
 import subprocess
 import typing
 
-from fault.computation import sequence as seqtools
 from fault.kernel import core as kcore
 from fault.kernel import system as ksystem
 from fault.kernel import flows
@@ -53,6 +52,7 @@ from fault.terminal import matrix
 from fault.terminal import events
 from fault.terminal import meta
 
+from . import sequence as seqtools
 from . import symbols
 from . import fields
 from . import query
