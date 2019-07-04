@@ -39,7 +39,7 @@ import weakref
 import subprocess
 import typing
 
-from fault.computation import library as libc
+from fault.computation import sequence as seqtools
 from fault.kernel import core as kcore
 from fault.kernel import system as ksystem
 from fault.kernel import flows
@@ -575,7 +575,7 @@ class Fields(core.Refraction):
 	def __init__(self):
 		super().__init__()
 
-		self.units = libc.Segments() # the sequence of buffered Fields.
+		self.units = seqtools.Segments() # the sequence of buffered Fields.
 
 		# cached access to line and specific field
 		self.horizontal_focus = None # controlling unit; object containing line
@@ -913,7 +913,7 @@ class Fields(core.Refraction):
 		"""
 		# Collect the fragments of the horizontal range from the Phrase.
 
-		# Nearly identical to &libc.Segments.select()
+		# Nearly identical to &seqtools.Segments.select()
 		"""
 		llen = len(line)
 		astart = positions[0]
@@ -3022,7 +3022,7 @@ class Lines(Fields):
 		self.Indentation = self._lindent(line_class.indentation)
 
 		initial = self.new(Class=line_class)
-		self.units = libc.Segments([initial])
+		self.units = seqtools.Segments([initial])
 		self.horizontal_focus = initial
 		nunits = len(self.units)
 		self.vertical_index = 0
@@ -3234,7 +3234,7 @@ class Prompt(Lines):
 					append(seq((new.Indentation.acquire(indentation), txt(line))))
 
 		new.source = path
-		new.units = libc.Segments(i)
+		new.units = seqtools.Segments(i)
 
 		new.subresource(self.controller)
 		console.selected_refractions.append(new)
