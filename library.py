@@ -3546,7 +3546,7 @@ class IDeviceState(object):
 
 		return (None, None)
 
-def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
+def input_transformed(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 	"""
 	# Thread transformer function translating input to Character events for &Console.
 	"""
@@ -3569,6 +3569,20 @@ def input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
 		chars = parse((decode(data), partialread))
 		enqueue(partial(emit, (rts, chars)))
 		string = ""
+
+def bytes_input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
+	"""
+	# Bytes input read loop minimizing time spent out of &os.read.
+	"""
+	enqueue = flow.enqueue
+	emit = flow.f_emit
+	read = os.read
+	fileno = tty.fileno()
+
+	while True:
+		data = read(fileno, maximum_read)
+		partialread = len(data) < maximum_read
+		enqueue(partial(emit, (data, partialread)))
 
 class Empty(Lines):
 	"""
@@ -4321,6 +4335,18 @@ class Console(flows.Channel):
 			self.id_state.scroll_flush = True
 			self.f_transfer((sysclock.now(), ()))
 
+def input_line_state():
+	now = sysclock.now
+	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
+	decode = state.decode
+	parse = events.parser().send
+
+	data, partialread = (yield None)
+	while True:
+		rts = now()
+		chars = parse((decode(data), partialread))
+		data, partialread = (yield (rts, chars))
+
 class Editor(kcore.Context):
 	def actuate(self):
 		"""
@@ -4366,13 +4392,20 @@ class Editor(kcore.Context):
 
 		# terminal input -> console -> terminal output
 		output_thread = flows.Parallel(output, tty)
-		input_thread = flows.Parallel(input, tty)
+		input_thread = flows.Parallel(bytes_input, tty)
+
+		ils = input_line_state()
+		next(ils)
+		t = flows.Transformation(ils.send)
+
 		c.f_connect(output_thread)
-		input_thread.f_connect(c)
+		input_thread.f_connect(t)
+		t.f_connect(c)
 
 		s = self.controller
 		s.scheduling()
 		self.xact_dispatch(output_thread)
+		self.xact_dispatch(t)
 		self.xact_dispatch(c)
 		self.xact_dispatch(input_thread)
 
