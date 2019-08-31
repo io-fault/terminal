@@ -577,7 +577,7 @@ class Refraction(kcore.Processor):
 		else:
 			rob = method(event, *params)
 
-		if self.controller.refraction is self:
+		if self.sector.refraction is self:
 			self.update_horizontal_indicators()
 
 		return rob
@@ -591,7 +591,7 @@ class Refraction(kcore.Processor):
 		self.distribute_once = True
 
 	def event_prepare_open(self, event):
-		console = self.controller
+		console = self.sector
 		return console.event_prepare_open(event)
 
 	def adjust(self, point, dimensions):
@@ -632,13 +632,13 @@ class Refraction(kcore.Processor):
 		"""
 		# Whether the refraction is currently visible.
 		"""
-		return self in self.controller.visible
+		return self in self.sector.visible
 
 	def focus(self):
 		"""
 		# Set position indicators and activate cursor.
 		"""
-		console = self.controller
+		console = self.sector
 		events = console.set_position_indicators(self)
 		console.f_emit([events])
 
@@ -647,13 +647,13 @@ class Refraction(kcore.Processor):
 		"""
 		# Whether the refraction is the current focus; receives key events.
 		"""
-		return self.controller.refraction is self
+		return self.sector.refraction is self
 
 	def blur(self):
 		"""
 		# Clear position indicators and lock cursor.
 		"""
-		console = self.controller
+		console = self.sector
 		events = console.clear_position_indicators(self)
 		console.f_emit([events])
 

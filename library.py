@@ -158,7 +158,7 @@ class Fields(core.Refraction):
 	out_of_bounds = fields.Sequence((fields.Indentation.acquire(0),))
 
 	def transcript_write(self, data):
-		return self.controller.transcript.write(data)
+		return self.sector.transcript.write(data)
 
 	@property
 	def current_vertical(self):
@@ -223,7 +223,7 @@ class Fields(core.Refraction):
 
 		self.horizontal.configure(il.length(), 0)
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update_unit()
 		self.update_window()
 		self.update(max(0, new-quantity), None)
@@ -436,7 +436,7 @@ class Fields(core.Refraction):
 		self.horizontal_focus = unit
 
 		# Adjust the vertical position without modifying the range.
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.vertical_index = line
 		v = self.vector.vertical
 		v.move(v.get() - line)
@@ -570,7 +570,7 @@ class Fields(core.Refraction):
 		v.reposition()
 
 		# All lines are being updated.
-		self.controller.f_emit(self.refresh())
+		self.sector.f_emit(self.refresh())
 
 	def __init__(self):
 		super().__init__()
@@ -631,7 +631,7 @@ class Fields(core.Refraction):
 		redo = []
 		add = redo.append
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		ranges = []
 		for ts, (undo, lr) in actions:
@@ -669,7 +669,7 @@ class Fields(core.Refraction):
 		undo = []
 		add = undo.append
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		for ts, (redo, lr) in actions:
 			method, args = redo
@@ -1051,7 +1051,7 @@ class Fields(core.Refraction):
 			clearing.append(b''.join(v.render(ph)))
 			clearing.append(v.seek_horizontal_relative(-(offset+cells(text))))
 
-		self.controller.f_emit(clearing)
+		self.sector.f_emit(clearing)
 		self.horizontal_positions.clear()
 		self.horizontal_range = None
 
@@ -1198,7 +1198,7 @@ class Fields(core.Refraction):
 
 	def update_horizontal_indicators(self):
 		events = self.current_horizontal_indicators()
-		self.controller.f_emit(events)
+		self.sector.f_emit(events)
 
 	def window_line(self, line):
 		"""
@@ -1272,7 +1272,7 @@ class Fields(core.Refraction):
 
 		dcommands = [self.view.seek((0, rlines[0]))]
 		dcommands.extend(self.view.print(lines, cellc))
-		self.controller.f_emit(dcommands)
+		self.sector.f_emit(dcommands)
 		return ()
 
 	def refresh(self, start=0, len=len, range=range, list=list, min=min, islice=itertools.islice):
@@ -1362,7 +1362,7 @@ class Fields(core.Refraction):
 			self.movement = True
 
 	def event_console_search(self, event):
-		console = self.controller
+		console = self.sector
 		prompt = console.prompt
 		prompt.prepare(fields.String("search"), fields.String(""))
 		prompt.horizontal.configure(8, 8, 0)
@@ -1371,12 +1371,12 @@ class Fields(core.Refraction):
 		self.update_horizontal_indicators()
 
 	def event_console_save(self, event):
-		console = self.controller
+		console = self.sector
 		console.prompt.prepare(fields.String("write"), fields.String(self.source))
 		console.focus_prompt()
 
 	def event_console_seek_line(self, event):
-		console = self.controller
+		console = self.sector
 		prompt = console.prompt
 		prompt.prepare(fields.String("seek"), fields.String(""))
 		prompt.event_select_horizontal_line(None)
@@ -1389,7 +1389,7 @@ class Fields(core.Refraction):
 		sel[-2].delete(sel[-1])
 
 	def event_delta_delete_line(self, event):
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		record = self.truncate_vertical(self.vertical_index, self.vertical_index+1)
 		self.log(record, IRange.single(self.vertical_index))
 		self.movement = True
@@ -1403,7 +1403,7 @@ class Fields(core.Refraction):
 		deleted_lines = self.units[start:stop]
 
 		self.units.delete(start, stop)
-		self.controller.f_emit(self.refresh(self.window_line(start)))
+		self.sector.f_emit(self.refresh(self.window_line(start)))
 		self.update_vertical_state()
 
 		return (self.insert_vertical, (start, deleted_lines))
@@ -1448,7 +1448,7 @@ class Fields(core.Refraction):
 		# Relocate the range to the current position.
 		"""
 		axis = self.last_axis
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		if axis == 'vertical':
 			start, position, stop = self.vertical.snapshot()
@@ -1485,7 +1485,7 @@ class Fields(core.Refraction):
 		self.checkpoint()
 
 	def event_delta_transpose_vertical(self, event):
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		s1 = self.vertical.snapshot()
 
 		self.event_navigation_range_dequeue(None)
@@ -1507,7 +1507,7 @@ class Fields(core.Refraction):
 		self.checkpoint()
 
 	def event_delta_transpose_horizontal(self, event):
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		axis, dominate, current, range = self.range_queue.popleft()
 		if axis == 'vertical':
@@ -1599,7 +1599,7 @@ class Fields(core.Refraction):
 		# Remove the range of the last axis.
 		"""
 		axis = self.last_axis
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		if axis == 'vertical':
 			start, position, stop = self.vertical.snapshot()
@@ -1635,7 +1635,7 @@ class Fields(core.Refraction):
 		adjust = self.horizontal_focus[0].length()
 		ul = self.horizontal_focus.length()
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		h.configure(adjust, ul - adjust)
 		self.vector_last_axis = h
@@ -1717,7 +1717,7 @@ class Fields(core.Refraction):
 		ry = ay - sy
 		ry += self.window.vertical.get()
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.vector.vertical.set(ry-1)
 		self.vector.horizontal.set(rx-1)
 		self.update_unit()
@@ -1727,7 +1727,7 @@ class Fields(core.Refraction):
 			self.movement = True
 
 		# Take focus.
-		self.controller.focus(self)
+		self.sector.focus(self)
 
 	def event_select_series(self, event, Indentation=fields.Indentation):
 		"""
@@ -1807,7 +1807,7 @@ class Fields(core.Refraction):
 		self.movement = True
 
 	def event_place_center(self, event):
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		a = self.axis
 		a.bisect()
 
@@ -1815,12 +1815,12 @@ class Fields(core.Refraction):
 		self.movement = True
 
 	def event_navigation_move_bol(self, event):
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		offset = self.indentation_adjustments(self.horizontal_focus)
 		self.horizontal.move((-self.horizontal.datum)+offset, 1)
 
 	def event_navigation_move_eol(self, event):
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		offset = self.indentation_adjustments(self.horizontal_focus)
 		self.horizontal.move(offset + self.horizontal_focus[1].characters(), 0)
 
@@ -1830,7 +1830,7 @@ class Fields(core.Refraction):
 		# Move the position to the next line.
 		"""
 		v = self.vertical
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		v.move(quantity)
 		self.vector_last_axis = v
 		self.update_vertical_state()
@@ -1841,7 +1841,7 @@ class Fields(core.Refraction):
 		# Move the position to the previous line.
 		"""
 		v = self.vertical
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		v.move(-quantity)
 		self.vector_last_axis = v
 		self.update_vertical_state()
@@ -1876,7 +1876,7 @@ class Fields(core.Refraction):
 		"""
 		# Adjust the horizontal position of the window forward by the given quantity.
 		"""
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.window.horizontal.move(quantity)
 		self.movement = True
 		self.scrolled()
@@ -1885,7 +1885,7 @@ class Fields(core.Refraction):
 		"""
 		# Adjust the horizontal position of the window forward by the given quantity.
 		"""
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.window.horizontal.move(-quantity)
 		self.movement = True
 		self.scrolled()
@@ -1895,7 +1895,7 @@ class Fields(core.Refraction):
 		# Adjust the vertical position of the window forward by the
 		# given quantity.
 		"""
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.window.vertical.move(quantity)
 		self.movement = True
 		self.scrolled()
@@ -1905,7 +1905,7 @@ class Fields(core.Refraction):
 		# Adjust the vertical position of the window backward by the
 		# given quantity. (Moves view port).
 		"""
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.window.vertical.move(-quantity)
 		self.movement = True
 		self.scrolled()
@@ -1915,7 +1915,7 @@ class Fields(core.Refraction):
 		# Adjust the vertical position of the window forward by the
 		# given quantity.
 		"""
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.window.vertical.move(quantity)
 		self.movement = True
 		self.scrolled()
@@ -1925,7 +1925,7 @@ class Fields(core.Refraction):
 		# Adjust the vertical position of the window backward by the
 		# given quantity. (Moves view port).
 		"""
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.window.vertical.move(-quantity)
 		self.movement = True
 		self.scrolled()
@@ -1973,7 +1973,7 @@ class Fields(core.Refraction):
 		"""
 		v = self.vertical
 		self.vector_last_axis = v
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		if v.offset <= 0 or self.vertical_query == 'pattern':
 			# already at beginning, imply previous block at same level
@@ -2024,7 +2024,7 @@ class Fields(core.Refraction):
 	def event_navigation_vertical_stop(self, event):
 		v = self.vertical
 		self.vector_last_axis = v
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		if (v.offset+1) >= v.magnitude or self.vertical_query == 'pattern':
 			# already at end, imply next block at same level
@@ -2176,7 +2176,7 @@ class Fields(core.Refraction):
 			else:
 				i += 1
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		v.move(i-v.get())
 		self.horizontal.configure(0, 0, 0)
 		self.update_vertical_state()
@@ -2215,7 +2215,7 @@ class Fields(core.Refraction):
 		axis, dominate, current, range = self.range_queue.popleft()
 
 		if axis == 'horizontal':
-			self.controller.f_emit(self.clear_horizontal_indicators())
+			self.sector.f_emit(self.clear_horizontal_indicators())
 			self.vertical.set(dominate)
 			self.horizontal.restore((range[0], self.horizontal.get(), range[1]+1))
 			self.update_vertical_state()
@@ -2325,7 +2325,7 @@ class Fields(core.Refraction):
 		self.log(inverse, r)
 
 		h.zero()
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update(*r.exclusive())
 		self.transition_keyboard('edit')
 
@@ -2337,7 +2337,7 @@ class Fields(core.Refraction):
 		focus = self.horizontal_focus
 		start, position, stop = self.extract_horizontal_range(focus, h)
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		self.horizontal_focus[1].delete(start, stop)
 		le = self.last_edit
@@ -2346,7 +2346,7 @@ class Fields(core.Refraction):
 
 		h.configure(start, len(le))
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update(*self.current_vertical.exclusive())
 		self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
 
@@ -2464,7 +2464,7 @@ class Fields(core.Refraction):
 		r = (index, index+nl)
 		if r[0] <= self.vertical_index < r[1]:
 			self.movement = True
-			self.controller.f_emit(self.clear_horizontal_indicators())
+			self.sector.f_emit(self.clear_horizontal_indicators())
 			self.update_unit()
 			self.update_window()
 
@@ -2521,7 +2521,7 @@ class Fields(core.Refraction):
 			self.insert_characters(symbols.arrows.get(event.identity))
 			self.movement = True
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_checkpoint(self, event):
@@ -2541,7 +2541,7 @@ class Fields(core.Refraction):
 		self.movement = True
 
 		original_lineno = v.get()
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		hf = self.horizontal_focus
 		aoffset = h.get() - self.indentation_adjustments(hf) # absolute offset
@@ -2590,7 +2590,7 @@ class Fields(core.Refraction):
 		if key.type == 'literal':
 			self.insert_characters(key.string)
 			r = self.delete_characters(1)
-			self.controller.f_emit(self.clear_horizontal_indicators())
+			self.sector.f_emit(self.clear_horizontal_indicators())
 			self.update(*r.exclusive())
 			self.movement = True
 
@@ -2625,7 +2625,7 @@ class Fields(core.Refraction):
 		r = IRange.single(self.vertical.get())
 		self.log(inverse, r)
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.horizontal.set(adjustments)
 		self.update(*r.exclusive())
 
@@ -2643,7 +2643,7 @@ class Fields(core.Refraction):
 		r = IRange.single(self.vertical.get())
 		self.log(inverse, r)
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update(*r.exclusive())
 
 	def event_delta_delete_backward_adjacent_class(self, event,
@@ -2672,7 +2672,7 @@ class Fields(core.Refraction):
 		if old_mode == mode:
 			return
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.keyboard.set(mode)
 
 	def event_transition_control(self, event):
@@ -2731,7 +2731,7 @@ class Fields(core.Refraction):
 		"""
 		self.insert_characters(fields.Delimiter(' '))
 		self.movement = True
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_delta_insert_space(self, event):
@@ -2739,7 +2739,7 @@ class Fields(core.Refraction):
 		# Insert a literal space.
 		"""
 		self.insert_characters(fields.Delimiter((' ')))
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_delta_indent_increment(self, event, quantity = 1):
@@ -2750,7 +2750,7 @@ class Fields(core.Refraction):
 			# ignore indent if the line is empty and deltas are being distributed
 			return
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.indent(self.horizontal_focus, quantity)
 
 		r = IRange.single(self.vertical_index)
@@ -2767,7 +2767,7 @@ class Fields(core.Refraction):
 			# ignore indent if the line is empty and deltas are being distributed
 			return
 
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.indent(self.horizontal_focus, -quantity)
 
 		r = IRange.single(self.vertical_index)
@@ -2803,7 +2803,7 @@ class Fields(core.Refraction):
 		self.transcript_write(s+'\n')
 
 	def event_delta_delete_backward(self, event, quantity = 1):
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		r = self.delete_characters(-1*quantity)
 		self.constrain_horizontal_range()
 		if r is not None:
@@ -2811,7 +2811,7 @@ class Fields(core.Refraction):
 			self.movement = True
 
 	def event_delta_delete_forward(self, event, quantity = 1):
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		r = self.delete_characters(quantity)
 		self.constrain_horizontal_range()
 		if r is not None:
@@ -2830,7 +2830,7 @@ class Fields(core.Refraction):
 			])
 		else:
 			r = str(self.horizontal_focus[1])[self.horizontal.slice()]
-		self.controller.cache.put(None, ('text', r))
+		self.sector.cache.put(None, ('text', r))
 
 	def event_delta_split(self, event):
 		"""
@@ -2838,7 +2838,7 @@ class Fields(core.Refraction):
 		"""
 		h = self.horizontal
 		hs = h.snapshot()
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		adjustment = self.indentation_adjustments(self.horizontal_focus)
 		start, position, stop = map((-adjustment).__add__, hs)
@@ -2941,7 +2941,7 @@ class Fields(core.Refraction):
 		"""
 		v = self.vector.vertical
 		d, o, m = v.snapshot()
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		v.restore((d, vertical_index, m))
 		self.update_vertical_state()
 		self.movement = True
@@ -2971,7 +2971,7 @@ class Fields(core.Refraction):
 		self.insert_lines(len(self.units), string)
 
 	def paste(self, index, cache = None):
-		typ, s = self.controller.cache.get(cache)
+		typ, s = self.sector.cache.get(cache)
 		return self.insert_lines(index, s.split('\n'))
 
 	def focus(self):
@@ -2980,7 +2980,7 @@ class Fields(core.Refraction):
 
 	def blur(self):
 		super().blur()
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 	def sequence(self, unit):
 		current = ""
@@ -3120,7 +3120,7 @@ class Prompt(Lines):
 
 		method = getattr(self, 'command_' + cname, None)
 		if method is None:
-			self.controller.transcript.write('command not found: ' + cname + '\n')
+			self.sector.transcript.write('command not found: ' + cname + '\n')
 		else:
 			result = method(*command[1:])
 
@@ -3128,7 +3128,7 @@ class Prompt(Lines):
 		self.window.vertical.move(1)
 		self.scrolled()
 		self.transition_keyboard('control')
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 
 	event_edit_return = execute
 	event_control_return = execute
@@ -3137,7 +3137,7 @@ class Prompt(Lines):
 		"""
 		# Set the command line to a sequence of fields.
 		"""
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		l = list(itertools.chain.from_iterable(
 			zip(fields, itertools.repeat(self.separator, len(fields)))
 		))
@@ -3145,18 +3145,18 @@ class Prompt(Lines):
 		# remove additional field separator
 		del l[-1]
 		self.horizontal_focus[1].sequences = l
-		self.controller.f_emit(self.refresh())
+		self.sector.f_emit(self.refresh())
 
 	def event_delta_edit_insert_space(self, event):
 		self.insert_characters(self.separator)
 		self.movement = True
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_edit_tab(self, event):
 		self.insert_characters(fields.space)
 		self.movement = True
-		self.controller.f_emit(self.clear_horizontal_indicators())
+		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.update(self.vertical_index, self.vertical_index+1)
 
 	def event_edit_shift_tab(self, event):
@@ -3179,13 +3179,13 @@ class Prompt(Lines):
 		"""
 		# Search the current working pane for the designated term.
 		"""
-		console = self.controller
+		console = self.sector
 		p = console.visible[console.pane]
 		p.find(term)
 		console.focus_pane()
 
 	def command_printobject(self):
-		console = self.controller
+		console = self.sector
 		p = console.visible[console.pane]
 		p.print_unit()
 
@@ -3207,7 +3207,7 @@ class Prompt(Lines):
 		# The implementation will be selected based on the file type.
 		# File type being determined by the dot-extension of the filename.
 		"""
-		console = self.controller
+		console = self.sector
 
 		if type is None:
 			profile = liblines.profile_from_filename(source)
@@ -3236,7 +3236,7 @@ class Prompt(Lines):
 		new.source = path
 		new.units = seqtools.Segments(i)
 
-		new.subresource(self.controller)
+		new.subresource(self.sector)
 		console.selected_refractions.append(new)
 
 		new.vertical_index = 0
@@ -3250,12 +3250,12 @@ class Prompt(Lines):
 		"""
 		# Write the value of the current working pane to the given target.
 		"""
-		console = self.controller
+		console = self.sector
 
 		with open(target, 'w+b') as f:
 			p = console.visible[console.pane]
 			size = p.serialize(f.write)
-			self.controller.transcript.write('Wrote %d bytes to "%s"\n' %(size, target,))
+			self.sector.transcript.write('Wrote %d bytes to "%s"\n' %(size, target,))
 			f.truncate(size)
 			f.flush()
 
@@ -3265,7 +3265,7 @@ class Prompt(Lines):
 		"""
 		# Move the refraction's vector to a specific vertical index. (Line Number).
 		"""
-		console = self.controller
+		console = self.sector
 		#p = console.refraction
 		p = console.visible[console.pane]
 		p.seek(int(vertical_index) - 1)
@@ -3276,7 +3276,7 @@ class Prompt(Lines):
 		"""
 		# Close the current working pane.
 		"""
-		console = self.controller
+		console = self.sector
 
 		p = console.visible[console.pane]
 		if len(console.visible) <= len(console.selected_refractions):
@@ -3294,7 +3294,7 @@ class Prompt(Lines):
 		"""
 		# Change the source of the current working pane.
 		"""
-		console = self.controller
+		console = self.sector
 		p = console.visible[console.pane]
 		p.source = target
 
@@ -3303,7 +3303,7 @@ class Prompt(Lines):
 		# Execute a system command buffering standard out and error in order to
 		# write it to the &Transcript. Currently blocks the process.
 		"""
-		console = self.controller
+		console = self.sector
 		transcript = console.transcript
 		re = console.visible[console.pane]
 
@@ -3322,7 +3322,7 @@ class Prompt(Lines):
 		"""
 		# Print the current working directory.
 		"""
-		echo = self.controller.transcript.write
+		echo = self.sector.transcript.write
 		echo(os.getcwd()+'\n')
 
 	def command_insert(self, *characters):
@@ -3331,7 +3331,7 @@ class Prompt(Lines):
 		"""
 		basemap = {'0x':16, '0o':8, '0b':2}
 
-		console = self.controller
+		console = self.sector
 		re = console.visible[console.pane]
 		chars = ''.join(chr(int(x, basemap.get(x[:2], 10))) for x in characters)
 		re.write(chars)
@@ -3342,7 +3342,7 @@ class Prompt(Lines):
 		# List command index.
 		"""
 		import inspect
-		echo = self.controller.transcript.write
+		echo = self.sector.transcript.write
 
 		cmds = [
 			(name[len('command_'):], obj)
@@ -3387,7 +3387,7 @@ class Transcript(core.Refraction):
 
 		self.bottom += nlines
 		if self.view is not None:
-			self.controller.f_emit(self.refresh())
+			self.sector.f_emit(self.refresh())
 
 	def reveal(self):
 		super().reveal()
@@ -4311,7 +4311,7 @@ class Console(flows.Channel):
 			if self.id_scroll_timeout_deferred is False:
 				self.id_scroll_timeout_deferred = True
 				delay = sto_soon
-				self.controller.scheduler.defer(delay, self.id_scroll_timeout)
+				self.sector.scheduler.defer(delay, self.id_scroll_timeout)
 
 		for x in tuple(self.motion):
 			if x is self.refraction:
@@ -4402,7 +4402,7 @@ class Editor(kcore.Context):
 		input_thread.f_connect(t)
 		t.f_connect(c)
 
-		s = self.controller
+		s = self.sector
 		s.scheduling()
 		self.xact_dispatch(output_thread)
 		self.xact_dispatch(t)
