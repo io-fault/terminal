@@ -132,6 +132,17 @@ actions = dict(
 	),
 )
 
+def _subresource(sub, ascent, WR=weakref.ref):
+	"""
+	# Currently, this is being misused and will be eliminated once
+	# a proper processor hierarchy is established.
+	"""
+
+	sub._pexe_contexts = ascent._pexe_contexts
+	for field in ascent._pexe_contexts:
+		setattr(sub, field, getattr(ascent, field))
+	sub._sector_reference = WR(ascent)
+
 class Session(kcore.Processor):
 	"""
 	# A set of buffers and execution contexts accessed by a Console.
@@ -3236,7 +3247,7 @@ class Prompt(Lines):
 		new.source = path
 		new.units = seqtools.Segments(i)
 
-		new.subresource(self.sector)
+		_subresource(new, self.sector)
 		console.selected_refractions.append(new)
 
 		new.vertical_index = 0
@@ -3282,7 +3293,7 @@ class Prompt(Lines):
 		if len(console.visible) <= len(console.selected_refractions):
 			# No other panes to take its place, so create an Empty().
 			ep = Empty()
-			ep.subresource(console)
+			_subresource(ep, console)
 			console.selected_refractions.append(ep)
 
 		console.event_pane_rotate_refraction(None)
@@ -4060,9 +4071,9 @@ class Console(flows.Channel):
 	def actuate(self):
 		v = self.view
 		for x in self.selected_refractions:
-			x.subresource(self)
-		self.c_status.subresource(self)
-		self.prompt.subresource(self)
+			_subresource(x, self)
+		_subresource(self.c_status, self)
+		_subresource(self.prompt, self)
 
 		ttyinit = [
 			v.clear(),
