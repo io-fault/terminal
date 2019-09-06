@@ -4322,7 +4322,7 @@ class Console(flows.Channel):
 			if self.id_scroll_timeout_deferred is False:
 				self.id_scroll_timeout_deferred = True
 				delay = sto_soon
-				self.sector.scheduler.defer(delay, self.id_scroll_timeout)
+				self.system.defer(delay, self)
 
 		for x in tuple(self.motion):
 			if x is self.refraction:
@@ -4345,6 +4345,7 @@ class Console(flows.Channel):
 		if self.id_state.scroll_count > 0 and self.id_state.scroll_flush is False:
 			self.id_state.scroll_flush = True
 			self.f_transfer((sysclock.now(), ()))
+	occur = id_scroll_timeout
 
 def input_line_state():
 	now = sysclock.now
@@ -4413,8 +4414,6 @@ class Editor(kcore.Context):
 		input_thread.f_connect(t)
 		t.f_connect(c)
 
-		s = self.sector
-		s.scheduling()
 		self.xact_dispatch(output_thread)
 		self.xact_dispatch(t)
 		self.xact_dispatch(c)
