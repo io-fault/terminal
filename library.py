@@ -4092,7 +4092,7 @@ class Console(flows.Channel):
 		process = self.system.process
 
 		process.log = self.transcript.write
-		process.system_event_connect(('signal', 'terminal.delta'), self, self.delta)
+		process.system_event_connect(('signal', 'terminal/delta'), self, self.delta)
 
 		self.f_emit(ttyinit)
 
