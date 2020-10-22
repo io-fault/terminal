@@ -272,7 +272,10 @@ class Fields(core.Refraction):
 		l = []
 		start, pos, stop = index # position is reference point
 
-		ranges = ((-1, minimum, range(start, minimum-1, -1)), (1, maximum, range(stop, maximum+1)))
+		ranges = (
+			(-1, minimum, range(max(start, 0), minimum-1, -1)),
+			(1, maximum, range(min(stop, maximum), maximum+1))
+		)
 
 		for direction, default, r in ranges:
 			condition = condition_constructor(direction, sequence[pos], *parameters)
@@ -3173,6 +3176,10 @@ class Prompt(Lines):
 	def event_edit_shift_tab(self, event):
 		pass
 
+	def command_suspend(self):
+		import signal
+		os.kill(os.getpid(), signal.SIGTSTP)
+
 	def command_exit(self):
 		"""
 		# Immediately exit the process. Unsaved files will not be saved.
@@ -3647,8 +3654,10 @@ class Console(flows.Channel):
 		self.pane = 0 # focus pane (visible)
 		self.refraction = self.selected_refractions[0] # focus refraction; receives events
 
-	def con_connect_tty(self, tty):
+	def con_connect_tty(self, tty, preparation, restoration):
 		self.tty = tty
+		self.tty_preparation = preparation
+		self.tty_restoration = restoration
 		self.view.context_set_dimensions(tty.get_window_dimensions())
 
 		self.prompt.connect(self.panes['prompt'])
@@ -4048,6 +4057,14 @@ class Console(flows.Channel):
 		refraction.snapshot = None
 		return events
 
+	def suspend(self):
+		import signal
+		self.tty_restoration()
+		try:
+			os.kill(os.getpid(), signal.SIGSTOP)
+		finally:
+			self.tty_preparation()
+
 	def delta(self):
 		"""
 		# The terminal window changed in size. Get the new dimensions and refresh the entire
@@ -4092,7 +4109,9 @@ class Console(flows.Channel):
 		process = self.system.process
 
 		process.log = self.transcript.write
+		process.system_event_connect(('signal', 'terminal/stop'), self, self.suspend)
 		process.system_event_connect(('signal', 'terminal/delta'), self, self.delta)
+		process.system_event_connect(('signal', 'process/continue'), self, self.delta)
 
 		self.f_emit(ttyinit)
 
@@ -4393,14 +4412,22 @@ class Editor(kcore.Context):
 			for xact, (proc, enq) in ksystem.__process_index__.items():
 				proc.xact_context.report(sys.stderr.write)
 
-		import atexit
+		import atexit, signal
 		atexit.register(printall)
 
 		from fault.terminal import control
-		tty = control.setup() # Cursor will be hidden and raw mode is enabled.
+		from fault.kernel.system import main_thread_task_queue
+		tty, tty_prep, tty_rest = control.setup() # Cursor will be hidden and raw mode is enabled.
+
+		# control.setup uses system.runtime.interject to ensure
+		# main thread execution of signal(); in fault.kernel's case,
+		# it's likely blocking, so issue a no-op to make sure it gets set.
+		main_thread_task_queue.enqueue(lambda: None)
+		del main_thread_task_queue
 
 		c = Console()
-		c.con_connect_tty(tty)
+		c.con_connect_tty(tty, tty_prep, tty_rest)
+		tty_prep()
 
 		# terminal input -> console -> terminal output
 		output_thread = flows.Parallel(output, tty)
