@@ -4418,16 +4418,11 @@ class Editor(kcore.Context):
 		from fault.terminal import control
 		from fault.kernel.system import main_thread_task_queue
 		tty, tty_prep, tty_rest = control.setup() # Cursor will be hidden and raw mode is enabled.
-
-		# control.setup uses system.runtime.interject to ensure
-		# main thread execution of signal(); in fault.kernel's case,
-		# it's likely blocking, so issue a no-op to make sure it gets set.
-		main_thread_task_queue.enqueue(lambda: None)
-		del main_thread_task_queue
+		tty_prep()
+		atexit.register(tty_rest)
 
 		c = Console()
 		c.con_connect_tty(tty, tty_prep, tty_rest)
-		tty_prep()
 
 		# terminal input -> console -> terminal output
 		output_thread = flows.Parallel(output, tty)
