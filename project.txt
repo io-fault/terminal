@@ -3,13 +3,13 @@
 		&<http://if.fault.io/project/information>
 
 /identifier/
-	&<http://fault.io/engineering/sources>
+	&<http://fault.io/development/syntax>
 /icon/
 	- (emoji)`📄`
 /name/
-	`sources`
+	`syntax`
 /abstract/
-	Terminal source editor.
+	Terminal editor for manipulating common forms of syntax.
 
 /authority/
 	`fault.io`
