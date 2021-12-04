@@ -186,6 +186,10 @@ exoword_list = [
 	'#line',
 	'#pragma',
 	'#import',
+	'STATIC',
+	'CONCEAL',
+	'REVEAL',
+	'SYMBOL',
 ]
 
 keywords = {y: y for y in map(fields.String, keyword_list)}
