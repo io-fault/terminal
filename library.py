@@ -65,7 +65,7 @@ underlined = matrix.Context.Traits.construct('underline')
 normalstyle = matrix.Context.Traits.none()
 exceptions = []
 
-def print_except_with_crlf(exc, val, tb, altbuffer=False):
+def print_except_with_crlf(exc, val, tb, altbuffer=False, file=sys.stderr):
 	# Used to allow reasonable exception displays.
 	import traceback
 	import pprint
@@ -75,14 +75,15 @@ def print_except_with_crlf(exc, val, tb, altbuffer=False):
 		exceptions.append((exc, val, tb))
 		return
 
-	sys.stderr.flush()
-	sys.stderr.write('\r')
-	sys.stderr.write('\r\n'.join(itertools.chain.from_iterable([
+	file.flush()
+	file.write('\r')
+	file.write('\r\n'.join(itertools.chain.from_iterable([
 		x.rstrip().split('\n')
 		for x in traceback.format_exception(exc, val, tb)
 	])))
-	sys.stderr.write('\r\n')
-	sys.stderr.flush()
+	file.write('\r\n')
+	file.flush()
+	file.close()
 
 contexts = (
 	'system', # the operating system
@@ -4057,7 +4058,7 @@ class Console(flows.Channel):
 		refraction.snapshot = None
 		return events
 
-	def suspend(self):
+	def suspend(self, link=None):
 		import signal
 		self.tty_restoration()
 		try:
@@ -4065,7 +4066,7 @@ class Console(flows.Channel):
 		finally:
 			self.tty_preparation()
 
-	def delta(self):
+	def delta(self, link=None):
 		"""
 		# The terminal window changed in size. Get the new dimensions and refresh the entire
 		# screen.
@@ -4106,12 +4107,11 @@ class Console(flows.Channel):
 
 		# redirect log to the transcript
 		# XXX: relocate Execution.xact_initialize
-		process = self.system.process
-
-		process.log = self.transcript.write
-		process.system_event_connect(('signal', 'terminal/stop'), self, self.suspend)
-		process.system_event_connect(('signal', 'terminal/delta'), self, self.delta)
-		process.system_event_connect(('signal', 'process/continue'), self, self.delta)
+		sy = self.system
+		sy.process.log = self.transcript.write
+		sy.connect_process_signal(self, self.suspend, 'terminal/stop')
+		sy.connect_process_signal(self, self.delta, 'terminal/delta')
+		sy.connect_process_signal(self, self.delta, 'process/continue')
 
 		self.f_emit(ttyinit)
 
