@@ -64,6 +64,7 @@ from . import palette
 underlined = matrix.Context.Traits.construct('underline')
 normalstyle = matrix.Context.Traits.none()
 exceptions = []
+PConstruct = matrix.Context.Phrase.construct
 
 def print_except_with_crlf(exc, val, tb, altbuffer=False, file=sys.stderr):
 	# Used to allow reasonable exception displays.
@@ -752,20 +753,20 @@ class Fields(core.Refraction):
 				continue
 			elif spaces:
 				# Print regular spaces.
-				yield (" " * spaces, color, -1024, normalstyle)
+				yield (" " * spaces, normalstyle, color, -1024, -1024)
 				spaces = 0
-			yield (x, color, -1024, normalstyle)
+			yield (x, normalstyle, color, -1024, -1024)
 		else:
 			# trailing spaces
 			if spaces:
-				yield ("#" * spaces, 0xaf0000, -1024, underlined)
+				yield ("#" * spaces, underlined, 0xaf0000, -1024, -1024)
 
 	def quotation(self, q, iterator, color=palette.theme['quotation'], cell=palette.theme['cell']):
 		"""
 		# Draw the quotation.
 		"""
 
-		yield (q.value(), color, cell, normalstyle)
+		yield (q.value(), normalstyle, color, cell, -1024)
 
 		spaces = 0
 		for path, x in iterator:
@@ -780,17 +781,17 @@ class Fields(core.Refraction):
 				continue
 			elif spaces:
 				# Print regular spaces.
-				yield (" " * spaces, color, cell, normalstyle)
+				yield (" " * spaces, normalstyle, color, cell, -1024)
 				spaces = 0
 
-			yield (x, color, cell, normalstyle)
+			yield (x, normalstyle, color, cell, -1024)
 
 			if x == q:
 				break
 		else:
 			# trailing spaces
 			if spaces:
-				yield ("#" * spaces, 0xaf0000, cell, underlined)
+				yield ("#" * spaces, underlined, 0xaf0000, cell, -1024)
 
 	def specify(self, line,
 			Indent=fields.Indentation,
@@ -822,9 +823,9 @@ class Fields(core.Refraction):
 		if isinstance(x, Indent):
 			if x > 0:
 				if self.has_content(line):
-					yield (self.tab(x, size=x.size), -1024, defaultcell, defaulttraits)
+					yield (self.tab(x, size=x.size), defaulttraits, -1024, defaultcell, -1024)
 				else:
-					yield (self.visible_tab(x, size=x.size), indent_cv, defaultcell, defaulttraits)
+					yield (self.visible_tab(x, size=x.size), defaulttraits, indent_cv, defaultcell, -1024)
 
 		spaces = 0
 
@@ -840,39 +841,39 @@ class Fields(core.Refraction):
 				continue
 			elif spaces:
 				# Regular spaces.
-				yield (" " * spaces, -1024, defaultcell, defaulttraits)
+				yield (" " * spaces, defaulttraits, -1024, defaultcell, -1024)
 				spaces = 0
 
 			if x in {"#", "//"}:
-				yield (x.value(), -(512+8), defaultcell, defaulttraits)
+				yield (x.value(), defaulttraits, -(512+8), defaultcell, -1024)
 				yield from self.comment(i) # progresses internally
 				break
 			elif x in uline.quotations:
 				yield from self.quotation(x, i) # progresses internally
 			elif val.isdigit() or val.startswith('0x'):
-				yield (x.value(), quotation, defaultcell, defaulttraits)
+				yield (x.value(), defaulttraits, quotation, defaultcell, -1024)
 			elif x is self.separator:
 				fs += 1
-				yield (str(fs), 0x202020, defaultcell, defaulttraits)
+				yield (str(fs), defaulttraits, 0x202020, defaultcell, -1024)
 			else:
 				color = theme[classify.get(x, 'identifier')]
-				yield (x, color, defaultcell, defaulttraits)
+				yield (x, defaulttraits, color, defaultcell, -1024)
 		else:
 			# trailing spaces
 			if spaces:
-				yield ("#" * spaces, -521, defaultcell, underlined)
+				yield ("#" * spaces, underlined, -521, defaultcell, -1024)
 
-	def phrase(self, line, Constructor=functools.lru_cache(512)(matrix.Context.Phrase.construct)):
+	def phrase(self, line, Constructor=functools.lru_cache(512)(PConstruct)):
 		return Constructor(self.specify(line))
 
 	# returns the text for the stop, position, and stop indicators.
 	def calculate_horizontal_start_indicator(self, empty, text, style, positions):
-		return matrix.Context.Phrase.construct(((text, *style),))
+		return PConstruct([(text, *style)])
 
 	def calculate_horizontal_stop_indicator(self, empty, text, style, positions,
 			combining_wedge=symbols.combining['low']['wedge-left'],
 		):
-		return matrix.Context.Phrase.construct(((text, style[0], style[1], normalstyle),))
+		return PConstruct([(text, normalstyle, *style[1:])])
 
 	def calculate_horizontal_position_indicator(self, empty, text, style, positions,
 			vc=symbols.combining['right']['vertical-line'],
@@ -885,32 +886,32 @@ class Fields(core.Refraction):
 		mode = self.keyboard.current[0]
 
 		if mode == 'edit':
-			style = underlined
+			traits = underlined
 			swap = False
 		else:
-			style = style[-1]
+			traits = style[0]
 
 		if empty:
-			color = (range_color_palette['clear'], cursortext)
+			color = (range_color_palette['clear'], cursortext, -1024)
 		elif positions[1] >= positions[2]:
 			# after or at exclusive stop
-			color = (range_color_palette['stop-exclusive'], cursortext)
+			color = (range_color_palette['stop-exclusive'], cursortext, -1024)
 		elif positions[1] < positions[0]:
 			# before start
-			color = (range_color_palette['start-exclusive'], cursortext)
+			color = (range_color_palette['start-exclusive'], cursortext, -1024)
 		elif positions[0] == positions[1]:
 			# position is on start
-			color = (range_color_palette['start-inclusive'], cursortext)
+			color = (range_color_palette['start-inclusive'], cursortext, -1024)
 		elif positions[2]-1 == positions[1]:
 			# last included character
-			color = (range_color_palette['stop-inclusive'], cursortext)
+			color = (range_color_palette['stop-inclusive'], cursortext, -1024)
 		else:
-			color = (range_color_palette['offset-active'], cursortext)
+			color = (range_color_palette['offset-active'], cursortext, -1024)
 
 		if swap:
-			color = (color[1], color[0])
+			color = (color[1], color[0], -1024)
 
-		return matrix.Context.Phrase.construct(((text, *color, style),))
+		return PConstruct(((text, traits, *color),))
 
 	# modification to text string
 	horizontal_transforms = {
@@ -998,7 +999,7 @@ class Fields(core.Refraction):
 
 		for x, size in hr:
 			grapheme = ""
-			style = (-1024, -1024, normalstyle)
+			style = (normalstyle, -1024, -1024, -1024)
 
 			if x >= offset and x < (offset + fl):
 				# continuation of word.
@@ -1060,7 +1061,7 @@ class Fields(core.Refraction):
 					continue
 			index, size, text, style = p
 			text = text or ' '
-			ph = matrix.Context.Phrase.construct([(text, *style)])
+			ph = PConstruct([(text, *style)])
 			clearing.append(v.seek_horizontal_relative(offset))
 			clearing.append(v.reset_text())
 			clearing.append(b''.join(v.render(ph)))
@@ -1090,6 +1091,7 @@ class Fields(core.Refraction):
 		hr_changed = False
 
 		if horizontal[0] > horizontal[2]:
+			# Start beyond stop.
 			horizontal = (horizontal[2], horizontal[1], horizontal[0])
 			inverted = True
 		else:
@@ -1128,14 +1130,14 @@ class Fields(core.Refraction):
 				rstarto = rstopo = 0
 
 			range_part = [
-				(x[0], x[1], x[2], range_style)
+				(x[0], range_style, x[2], x[3], x[4])
 				for x in subphrase
 			]
 
 			self.horizontal_range = (rstarto, rstopo, hr)
 
 			# rline is the unit line with the range changes
-			rline = matrix.Context.Phrase.construct(prefix + range_part + suffix)
+			rline = PConstruct(prefix + range_part + suffix)
 			self.horizontal_line_cache = rline
 			rlcc = rline.cellcount()
 			if rlcc > width:
@@ -1161,7 +1163,7 @@ class Fields(core.Refraction):
 					offset = rline.cellcount()
 				index, size, text, style = p
 				text = text or ' '
-				ph = matrix.Context.Phrase.construct([(text, *style)])
+				ph = PConstruct([(text, *style)])
 				position_events.append(v.reset_text())
 				position_events.append(v.seek_horizontal_relative(offset))
 				position_events.append(b''.join(v.render(ph)))
@@ -3440,7 +3442,7 @@ class Transcript(core.Refraction):
 			yield from self.view.render(start - top, stop - top)
 
 	def phrase(self, line):
-		return matrix.Context.Phrase.construct([(line, -1024, -1024, normalstyle)])
+		return PConstruct([(line, normalstyle, -1024, -1024, -1024)])
 
 	def refresh(self):
 		height = self.view.height

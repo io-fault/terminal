@@ -291,16 +291,17 @@ class Styled(object):
 	# Explicitly styled text field.
 	"""
 
-	__slots__ = ('text', 'textcolor', 'cellcolor', 'traits')
+	__slots__ = ('text', 'traits', 'textcolor', 'cellcolor', 'linecolor')
 
 	@property
 	def underlined(self):
-		return 'underline' in self.styles
+		return 'underline' in self.traits
 
 	def __init__(self, text="", fg=-1024):
 		self.text = text
 		self.textcolor = fg
 		self.cellcolor = -1024
+		self.linecolor = -1024
 		self.traits = 0
 
 	def terminal(self):
@@ -310,9 +311,10 @@ class Styled(object):
 
 		return (
 			self.text,
+			self.traits,
 			self.textcolor,
 			self.cellcolor,
-			self.traits
+			self.linecolor,
 		)
 
 @Field.register
