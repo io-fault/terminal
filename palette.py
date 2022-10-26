@@ -11,12 +11,12 @@ colors = (
 
 	'background-limit', # black (used for embossed areas)
 
-	'comment',          # red
+	'exception',        # red
 	'endpoint',         # green
 	'highlighter',      # yellow
 	'keyword',          # blue
 	'core',             # purple, normally magenta
-	'exception',        # teal, normally cyan (fake text; markers)
+	'comment',          # teal, normally cyan (fake text; markers)
 	'gray',             # white (darker default text)
 
 	'dark',             # bright black (lighter default cell)
