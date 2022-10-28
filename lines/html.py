@@ -1,5 +1,6 @@
 """
 # HTML language profile.
+# Operators include punctuation to avoid unnatural field navigation.
 """
 import itertools
 from .. import fields
@@ -153,12 +154,12 @@ cores = [
 ]
 keywords = {y: y for y in map(fields.String, keywords)}
 cores = {y: y for y in map(fields.String, cores)}
-exowords = {y: y for y in map(fields.String, ["!DOCTYPE"])}
+exowords = {y: y for y in map(fields.String, ["DOCTYPE"])}
 
-terminators = {y: y for y in map(fields.Constant, "<>")}
-separators = {}
+terminators = {y: y for y in map(fields.Constant, ".;?")}
+separators = {y: y for y in map(fields.Constant, "|,")}
 routers = {':': fields.Constant(":")}
-operators = {y: y for y in map(fields.Constant, "/=&;")}
-groupings = {y: y for y in map(fields.Constant, "<>")}
-quotations = {y: y for y in map(fields.Constant, ("'", '"',))}
+operators = {y: y for y in map(fields.Constant, "/=&!@#$%^&*+-~")}
+groupings = {y: y for y in map(fields.Constant, "<>{}[]()")}
+quotations = {y: y for y in map(fields.Constant, ("'", '"', "`"))}
 comments = {y: y for y in map(fields.Constant, ("<!--", '-->',))}
