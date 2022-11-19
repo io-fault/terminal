@@ -800,7 +800,7 @@ class Fields(core.Refraction):
 			indent_cv=palette.theme['indent'],
 			theme=palette.theme,
 			defaultcell=palette.theme['cell'],
-			defaulttraits=matrix.core.Traits(0),
+			defaulttraits=matrix.types.Traits(0),
 			isinstance=isinstance,
 			len=len, hasattr=hasattr,
 			iter=iter, next=next,
@@ -1006,7 +1006,7 @@ class Fields(core.Refraction):
 				roffset = (x - offset)
 				text = f[1]
 				if text:
-					grapheme = text[matrix.core.grapheme(text, roffset)]
+					grapheme = text[matrix.types.grapheme(text, roffset)]
 				style = f[2]
 			else:
 				offset += fl
@@ -1019,7 +1019,7 @@ class Fields(core.Refraction):
 
 						text = f[1]
 						if text:
-							grapheme = text[matrix.core.grapheme(text, roffset)]
+							grapheme = text[matrix.types.grapheme(text, roffset)]
 						style = f[2]
 						break
 					else:
