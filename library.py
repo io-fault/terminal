@@ -46,7 +46,7 @@ from fault.range.types import IRange
 from fault.system import files as systemfiles
 
 from fault.time import types as timetypes
-from fault.time import sysclock
+from fault.time.system import elapsed
 
 from fault.terminal import matrix
 from fault.terminal import events
@@ -3573,7 +3573,6 @@ def input_transformed(flow, queue, tty, maximum_read=1024*2, partial=functools.p
 	"""
 	enqueue = flow.enqueue
 	emit = flow.f_emit
-	now = sysclock.now
 
 	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
 	decode = state.decode
@@ -3586,7 +3585,7 @@ def input_transformed(flow, queue, tty, maximum_read=1024*2, partial=functools.p
 		data = read(fileno, maximum_read)
 		partialread = len(data) < maximum_read
 
-		rts = now()
+		rts = elapsed()
 		chars = parse((decode(data), partialread))
 		enqueue(partial(emit, (rts, chars)))
 		string = ""
@@ -4365,18 +4364,17 @@ class Console(flows.Channel):
 		self.id_scroll_timeout_deferred = False
 		if self.id_state.scroll_count > 0 and self.id_state.scroll_flush is False:
 			self.id_state.scroll_flush = True
-			self.f_transfer((sysclock.now(), ()))
+			self.f_transfer((elapsed(), ()))
 	occur = id_scroll_timeout
 
 def input_line_state():
-	now = sysclock.now
 	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
 	decode = state.decode
 	parse = events.parser().send
 
 	data, partialread = (yield None)
 	while True:
-		rts = now()
+		rts = elapsed()
 		chars = parse((decode(data), partialread))
 		data, partialread = (yield (rts, chars))
 
