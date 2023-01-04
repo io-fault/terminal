@@ -1,33 +1,13 @@
 """
 # Core structures tests.
 """
-from .. import core as library
-
-def test_Point(test):
-	"""
-	# - &library.Point
-	"""
-
-	# Sanity
-	p0 = library.Point((0,0))
-	p1 = library.Point((1,1))
-	p2 = library.Point((2,2))
-	p3 = library.Point((5,6))
-	test/(p1+p0) == p1
-	test/(p1-p0) == p1
-	test/(p2-p0) == p2
-	test/(p2-p1) == p1
-	test/(p2+p1) == (3,3)
-	test/(p2+p1) == (3,3)
-	test/(p3+p0) == p3
-	test/(p3+p1) == (6,7)
-	test/(p3-p1) == (4,5)
+from .. import core as module
 
 def test_Position(test):
 	"""
-	# Check all the methods of &library.Position
+	# Check all the methods of &module.Position
 	"""
-	p = library.Position()
+	p = module.Position()
 	test/p.snapshot() == (0,0,0)
 	test/p.get() == 0
 
@@ -90,8 +70,3 @@ def test_Position(test):
 	test/p.offset == -2
 	test/p.magnitude == 9
 	test/p.snapshot() == (10, 8, 19)
-
-if __name__ == '__main__':
-	import sys; from fault.test import library as libtest
-	libtest.execute(sys.modules[__name__])
-

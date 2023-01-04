@@ -348,7 +348,7 @@ class Vector(object):
 		"""
 		# Get the absolute horizontal and vertical position as a 2-tuple.
 		"""
-		return Point((self.horizontal.get(), self.vertical.get()))
+		return (self.horizontal.get(), self.vertical.get())
 
 	def __init__(self):
 		"""
