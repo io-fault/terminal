@@ -1036,7 +1036,7 @@ class Fields(core.Refraction):
 		slices = [panes[k[0]] for k in positions]
 		return slices
 
-	def clear_horizontal_indicators(self, cells=matrix.text.cells):
+	def clear_horizontal_indicators(self, cells=matrix.types.cells):
 		"""
 		# Called to clear the horizontal indicators for line switches.
 		"""
@@ -1077,7 +1077,7 @@ class Fields(core.Refraction):
 			self, unit, horizontal,
 			names=('start', 'position', 'stop'),
 			starmap=itertools.starmap,
-			cells=matrix.text.cells,
+			cells=matrix.types.cells,
 			list=list, len=len, tuple=tuple, zip=zip
 		):
 		"""
@@ -1318,7 +1318,7 @@ class Fields(core.Refraction):
 		return isinstance(field, (fields.Formatting, fields.Constant)) or str(field) == " "
 
 	def rotate(self, direction, horizontal, unit, sequence, quantity,
-			filtered=None, iter=iter, cells=matrix.text.cells
+			filtered=None, iter=iter, cells=matrix.types.cells
 		):
 		"""
 		# Select the next *significant* field, skipping the given quantity.
