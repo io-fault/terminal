@@ -258,11 +258,12 @@ class Position(object):
 		if roffset <= self.offset:
 			self.offset += quantity
 
-	def expand(self, offset, quantity):
+	def dilate(self, offset, quantity):
 		"""
 		# Adjust, increase, the magnitude relative to a particular offset.
 		"""
 		return self.contract(offset, -quantity)
+	expand = dilate
 
 	def relation(self):
 		"""
