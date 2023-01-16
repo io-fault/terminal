@@ -473,6 +473,7 @@ class Refraction(kcore.Processor):
 		return self.keyboard.current
 
 	def __init__(self):
+		self.scrolling = False
 		self.movement = False
 		self.page = [] # Phrase buffer.
 		self.page_cells = [] # Sum of cells.

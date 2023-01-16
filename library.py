@@ -596,7 +596,6 @@ class Fields(core.Refraction):
 		# cached access to line and specific field
 		self.horizontal_focus = None # controlling unit; object containing line
 		self.movement = True
-		self.scrolling = False
 		self.level = 0 # indentation level
 
 		# method of range production
@@ -3454,28 +3453,6 @@ class Transcript(core.Refraction):
 			yield from self.view.render(self.phrase(self.lines[i]))
 			yield self.view.seek_next_line()
 
-def output(flow, queue, tty, bytearray=bytearray):
-	"""
-	# Thread transformer function receiving display transactions and writing to the terminal.
-	"""
-	write = os.write
-	fileno = tty.fileno()
-	get = queue.get
-
-	while True:
-		try:
-			while True:
-				out = get()
-				r = bytearray().join(out)
-				while r:
-					try:
-						del r[:write(fileno, r)]
-					except OSError as err:
-						if err.errno == errno.EINTR:
-							continue
-		except BaseException as exception:
-			flow.system.error(flow, exception, "Terminal Output")
-
 class IDeviceState(object):
 	"""
 	# Manage the state of mouse key presses and scroll events.
@@ -3545,7 +3522,7 @@ class IDeviceState(object):
 		action = disposition + state
 		if state != 0 and action == 0:
 			# click or drag completion
-			delay = start.measure(timestamp)
+			delay = timestamp.decrease(start)
 			del self.keys[kid]
 			return ref, events.Character(('click', '<state>', (point, kid, delay), event[3]))
 		else:
@@ -3566,43 +3543,6 @@ class IDeviceState(object):
 			return self.key_delta(*params)
 
 		return (None, None)
-
-def input_transformed(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
-	"""
-	# Thread transformer function translating input to Character events for &Console.
-	"""
-	enqueue = flow.enqueue
-	emit = flow.f_emit
-
-	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
-	decode = state.decode
-	parse = events.parser().send
-	read = os.read
-	fileno = tty.fileno()
-
-	string = ""
-	while True:
-		data = read(fileno, maximum_read)
-		partialread = len(data) < maximum_read
-
-		rts = elapsed()
-		chars = parse((decode(data), partialread))
-		enqueue(partial(emit, (rts, chars)))
-		string = ""
-
-def bytes_input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
-	"""
-	# Bytes input read loop minimizing time spent out of &os.read.
-	"""
-	enqueue = flow.enqueue
-	emit = flow.f_emit
-	read = os.read
-	fileno = tty.fileno()
-
-	while True:
-		data = read(fileno, maximum_read)
-		partialread = len(data) < maximum_read
-		enqueue(partial(emit, (data, partialread)))
 
 class Empty(Lines):
 	"""
@@ -4315,7 +4255,12 @@ class Console(flows.Channel):
 					result = method(k, *params)
 				else:
 					# refraction may change during iteration
-					result = refraction.key(self, k)
+					try:
+						result = refraction.key(self, k)
+					except Exception as failure:
+						self.system.process.error(self, failure, "User Event Operation")
+						result = None
+
 					if result is not None:
 						#self.rstack.append(result)
 						pass
@@ -4372,21 +4317,77 @@ def input_line_state():
 	decode = state.decode
 	parse = events.parser().send
 
-	data, partialread = (yield None)
+	datas = (yield None)
 	while True:
 		rts = elapsed()
+		chars = parse((decode(b''.join(datas)), 0))
+		datas = (yield (rts, chars))
+
+def thread_bytes_output(flow, queue, tty, bytearray=bytearray):
+	"""
+	# Thread transformer function receiving display transactions and writing to the terminal.
+	"""
+	write = os.write
+	fileno = tty.fileno()
+	get = queue.get
+
+	while True:
+		try:
+			while True:
+				out = get()
+				r = bytearray().join(out)
+				while r:
+					try:
+						del r[:write(fileno, r)]
+					except OSError as err:
+						if err.errno == errno.EINTR:
+							continue
+		except BaseException as exception:
+			flow.system.error(flow, exception, "Terminal Output")
+
+def input_transformed(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
+	"""
+	# Thread transformer function translating input to Character events for &Console.
+	"""
+	enqueue = flow.enqueue
+	emit = flow.f_emit
+
+	state = codecs.getincrementaldecoder('utf-8')('surrogateescape')
+	decode = state.decode
+	parse = events.parser().send
+	read = os.read
+	fileno = tty.fileno()
+
+	string = ""
+	while True:
+		data = read(fileno, maximum_read)
+		partialread = len(data) < maximum_read
+
+		rts = elapsed()
 		chars = parse((decode(data), partialread))
-		data, partialread = (yield (rts, chars))
+		enqueue(partial(emit, (rts, chars)))
+		string = ""
+
+def thread_bytes_input(flow, queue, tty, maximum_read=1024*2, partial=functools.partial):
+	"""
+	# Bytes input read loop minimizing time spent out of &os.read.
+	"""
+	enqueue = flow.enqueue
+	emit = flow.f_emit
+	read = os.read
+	fileno = tty.fileno()
+
+	while True:
+		data = read(fileno, maximum_read)
+		enqueue(partial(emit, (data,)))
 
 class Editor(kcore.Context):
 	def actuate(self):
 		"""
 		# Initialize the given unit with a console.
 		"""
-
-		sys.excepthook = print_except_with_crlf
-
 		self.provide('application')
+		sys.excepthook = print_except_with_crlf
 
 		inv = self.executable.exe_invocation
 		if 'system' in inv.parameters:
@@ -4424,22 +4425,30 @@ class Editor(kcore.Context):
 		c = Console()
 		c.con_connect_tty(tty, tty_prep, tty_rest)
 
-		# terminal input -> console -> terminal output
-		output_thread = flows.Parallel(output, tty)
-		input_thread = flows.Parallel(bytes_input, tty)
+		if False:
+			# Read and write from terminal using threads.
+			ki = flows.Parallel(thread_bytes_input, tty)
+			ko = flows.Parallel(thread_bytes_output, tty)
+		else:
+			# Read and write from terminal using events.
+			ki = self.system.read_file(tty.fs_path())
+			ko = self.system.write_file(tty.fs_path())
 
+		# Decoding and interpretation.
 		ils = input_line_state()
 		next(ils)
 		t = flows.Transformation(ils.send)
 
-		c.f_connect(output_thread)
-		input_thread.f_connect(t)
+		# ki -> ils -> console -> ko
+		c.f_connect(ko)
+		ki.f_connect(t)
 		t.f_connect(c)
 
-		self.xact_dispatch(output_thread)
-		self.xact_dispatch(t)
+		self.xact_dispatch(ko)
 		self.xact_dispatch(c)
-		self.xact_dispatch(input_thread)
+		self.xact_dispatch(t)
+		self.xact_dispatch(ki)
+		ki.f_transfer(None)
 
 		os.environ['FIO_SYSTEM_CONSOLE'] = str(os.getpid())
 
