@@ -14,7 +14,7 @@ class Position(object):
 
 	# [ Properties ]
 	# /datum/
-		# The absolute position. (start)
+		# The absolute reference position. (start)
 	# /offset/
 		# The actual position relative to the &datum. (current=datum+offset)
 	# /magnitude/
