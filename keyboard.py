@@ -180,6 +180,7 @@ for i in range(10):
 # character level movement
 ca(ctl(' '), 'refraction', ('navigation', 'forward', 'character'))
 ca(ctl('?'), 'refraction', ('navigation', 'backward', 'character'))
+ca(ctl('h'), 'refraction', ('navigation', 'backward', 'character'))
 
 ca(nav('left'), 'refraction', ('window', 'horizontal', 'backward'))
 ca(nav('right'), 'refraction', ('window', 'horizontal', 'forward'))
@@ -225,6 +226,7 @@ ea(ctl(' ', ctlm), 'refraction', ('delta', 'insert', 'space'))
 ea(ctl(' '), 'refraction', ('delta', 'edit', 'insert', 'space'))
 
 ea(ctl('?'), 'refraction', ('delta', 'delete', 'backward'))
+ea(ctl('h'), 'refraction', ('delta', 'delete', 'backward'))
 ea(ctl('x'), 'refraction', ('delta', 'delete', 'forward'))
 
 # these are mapped to keyboard names in order to allow class-level overrides
