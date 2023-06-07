@@ -563,7 +563,6 @@ class Fields(core.Refraction):
 		"""
 		# Bind the window to the appropriate edges.
 		"""
-		h = self.window.horizontal
 		v = self.window.vertical
 		vcurrent = v.datum
 
@@ -579,14 +578,13 @@ class Fields(core.Refraction):
 		if underflow < 0:
 			v.move(-underflow)
 
-		h.reposition()
 		v.reposition()
-
-		vscrolled = v.datum - vcurrent
-
-		# Full refresh. Unconditional as DECCRA/DECSLRM is uncommon.
-		self.margin_scrolled(v, vscrolled)
-		self.vdelta(v, vscrolled)
+		if v.maximum > 3:
+			vscrolled = v.datum - vcurrent
+			self.margin_scrolled(v, vscrolled)
+			self.vdelta(v, vscrolled)
+		else:
+			self.sector.f_emit(self.refresh())
 
 	def repaint_scrolled(self, vertical, scrolled):
 		"""
