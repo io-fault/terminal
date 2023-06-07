@@ -565,12 +565,9 @@ class Fields(core.Refraction):
 		"""
 		h = self.window.horizontal
 		v = self.window.vertical
+		vcurrent = v.datum
 
-		# origin != top means a scroll occurred
-		hscrolled = h.offset
-		vscrolled = v.offset
-
-		if not hscrolled and not vscrolled:
+		if not v.offset:
 			return
 
 		# normalize the window by setting the datum to stop
@@ -585,8 +582,63 @@ class Fields(core.Refraction):
 		h.reposition()
 		v.reposition()
 
-		# All lines are being updated.
-		self.sector.f_emit(self.refresh())
+		vscrolled = v.datum - vcurrent
+
+		# Full refresh. Unconditional as DECCRA/DECSLRM is uncommon.
+		self.margin_scrolled(v, vscrolled)
+		self.vdelta(v, vscrolled)
+
+	def repaint_scrolled(self, vertical, scrolled):
+		"""
+		# Scrolling with full repaint.
+		"""
+		height = vertical.maximum
+		if scrolled > 0:
+			self.update(0, height - scrolled)
+		elif scrolled < 0:
+			self.update(- scrolled, height)
+
+	def margin_scrolled(self, vertical, scrolled):
+		"""
+		# Scrolling with &matrix.Context.confine and &matrix.Context.scroll.
+		"""
+		self.sector.f_emit([
+			self.view.confine(),
+			self.view.scroll(scrolled),
+			self.sector.view.confine(),
+		])
+
+	def copy_scrolled(self, vertical, scrolled):
+		"""
+		# Scrolling with &matrix.Context.replicate.
+		"""
+		origin = (0, 0)
+		end = view.dimensions
+
+		# Partial, copy residual lines.
+		if scrolled > 0:
+			# Forwards, push text up.
+			vfrom = (origin[0], origin[1] + scroll)
+			vto = end
+			vd = origin
+			self.sector.f_emit([self.view.replicate(vfrom, vto, vd)])
+		elif scrolled < 0:
+			# Backwards, push text down.
+			vfrom = origin
+			vto = (end[0], end[1] + scroll)
+			vd = (origin[0], origin[1] - scroll)
+			self.sector.f_emit([self.view.replicate(vfrom, vto, vd)])
+
+	def vdelta(self, vertical, scroll):
+		"""
+		# Update lines scrolled into view.
+		"""
+		if scroll > 0:
+			# Forwards, fill new lines below.
+			self.update(vertical.maximum - scroll, None)
+		elif scroll < 0:
+			# Backwards, fill new lines above.
+			self.update(0, vertical.get() - scroll)
 
 	def __init__(self):
 		super().__init__()
