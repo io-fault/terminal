@@ -579,7 +579,7 @@ class Fields(core.Refraction):
 			v.move(-underflow)
 
 		v.reposition()
-		if v.maximum > 3:
+		if v.magnitude > 3:
 			vscrolled = v.datum - vcurrent
 			self.margin_scrolled(v, vscrolled)
 			self.vdelta(v, vscrolled)
