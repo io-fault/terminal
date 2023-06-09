@@ -936,6 +936,7 @@ class Fields(core.Refraction):
 
 		if mode == 'edit':
 			traits = underlined
+			cursortext = -1024
 			swap = False
 		else:
 			traits = style[0]
