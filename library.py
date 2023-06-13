@@ -581,7 +581,7 @@ class Fields(core.Refraction):
 		v.reposition()
 		if v.magnitude > 3:
 			vscrolled = v.datum - vcurrent
-			self.margin_scrolled(v, vscrolled)
+			self.copy_scrolled(v, vscrolled)
 			self.vdelta(v, vscrolled)
 		else:
 			self.sector.f_emit(self.refresh())
@@ -611,20 +611,20 @@ class Fields(core.Refraction):
 		# Scrolling with &matrix.Context.replicate.
 		"""
 		origin = (0, 0)
-		end = view.dimensions
+		end = self.view.dimensions
 
 		# Partial, copy residual lines.
 		if scrolled > 0:
 			# Forwards, push text up.
-			vfrom = (origin[0], origin[1] + scroll)
+			vfrom = (origin[0], origin[1] + scrolled)
 			vto = end
 			vd = origin
 			self.sector.f_emit([self.view.replicate(vfrom, vto, vd)])
 		elif scrolled < 0:
 			# Backwards, push text down.
 			vfrom = origin
-			vto = (end[0], end[1] + scroll)
-			vd = (origin[0], origin[1] - scroll)
+			vto = (end[0], end[1] + scrolled)
+			vd = (origin[0], origin[1] - scrolled)
 			self.sector.f_emit([self.view.replicate(vfrom, vto, vd)])
 
 	def vdelta(self, vertical, scroll):
