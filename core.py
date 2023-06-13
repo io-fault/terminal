@@ -6,6 +6,10 @@ from fault.kernel import core as kcore
 from fault.terminal import matrix
 
 from . import keyboard
+from .ia import navigation
+from .ia import delta
+from .ia import transaction
+from .ia import console
 
 class Position(object):
 	"""
@@ -503,10 +507,25 @@ class Refraction(kcore.Processor):
 		self.keyboard.set(self.default_keyboard_mapping)
 		self.distributing = False
 
-	@staticmethod
+	@classmethod
 	@functools.lru_cache(16)
-	def event_method(target, event):
-		return 'event_' + '_'.join(event)
+	def event_method(Class, target, event):
+		# Redundant with core.Refraction.
+		try:
+			if event:
+				if event[0] == 'navigation':
+					return navigation.Index.select(event[1:])
+				elif event[0] == 'delta':
+					return delta.Index.select(event[1:])
+				elif event[0] == 'transaction':
+					return transaction.Index.select(event[1:])
+				elif event[0] == 'console':
+					return console.Index.select(event[1:])
+		except LookupError:
+			pass
+
+		mn = 'event_' + '_'.join(event)
+		return getattr(Class, mn)
 
 	def route(self, event, scrollmap={-1:'backward', 1:'forward'}):
 		"""
@@ -518,11 +537,11 @@ class Refraction(kcore.Processor):
 
 			if mevent in scrollmap:
 				return (None, ('refraction',
-					('window', 'vertical', scrollmap[mevent]), (activation, point,)
+					('navigation', 'window', 'vertical', scrollmap[mevent]), (activation, point,)
 				))
 		elif event.type == 'click':
 			point, key_id, delay = event.identity
-			return (None, ('refraction', ('select', 'absolute'), (point[0], point[1])))
+			return (None, ('refraction', ('navigation', 'select', 'absolute'), (point[0], point[1])))
 		else:
 			mapping, event = self.keyboard.event(event)
 			if event is None:
@@ -540,8 +559,7 @@ class Refraction(kcore.Processor):
 			return ()
 
 		mapping, (target_id, event_selection, params) = routing
-		method_name = self.event_method(target_id, event_selection)
-		method = getattr(self, method_name)
+		method = self.event_method(target_id, event_selection)
 
 		if self.distributing and event_selection[0] == 'delta':
 			self.clear_horizontal_indicators()
@@ -555,7 +573,7 @@ class Refraction(kcore.Processor):
 				hs = self.horizontal.snapshot()
 
 				for i in range(h.magnitude-1, -1, -1):
-					method(event, *params)
+					method(self, event, *params)
 					h.move(-1)
 			else:
 				# Vertical distribution.
@@ -566,7 +584,7 @@ class Refraction(kcore.Processor):
 				for i in range(v.magnitude, 0, -1):
 					h.restore(hs)
 					self.update_unit()
-					method(event, *params)
+					method(self, event, *params)
 					v.move(-1)
 
 				v.set(vs)
@@ -577,7 +595,7 @@ class Refraction(kcore.Processor):
 				self.distributing = not self.distributing
 				self.distribute_once = None
 		else:
-			rob = method(event, *params)
+			rob = method(self, event, *params)
 
 		if self.sector.refraction is self:
 			self.update_horizontal_indicators()

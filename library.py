@@ -638,6 +638,16 @@ class Fields(core.Refraction):
 			# Backwards, fill new lines above.
 			self.update(0, vertical.get() - scroll)
 
+	def insert_literal_space(self):
+		"""
+		# Insert a constant into the field sequence and
+		# create a new text field for further editing.
+		"""
+		self.insert_characters(fields.Delimiter(' '))
+		self.sector.f_emit(self.clear_horizontal_indicators())
+		self.update(self.vertical_index, self.vertical_index+1)
+	insert_space = insert_literal_space
+
 	def __init__(self):
 		super().__init__()
 
@@ -753,19 +763,7 @@ class Fields(core.Refraction):
 		"""
 		self.vertical_query = self.horizontal_query = 'pattern'
 		self.pattern = pattern
-		self.event_navigation_vertical_stop(None)
-
-	def event_delta_undo(self, event, quantity = 1):
-		self.undo(quantity)
-
-	def event_delta_redo(self, event, quantity = 1):
-		self.redo(quantity)
-
-	def event_delta_map(self, event):
-		"""
-		# Map the the following commands across the vertical range.
-		"""
-		self.distribution = 'vertical'
+		self.event_method('refraction', ('navigation', 'vertical', 'stop'))(self, None)
 
 	@staticmethod
 	@functools.lru_cache(16)
@@ -1428,39 +1426,9 @@ class Fields(core.Refraction):
 			self.update_horizontal_indicators()
 			self.movement = True
 
-	def event_console_search(self, event):
-		console = self.sector
-		prompt = console.prompt
-		prompt.prepare(fields.String("search"), fields.String(""))
-		prompt.horizontal.configure(8, 8, 0)
-		prompt.event_transition_edit(event)
-		console.focus_prompt()
-		self.update_horizontal_indicators()
-
-	def event_console_save(self, event):
-		console = self.sector
-		console.prompt.prepare(fields.String("write"), fields.String(self.source))
-		console.focus_prompt()
-
-	def event_console_seek_line(self, event):
-		console = self.sector
-		prompt = console.prompt
-		prompt.prepare(fields.String("seek"), fields.String(""))
-		prompt.event_select_horizontal_line(None)
-		prompt.horizontal.move(0, -1)
-		prompt.keyboard.set('edit')
-		console.focus_prompt()
-
 	def event_field_cut(self, event):
 		self.rotate(self.horizontal, sel, self.horizontal_focus.subfields(), 1)
 		sel[-2].delete(sel[-1])
-
-	def event_delta_delete_line(self, event):
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		record = self.truncate_vertical(self.vertical_index, self.vertical_index+1)
-		self.log(record, IRange.single(self.vertical_index))
-		self.movement = True
-		self.update_unit()
 
 	def truncate_vertical(self, start, stop):
 		"""
@@ -1510,53 +1478,11 @@ class Fields(core.Refraction):
 		unit[1].reformat()
 		self.update(*r.exclusive())
 
-	def event_delta_translocate(self, event):
-		"""
-		# Relocate the range to the current position.
-		"""
-		axis = self.last_axis
-		self.sector.f_emit(self.clear_horizontal_indicators())
-
-		if axis == 'vertical':
-			start, position, stop = self.vertical.snapshot()
-			size = stop - start
-
-			if position > start:
-				newstart = position - size
-				newstop = position
-			else:
-				newstart = position
-				newstop = position + size
-
-			self.translocate_vertical(None, self.units, position, start, stop)
-			self.vertical.restore((newstart, self.vertical.get(), newstop))
-			self.movement = True
-		elif axis == 'horizontal':
-			adjustment = self.indentation_adjustments(self.horizontal_focus)
-			start, position, stop = map((-adjustment).__add__, self.horizontal.snapshot())
-			size = stop - start
-
-			if position > start:
-				newstart = position - size
-				newstop = position
-			else:
-				newstart = position
-				newstop = position + size
-
-			self.translocate_horizontal(self.vertical_index, self.horizontal_focus, position, start, stop)
-			self.horizontal.restore((newstart, self.vertical.get(), newstop))
-			self.movement = True
-		else:
-			pass
-
-		self.checkpoint()
-
-	def event_delta_transpose_vertical(self, event):
+	def transpose_vertical(self, event):
 		self.sector.f_emit(self.clear_horizontal_indicators())
 		s1 = self.vertical.snapshot()
 
-		self.event_navigation_range_dequeue(None)
-
+		self.event_method('refraction', ('navigation', 'range', 'dequeue'))(self, None)
 		s2 = self.vertical.snapshot()
 
 		# make s2 come second
@@ -1573,7 +1499,7 @@ class Fields(core.Refraction):
 		self.movement = True
 		self.checkpoint()
 
-	def event_delta_transpose_horizontal(self, event):
+	def transpose_horizontal(self, event):
 		self.sector.f_emit(self.clear_horizontal_indicators())
 
 		axis, dominate, current, range = self.range_queue.popleft()
@@ -1647,356 +1573,6 @@ class Fields(core.Refraction):
 		self.horizontal.configure(adjust + s2_adjust + s2_range[0], s1_range[1] - s1_range[0])
 		self.checkpoint()
 
-	def event_delta_transpose(self, event):
-		"""
-		# Relocate the current range with the queued.
-		"""
-
-		axis = self.last_axis
-
-		if axis == 'vertical':
-			self.event_delta_transpose_vertical(event)
-		elif axis == 'horizontal':
-			self.event_delta_transpose_horizontal(event)
-		else:
-			pass
-
-	def event_delta_truncate(self, event):
-		"""
-		# Remove the range of the last axis.
-		"""
-		axis = self.last_axis
-		self.sector.f_emit(self.clear_horizontal_indicators())
-
-		if axis == 'vertical':
-			start, position, stop = self.vertical.snapshot()
-
-			self.log(self.truncate_vertical(start, stop), IRange((start, stop-1)))
-			self.vertical.contract(0, stop - start)
-			self.vertical.set(position)
-			self.movement = True
-		elif axis == 'horizontal':
-			adjustment = self.indentation_adjustments(self.horizontal_focus)
-			start, position, stop = map((-adjustment).__add__, self.horizontal.snapshot())
-
-			r = IRange.single(self.vertical_index)
-			self.log(self.horizontal_focus[1].delete(start, stop), r)
-			abs = self.horizontal.get()
-			self.horizontal.contract(0, stop - start)
-			self.horizontal.set(abs)
-			self.update(*r.exclusive())
-			self.movement = True
-		else:
-			pass
-
-		self.checkpoint()
-		self.update_unit()
-
-	def event_select_horizontal_line(self, event, quantity=1):
-		"""
-		# Alter the horizontal range to be the length of the current vertical index.
-		"""
-		h = self.horizontal
-
-		abs = h.get()
-		adjust = self.horizontal_focus[0].length()
-		ul = self.horizontal_focus.length()
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-
-		h.configure(adjust, ul - adjust)
-		self.vector_last_axis = h
-		self.horizontal_query = 'line'
-
-		if abs < adjust:
-			h.offset = 0
-		elif abs >= ul:
-			h.offset = h.magnitude
-		else:
-			h.move(abs - h.datum)
-
-		self.movement = True
-		self.update_horizontal_indicators()
-
-	def event_select_vertical_line(self, event, quantity=1):
-		"""
-		# Alter the vertical range to contain a single line.
-		"""
-		v = self.vertical
-		abs = v.get()
-		v.configure(abs, 1)
-		self.vector_last_axis = v
-		self.movement = True
-
-	def event_select_single(self, event):
-		"""
-		# Modify the horizontal range to field beneath the position indicator.
-		"""
-		line = self.horizontal_focus[1]
-		fields = list(self.horizontal_focus.subfields())
-		offset = self.horizontal.get()
-
-		current = 0
-		index = 0
-		for path, field in fields:
-			l = field.length()
-			if offset - l < current:
-				break
-			index += 1
-			current += l
-
-		# index is the current field
-		nfields = len(fields)
-		start = index
-
-		for i in range(index, nfields):
-			path, f = fields[i]
-			if f.merge == False and f not in line.routers:
-				break
-		else:
-			# series query while on edge of line.
-			return
-
-		stop = self.horizontal_focus.offset(*fields[i])
-
-		for i in range(index, -1, -1):
-			path, f = fields[i]
-			if isinstance(f, fields.Indentation):
-				i = 1
-				break
-			if f.merge == False and f not in line.routers:
-				i += 1
-				break
-		start = self.horizontal_focus.offset(*fields[i])
-
-		self.horizontal_query = 'series'
-		h = self.vector_last_axis = self.horizontal
-
-		h.restore((start, offset, stop))
-
-	def event_select_absolute(self, target, ax, ay):
-		"""
-		# Map the absolute position to the relative position and
-		# perform the &event_select_series operation.
-		"""
-		sx, sy = self.view.point
-		rx = ax - sx
-		ry = ay - sy
-		ry += self.window.vertical.get()
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.vector.vertical.set(ry-1)
-		self.vector.horizontal.set(rx-1)
-		self.update_unit()
-		if self.vector.vertical.get() == ry-1:
-			self.event_select_series(None)
-		else:
-			self.movement = True
-
-		# Take focus.
-		self.sector.focus(self)
-
-	def event_select_series(self, event, Indentation=fields.Indentation):
-		"""
-		# Expand the horizontal range to include fields separated by an access, routing, delimiter.
-		"""
-		line = self.horizontal_focus[1]
-		fields = list(self.horizontal_focus.subfields())
-		offset = self.horizontal.get()
-
-		current = 0
-		index = 0
-		for path, field in fields:
-			l = field.length()
-			if offset - l < current:
-				break
-			index += 1
-			current += l
-
-		# index is the current field
-		nfields = len(fields)
-		start = index
-
-		# Scan for edge at ending.
-		for i in range(index, nfields):
-			path, f = fields[i]
-			if f.merge == False and f not in line.routers:
-				break
-		else:
-			# series query while on edge of line.
-			return
-
-		stop = self.horizontal_focus.offset(*fields[i])
-
-		# Scan for edge at beginning.
-		for i in range(index, -1, -1):
-			path, f = fields[i]
-			if isinstance(f, Indentation):
-				i = 1
-				break
-			if f.merge == False and f not in line.routers:
-				i += 1
-				break
-		start = self.horizontal_focus.offset(*fields[i])
-
-		self.horizontal_query = 'series'
-		h = self.vector_last_axis = self.horizontal
-
-		if start > stop:
-			start, stop = stop, start
-		h.restore((start, offset, stop))
-		self.movement = True
-
-	def event_select_block(self, event, quantity=1):
-		self.vertical_query = 'indentation'
-		self.block((self.vertical_index, self.vertical_index, self.vertical_index+1))
-
-	def event_select_outerblock(self, event, quantity=1):
-		self.vertical_query = 'indentation'
-		self.outerblock(self.vector.vertical.snapshot())
-
-	def event_select_adjacent(self, event, quantity=1):
-		self.vertical_query = 'adjacent'
-		self.adjacent((self.vertical_index, self.vertical_index, self.vertical_index))
-
-	def event_place_start(self, event):
-		a = self.axis
-		d, o, m = a.snapshot()
-		a.restore((o, o, m))
-
-		self.movement = True
-
-	def event_place_stop(self, event):
-		a = self.axis
-		d, o, m = a.snapshot()
-		a.restore((d, o, o))
-
-		self.movement = True
-
-	def event_place_center(self, event):
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		a = self.axis
-		a.bisect()
-
-		self.update_vertical_state()
-		self.movement = True
-
-	def event_navigation_move_bol(self, event):
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		offset = self.indentation_adjustments(self.horizontal_focus)
-		self.horizontal.move((-self.horizontal.datum)+offset, 1)
-
-	def event_navigation_move_eol(self, event):
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		offset = self.indentation_adjustments(self.horizontal_focus)
-		self.horizontal.move(offset + self.horizontal_focus[1].characters(), 0)
-
-	# line [history] forward/backward
-	def event_navigation_vertical_forward(self, event, quantity = 1):
-		"""
-		# Move the position to the next line.
-		"""
-		v = self.vertical
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		v.move(quantity)
-		self.vector_last_axis = v
-		self.update_vertical_state()
-		self.movement = True
-
-	def event_navigation_vertical_backward(self, event, quantity=1):
-		"""
-		# Move the position to the previous line.
-		"""
-		v = self.vertical
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		v.move(-quantity)
-		self.vector_last_axis = v
-		self.update_vertical_state()
-		self.movement = True
-
-	def event_navigation_vertical_paging(self, event, quantity=1):
-		"""
-		# Modify the vertical range query for paging.
-		"""
-		v = self.vector.vertical
-		win = self.window.vertical.snapshot()
-		diff = (win[2] - win[1]) // 8
-		v.restore((win[0] + diff, v.get(), win[2] - diff))
-
-		self.vector_last_axis = v
-		self.vertical_query = 'paging'
-		self.update_vertical_state()
-		self.movement = True
-
-	def event_navigation_vertical_sections(self, event, quantity=1):
-		v = self.vector.vertical
-		win = self.window.vertical.snapshot()
-		height = abs(int((win[2] - win[0]) / 2.5))
-		v.restore((win[0] + height, v.get(), win[2] - height))
-
-		self.vertical_query = 'paging'
-		self.vector_last_axis = v
-		self.update_vertical_state()
-		self.movement = True
-
-	def event_window_horizontal_forward(self, event, quantity=1, point=None):
-		"""
-		# Adjust the horizontal position of the window forward by the given quantity.
-		"""
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.window.horizontal.move(quantity)
-		self.movement = True
-		self.scrolled()
-
-	def event_window_horizontal_backward(self, event, quantity=1, point=None):
-		"""
-		# Adjust the horizontal position of the window forward by the given quantity.
-		"""
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.window.horizontal.move(-quantity)
-		self.movement = True
-		self.scrolled()
-
-	def event_window_vertical_forward(self, event, quantity=1, point=None):
-		"""
-		# Adjust the vertical position of the window forward by the
-		# given quantity.
-		"""
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.window.vertical.move(quantity)
-		self.movement = True
-		self.scrolled()
-
-	def event_window_vertical_backward(self, event, quantity=1, point=None):
-		"""
-		# Adjust the vertical position of the window backward by the
-		# given quantity. (Moves view port).
-		"""
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.window.vertical.move(-quantity)
-		self.movement = True
-		self.scrolled()
-
-	def event_window_vertical_forward_jump(self, event, quantity=32, point=None):
-		"""
-		# Adjust the vertical position of the window forward by the
-		# given quantity.
-		"""
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.window.vertical.move(quantity)
-		self.movement = True
-		self.scrolled()
-
-	def event_window_vertical_backward_jump(self, event, quantity=32, point=None):
-		"""
-		# Adjust the vertical position of the window backward by the
-		# given quantity. (Moves view port).
-		"""
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.window.vertical.move(-quantity)
-		self.movement = True
-		self.scrolled()
-
 	def vertical_query_previous(self):
 		v = self.vertical
 		qtype = self.vertical_query
@@ -2034,24 +1610,6 @@ class Fields(core.Refraction):
 			vi = self.vertical_index
 			self.block((vi-2, vi-1, vi-1), self.level, maximum=vi-1)
 
-	def event_navigation_vertical_start(self, event):
-		"""
-		# Relocate the vertical position to the start of the vertical range.
-		"""
-		v = self.vertical
-		self.vector_last_axis = v
-		self.sector.f_emit(self.clear_horizontal_indicators())
-
-		if v.offset <= 0 or self.vertical_query == 'pattern':
-			# already at beginning, imply previous block at same level
-			self.vertical_query_previous()
-		else:
-			v.offset = 0
-
-		self.update_vertical_state()
-		self.constrain_horizontal_range()
-		self.movement = True
-
 	def vertical_query_next(self):
 		v = self.vertical
 		qtype = self.vertical_query
@@ -2088,141 +1646,12 @@ class Fields(core.Refraction):
 			vi = self.vertical_index + 1
 			self.block((vi, vi, vi+1), self.level, minimum = vi)
 
-	def event_navigation_vertical_stop(self, event):
-		v = self.vertical
-		self.vector_last_axis = v
-		self.sector.f_emit(self.clear_horizontal_indicators())
-
-		if (v.offset+1) >= v.magnitude or self.vertical_query == 'pattern':
-			# already at end, imply next block at same level
-			self.vertical_query_next()
-		else:
-			v.offset = v.magnitude - 1
-
-		self.update_vertical_state()
-		self.constrain_horizontal_range()
-		self.movement = True
-
-	# horizontal
-
-	def event_navigation_horizontal_forward(self, event, quantity=1):
-		"""
-		# Move the selection to the next significant field.
-		"""
-		h = self.horizontal
-		self.vector_last_axis = h
-		self.rotate(1, h, self.horizontal_focus, self.horizontal_focus.subfields(), quantity)
-
-	def event_navigation_horizontal_backward(self, event, quantity=1):
-		"""
-		# Move the selection to the previous significant field.
-		"""
-		h = self.horizontal
-		self.vector_last_axis = h
-		self.rotate(-1, h, self.horizontal_focus, reversed(list(self.horizontal_focus.subfields())), quantity)
-
-	def event_navigation_horizontal_start(self, event):
-		"""
-		# Horizontally move the cursor to the beginning of the range.
-		# or extend the range if already on the edge of the start.
-		"""
-		h = self.horizontal
-		self.vector_last_axis = h
-
-		if h.offset == 0:
-			r = self.horizontal_focus.find(h.get()-1)
-			if r is not None:
-				# at the end
-				path, field, (start, length, fi) = r
-				change = h.datum - start
-				h.magnitude += change
-				h.datum -= change
-
-				# Disallow spanning of indentation.
-				self.constrain_horizontal_range()
-		elif h.offset < 0:
-			# move start exactly
-			h.datum += h.offset
-			h.offset = 0
-		else:
-			h.offset = 0
-
-		self.movement = True
-
-	def event_navigation_horizontal_stop(self, event):
-		"""
-		# Horizontally move the cursor to the end of the range.
-		"""
-		h = self.horizontal
-		self.vector_last_axis = h
-
-		if h.offset == h.magnitude:
-			edge = h.get()
-			r = self.horizontal_focus.find(edge)
-			if r is not None:
-				# at the end
-				path, field, (start, length, fi) = r
-				if start + length <= self.horizontal_focus.length():
-					h.magnitude += length
-					h.offset += length
-
-		elif h.offset > h.magnitude:
-			# move start exactly
-			h.magnitude = h.offset
-		else:
-			h.offset = h.magnitude
-
-		self.movement = True
-
-	def event_navigation_forward_character(self, event, quantity=1):
-		h = self.horizontal
-		self.vector_last_axis = h
-
-		h.move(quantity)
-		self.constrain_horizontal_range()
-		self.movement = True
-	event_control_space = event_navigation_forward_character
-
-	def event_navigation_backward_character(self, event, quantity=1):
-		h = self.vector.horizontal
-		self.vector_last_axis = h
-
-		h.move(-quantity)
-		self.constrain_horizontal_range()
-		self.movement = True
-	event_control_backspace = event_navigation_forward_character
-
 	def indentation_adjustments(self, unit=None):
 		"""
 		# Construct a string of tabs reprsenting the indentation of the given unit.
 		"""
 
 		return self.indentation(unit or self.horizontal_focus).characters()
-
-	def event_navigation_jump_character(self, event, quantity=1):
-		"""
-		# Horizontally move the cursor to the character in the event.
-		"""
-		h = self.vector.horizontal
-		self.vector_last_axis = h
-
-		character = event.string
-
-		il = self.indentation(self.horizontal_focus).characters()
-		line = str(self.horizontal_focus[1])
-		start = max(h.get() - il, 0)
-
-		if start < 0 or start > len(line):
-			start = 0
-		if line[start:start+1] == character:
-			# skip if it's on it already
-			start += 1
-
-		offset = line.find(character, start)
-
-		if offset > -1:
-			h.set(offset + il)
-		self.movement = True
 
 	def select_void(self, linerange, direction=1):
 		"""
@@ -2250,49 +1679,6 @@ class Fields(core.Refraction):
 		self.constrain_horizontal_range()
 		self.movement = True
 
-	def event_navigation_void_forward(self, event):
-		self.select_void(range(self.vertical_index+1, len(self.units)), direction=1)
-
-	def event_navigation_void_backward(self, event):
-		self.select_void(range(self.vertical_index-1, -1, -1), direction=-1)
-
-	def range_enqueue(self, vector, axis):
-		position = getattr(self.vector, axis)
-		start, point, stop = axis.snapshot()
-
-		if axis == 'horizontal':
-			self.range_queue.append((axis, vector.vertical.get(), point, IRange((start, stop-1))))
-		elif axis == 'vertical':
-			self.range_queue.append((axis, None, None, IRange((start, stop-1))))
-		else:
-			raise Exception("unknown axis")
-
-	def event_navigation_range_enqueue(self, event):
-		start, point, stop = self.axis.snapshot()
-		axis = self.last_axis
-
-		if axis == 'horizontal':
-			self.range_queue.append((axis, self.vertical.get(), point, IRange((start, stop-1))))
-		elif axis == 'vertical':
-			self.range_queue.append((axis, None, None, IRange((start, stop-1))))
-		else:
-			raise Exception("unknown axis")
-
-	def event_navigation_range_dequeue(self, event):
-		axis, dominate, current, range = self.range_queue.popleft()
-
-		if axis == 'horizontal':
-			self.sector.f_emit(self.clear_horizontal_indicators())
-			self.vertical.set(dominate)
-			self.horizontal.restore((range[0], self.horizontal.get(), range[1]+1))
-			self.update_vertical_state()
-		elif axis == 'vertical':
-			# no move is performed, so indicators don't need to be updaed.
-			self.vertical.restore((range[0], self.vertical.get(), range[1]+1))
-			self.movement = True
-		else:
-			raise Exception("unknown axis")
-
 	def clear_horizontal_state(self):
 		"""
 		# Zero out the horizontal cursor.
@@ -2312,110 +1698,12 @@ class Fields(core.Refraction):
 		"""
 		return self.indentation(self.horizontal_focus)
 
-	def event_open_behind(self, event, quantity = 1):
-		"""
-		# Open a new vertical behind the current vertical position.
-		"""
-		inverse = self.open_vertical(self.get_indentation_level(), 0, quantity)
-		self.log(*inverse)
-		self.keyboard.set('edit')
-		self.movement = True
-
-	def event_open_ahead(self, event, quantity = 1):
-		"""
-		# Open a new vertical ahead of the current vertical position.
-		"""
-		if len(self.units) == 0:
-			return self.event_open_behind(event, quantity)
-
-		inverse = self.open_vertical(self.get_indentation_level(), 1, quantity)
-		self.log(*inverse)
-		self.keyboard.set('edit')
-		self.movement = True
-
-	def event_open_into(self, event):
-		"""
-		# Open a newline between the line at the current position with greater indentation.
-		"""
-		h = self.horizontal
-		hs = h.snapshot()
-		self.f_controller.f_emit(self.clear_horizontal_indicators())
-
-		adjustment = self.indentation_adjustments(self.horizontal_focus)
-		start, position, stop = map((-adjustment).__add__, hs)
-
-		remainder = str(self.horizontal_focus[1])[position:]
-
-		r = IRange.single(self.vertical_index)
-		self.log(self.horizontal_focus[1].delete(position, position+len(remainder)), r)
-
-		ind = self.Indentation.acquire(self.get_indentation_level() + 1)
-		inverse = self.open_vertical(ind, 1, 2)
-		self.log(*inverse)
-
-		new = self.units[self.vertical.get()+1][1]
-		nr = IRange.single(self.vertical_index+1)
-
-		self.log(new.insert(0, remainder), nr)
-		new.reformat()
-
-		self.update(self.vertical_index-1, None)
-		self.movement = True
-
-	def event_edit_return(self, event, quantity = 1):
-		"""
-		# Open a newline while in edit mode.
-		"""
-		inverse = self.open_vertical(self.get_indentation_level(), 1, quantity)
-		self.log(*inverse)
-		self.movement = True
-
 	def extract_horizontal_range(self, unit, vector):
 		"""
 		# Map the display range to the character range compensating for indentation.
 		"""
 		adjust = int(self.indentation_adjustments(unit))
 		return tuple(map((-adjust).__add__, vector.snapshot()))
-
-	def event_delta_substitute(self, event):
-		"""
-		# Substitute the contents of the selection.
-		"""
-		self.constrain_horizontal_range()
-		h = self.horizontal
-		focus = self.horizontal_focus
-		start, position, stop = self.extract_horizontal_range(focus, h)
-		vi = self.vertical_index
-
-		inverse = focus[1].delete(start, stop)
-		r = IRange.single(vi)
-		self.log(inverse, r)
-
-		h.zero()
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.update(*r.exclusive())
-		self.transition_keyboard('edit')
-
-	def event_delta_substitute_previous(self, event):
-		"""
-		# Substitute the horizontal selection with previous substitution later.
-		"""
-		h = self.horizontal
-		focus = self.horizontal_focus
-		start, position, stop = self.extract_horizontal_range(focus, h)
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-
-		self.horizontal_focus[1].delete(start, stop)
-		le = self.last_edit
-		self.horizontal_focus[1].insert(start, le)
-		self.horizontal_focus[1].reformat()
-
-		h.configure(start, len(le))
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.update(*self.current_vertical.exclusive())
-		self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
 
 	def line_insert_characters(self, vertical, line, horizontal, characters,
 			isinstance=isinstance, StringField=fields.String
@@ -2572,84 +1860,6 @@ class Fields(core.Refraction):
 
 		return new
 
-	def event_delta_insert_character(self, event):
-		"""
-		# Insert a character at the current cursor position.
-		"""
-		if event.type == 'literal':
-			if event.modifiers.meta:
-				mchar = meta.select(event.identity)
-			else:
-				mchar = event.identity
-
-			self.insert_characters(mchar)
-			self.movement = True
-		elif event.type == 'navigation':
-			self.insert_characters(symbols.arrows.get(event.identity))
-			self.movement = True
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.update(self.vertical_index, self.vertical_index+1)
-
-	def event_checkpoint(self, event):
-		self.checkpoint()
-
-	def event_delta_insert_data(self, event):
-		"""
-		# Endpoint for terminal paste events.
-		"""
-		h, v = self.vector
-		lines = event.string.split('\n')
-
-		count = len(lines)
-		if count == 0:
-			return
-
-		self.movement = True
-
-		original_lineno = v.get()
-		self.sector.f_emit(self.clear_horizontal_indicators())
-
-		hf = self.horizontal_focus
-		aoffset = h.get() - self.indentation_adjustments(hf) # absolute offset
-
-		if lines[0]:
-			existing = hf[1].characters()
-			insertion = lines[0].lstrip('\t')
-
-			r = IRange.single(self.vertical_index)
-			self.log(hf[1].insert(aoffset, insertion), r)
-			indent = len(lines[0]) - len(insertion)
-			self.indent(hf, indent)
-			self.log((self.indent, (self.horizontal_focus, -indent)), r)
-		else:
-			insertion = ""
-
-		if count == 1:
-			h.update(len(lines[0]))
-			self.update_horizontal_indicators()
-			return
-
-		nextl = self.breakline(original_lineno, aoffset+len(insertion))
-
-		# Translate leading tabs; breakline logs the split, so no need here.
-		r = IRange.single(original_lineno+1)
-		insertion = lines[-1].lstrip('\t')
-		nextl[1].insert(0, insertion)
-		indent = len(lines[-1]) - len(insertion)
-		self.indent(nextl, indent)
-
-		self.insert_lines(original_lineno+1, lines[1:-1])
-		v.configure(original_lineno, count, count-1)
-		indenta = self.indentation_adjustments(nextl)
-		chars = indenta + len(insertion)
-		h.configure(0, chars, chars)
-
-		self.update_vertical_state(force=True)
-		self.update_horizontal_indicators()
-
-		return self.update(original_lineno, None)
-
 	def transition_insert_character(self, key):
 		"""
 		# Used as a capture hook to insert literal characters.
@@ -2664,72 +1874,6 @@ class Fields(core.Refraction):
 		self.transition_keyboard(self.previous_keyboard_mode)
 		del self.previous_keyboard_mode
 
-	def event_delta_replace_character(self, event):
-		"""
-		# Replace the character underneath the cursor and progress its position.
-		"""
-		self.event_capture = self.transition_insert_character
-		self.previous_keyboard_mode = self.keyboard.current[0]
-		self.transition_keyboard('capture')
-
-	def event_edit_capture(self, event):
-		"""
-		# Insert an exact character with the value carried by the event. (^V)
-		"""
-		self.event_capture = self.transition_insert_character
-		self.previous_keyboard_mode = self.keyboard.current[0]
-		self.transition_keyboard('capture')
-
-	def event_delta_delete_tobol(self, event):
-		"""
-		# Delete all characters between the current position and the begining of the line.
-		"""
-		u = self.horizontal_focus[1]
-		adjustments = self.indentation_adjustments(self.horizontal_focus)
-		offset = self.horizontal.get() - adjustments
-		inverse = u.delete(0, offset)
-
-		r = IRange.single(self.vertical.get())
-		self.log(inverse, r)
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.horizontal.set(adjustments)
-		self.update(*r.exclusive())
-
-	def event_delta_delete_toeol(self, event):
-		"""
-		# Delete all characters between the current position and the end of the line.
-		"""
-
-		u = self.horizontal_focus[1]
-		adjustments = self.indentation_adjustments(self.horizontal_focus)
-		offset = self.horizontal.get() - adjustments
-		eol = len(u)
-		inverse = u.delete(offset, eol)
-
-		r = IRange.single(self.vertical.get())
-		self.log(inverse, r)
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.update(*r.exclusive())
-
-	def event_delta_delete_backward_adjacent_class(self, event,
-			classify=query.classify
-		):
-		"""
-		# Delete the characters before the position indicator
-		# until the class changes. Or, delete the previous word.
-		"""
-		pass
-
-	def event_delta_delete_forward_adjacent_class(self, event,
-			classify=query.classify
-		):
-		"""
-		# Delete the characters after the position until the class changes.
-		"""
-		pass
-
 	def transition_keyboard(self, mode):
 		"""
 		# Transition the keyboard mode. Called in order to update the horizontal
@@ -2741,19 +1885,6 @@ class Fields(core.Refraction):
 
 		self.sector.f_emit(self.clear_horizontal_indicators())
 		self.keyboard.set(mode)
-
-	def event_transition_control(self, event):
-		"""
-		# Transition into control-mode.
-		"""
-		self.transition_keyboard('control')
-
-	def event_transition_edit(self, event):
-		"""
-		# Transition into edit-mode. If the line does not have an initialized field
-		# or the currently selected field is a Constant, an empty Text field will be created.
-		"""
-		self.transition_keyboard('edit')
 
 	def horizontal_selection(self):
 		"""
@@ -2776,177 +1907,20 @@ class Fields(core.Refraction):
 		"""
 		self.last_edit = self.horizontal_selection()
 
-	def event_edit_commit(self, event):
+	def commit(self):
 		"""
-		# Commit an edited line.
+		# Create a checkpoint in the log and note the last edit.
 		"""
 		self.checkpoint()
 		self.record_last_edit()
 		self.transition_keyboard('control')
 
-	def event_edit_abort(self, event):
+	def abort(self):
 		"""
 		# Exit edit mode and revert all alterations that were made while editing.
 		"""
 		self.undo(1)
 		self.transition_keyboard('control')
-
-	def event_delta_edit_insert_space(self, event):
-		"""
-		# Insert a constant into the field sequence and
-		# create a new text field for further editing.
-		"""
-		self.insert_characters(fields.Delimiter(' '))
-		self.movement = True
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.update(self.vertical_index, self.vertical_index+1)
-
-	def event_delta_insert_space(self, event):
-		"""
-		# Insert a literal space.
-		"""
-		self.insert_characters(fields.Delimiter((' ')))
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.update(self.vertical_index, self.vertical_index+1)
-
-	def event_delta_indent_increment(self, event, quantity = 1):
-		"""
-		# Increment indentation of the current line.
-		"""
-		if self.distributing and not self.has_content(self.horizontal_focus):
-			# ignore indent if the line is empty and deltas are being distributed
-			return
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.indent(self.horizontal_focus, quantity)
-
-		r = IRange.single(self.vertical_index)
-		self.log((self.indent, (self.horizontal_focus, -quantity)), r)
-
-		self.update(*r.exclusive())
-		self.constrain_horizontal_range()
-
-	def event_delta_indent_decrement(self, event, quantity = 1):
-		"""
-		# Decrement the indentation of the current line.
-		"""
-		if self.distributing and not self.has_content(self.horizontal_focus):
-			# ignore indent if the line is empty and deltas are being distributed
-			return
-
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.indent(self.horizontal_focus, -quantity)
-
-		r = IRange.single(self.vertical_index)
-		self.log((self.indent, (self.horizontal_focus, quantity)), r)
-
-		self.update(*r.exclusive())
-		self.constrain_horizontal_range()
-
-	def event_delta_indent_void(self, event, quantity = None):
-		"""
-		# Remove all indentation from the line.
-		"""
-		il = self.get_indentation_level()
-		return self.event_delta_indent_decrement(event, il)
-
-	event_edit_tab = event_delta_indent_increment
-	event_edit_shift_tab = event_delta_indent_decrement
-
-	def event_print_unit(self, event):
-		"""
-		# Display the structure of the current unit to the transcript.
-		"""
-		hf = self.horizontal_focus
-		l = [hf[1].__class__.__name__ + ': ' + str(len(hf[1]))]
-		l.extend(
-			x.__class__.__name__ + ': ' + repr(x) + ' [' + str(path[1:]) + ']'
-			for (path, x) in hf.subfields()
-		)
-		l.append('')
-		self.transcript_write('\n'.join(l))
-		import pprint
-		s = pprint.pformat(self.phrase(hf))
-		self.transcript_write(s+'\n')
-
-	def event_delta_delete_backward(self, event, quantity = 1):
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		r = self.delete_characters(-1*quantity)
-		self.constrain_horizontal_range()
-		if r is not None:
-			self.update(*r.exclusive())
-			self.movement = True
-
-	def event_delta_delete_forward(self, event, quantity = 1):
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		r = self.delete_characters(quantity)
-		self.constrain_horizontal_range()
-		if r is not None:
-			self.update(*r.exclusive())
-			self.movement = True
-
-	def event_copy(self, event):
-		"""
-		# Copy the range to the default cache entry.
-		"""
-		if self.last_axis == 'vertical':
-			start, p, stop = self.vertical.snapshot()
-			r = '\n'.join([
-				''.join(map(str, x.value())) for x in
-				self.units.select(start, stop)
-			])
-		else:
-			r = str(self.horizontal_focus[1])[self.horizontal.slice()]
-		self.sector.cache.put(None, ('text', r))
-
-	def event_delta_split(self, event):
-		"""
-		# Create a new line splitting the current line at the horizontal position.
-		"""
-		h = self.horizontal
-		hs = h.snapshot()
-		self.sector.f_emit(self.clear_horizontal_indicators())
-
-		adjustment = self.indentation_adjustments(self.horizontal_focus)
-		start, position, stop = map((-adjustment).__add__, hs)
-
-		remainder = str(self.horizontal_focus[1])[position:]
-
-		r = IRange.single(self.vertical_index)
-		if remainder:
-			self.log(self.horizontal_focus[1].delete(position, position+len(remainder)), r)
-
-		inverse = self.open_vertical(self.get_indentation_level(), 1, 1)
-		self.log(*inverse)
-
-		new = self.horizontal_focus[1]
-		nr = IRange.single(self.vertical_index)
-
-		self.log(new.insert(0, remainder), nr)
-		new.reformat()
-
-		self.update(self.vertical_index-1, None)
-		self.movement = True
-
-	def event_delta_join(self, event):
-		"""
-		# Join the current line with the following.
-		"""
-		join = self.horizontal_focus[1]
-		ulen = self.horizontal_focus.characters()
-		collapse = self.vertical_index+1
-		following = str(self.units[collapse][1])
-
-		joinlen = len(join.value())
-		self.log(join.insert(joinlen, following), IRange.single(self.vertical_index))
-		join.reformat()
-
-		self.log(self.truncate_vertical(collapse, collapse+1), IRange.single(collapse))
-
-		self.update(self.vertical_index, None)
-		h = self.horizontal.set(ulen)
-
-		self.movement = True
 
 	def unit_class(self, index, len = len):
 		"""
@@ -2958,21 +1932,6 @@ class Fields(core.Refraction):
 			return self.units[index][1].__class__
 		else:
 			return self.document_line_class
-
-	def event_paste_after(self, event):
-		"""
-		# Paste cache contents after the current vertical position.
-		"""
-		self.paste(self.vertical_index+1)
-
-	def event_paste_before(self, event):
-		"""
-		# Paste cache contents before the current vertical position.
-		"""
-		self.paste(self.vertical_index)
-
-	def event_paste_into(self, event):
-		raise RuntimeError("paste into horizontal and vertical position")
 
 	def indent(self, sequence, quantity=1, ignore_empty=False):
 		"""
@@ -3039,7 +1998,9 @@ class Fields(core.Refraction):
 
 	def paste(self, index, cache = None):
 		typ, s = self.sector.cache.get(cache)
-		return self.insert_lines(index, s.split('\n'))
+		lines = s.split('\n')
+		self.insert_lines(index, lines)
+		self.vector.vertical.restore((index, index, index+len(lines)))
 
 	def focus(self):
 		super().focus()
@@ -3053,7 +2014,7 @@ class Fields(core.Refraction):
 		current = ""
 
 		for path, x in unit.subfields():
-			if isinstance(x, fields.FieldSeparator) and x:
+			if x and isinstance(x, fields.FieldSeparator):
 				yield current
 				current = ""
 			elif isinstance(x, fields.Formatting):
@@ -3080,6 +2041,18 @@ class Lines(Fields):
 		class LIndentation(fields.Indentation):
 			size = lsize
 		return LIndentation
+
+	def returned(self, event, quantity = 1):
+		"""
+		# Open a newline while in edit mode.
+		"""
+		mode = self.keyboard.current[0]
+		if mode == 'edit':
+			return self.event_method('refraction', ('delta', 'line', 'break'))(self, event)
+		else:
+			inverse = self.open_vertical(self.get_indentation_level(), 1, quantity)
+			self.log(*inverse)
+			self.movement = True
 
 	def __init__(self, line_class=liblines.profile('text')[0]):
 		super().__init__()
@@ -3110,12 +2083,6 @@ class Lines(Fields):
 			size += len(c) + 1
 
 		return size
-
-	def event_edit_return(self, event):
-		"""
-		# Splits the line at the cursor position.
-		"""
-		return self.event_delta_split(event)
 
 class Status(Fields):
 	"""
@@ -3191,14 +2158,18 @@ class Prompt(Lines):
 		else:
 			result = method(*command[1:])
 
-		self.event_open_ahead(event)
+		self.open_vertical(self.get_indentation_level(), 1, 1)
 		self.window.vertical.move(1)
 		self.scrolled()
 		self.transition_keyboard('control')
 		self.sector.f_emit(self.clear_horizontal_indicators())
+	returned = execute
 
-	event_edit_return = execute
-	event_control_return = execute
+	def insert_space(self):
+		self.insert_characters(self.separator)
+		self.movement = True
+		self.sector.f_emit(self.clear_horizontal_indicators())
+		self.update(self.vertical_index, self.vertical_index+1)
 
 	def prepare(self, *fields):
 		"""
@@ -3213,21 +2184,6 @@ class Prompt(Lines):
 		del l[-1]
 		self.horizontal_focus[1].sequences = l
 		self.sector.f_emit(self.refresh())
-
-	def event_delta_edit_insert_space(self, event):
-		self.insert_characters(self.separator)
-		self.movement = True
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.update(self.vertical_index, self.vertical_index+1)
-
-	def event_edit_tab(self, event):
-		self.insert_characters(fields.space)
-		self.movement = True
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.update(self.vertical_index, self.vertical_index+1)
-
-	def event_edit_shift_tab(self, event):
-		pass
 
 	def command_suspend(self):
 		import signal
@@ -3356,7 +2312,8 @@ class Prompt(Lines):
 			_subresource(ep, console)
 			console.selected_refractions.append(ep)
 
-		console.event_pane_rotate_refraction(None)
+		rmethod = ('navigation', 'pane', 'rotate', 'refraction')
+		console.event_method('refraction', rmethod)(console, None)
 		if p is not console.transcript and p in console.selected_refractions:
 			# Transcript is eternal.
 			console.selected_refractions.remove(p)
@@ -3612,6 +2569,26 @@ class Console(flows.Channel):
 	# Console is a complex Transformer that consists of a set of &Refraction's. The
 	# refractions are associated with panes that make up the total screen.
 	"""
+
+	@classmethod
+	@functools.lru_cache(16)
+	def event_method(Class, target, event):
+		# Redundant with core.Refraction.
+		try:
+			if event:
+				if event[0] == 'navigation':
+					return core.navigation.Index.select(event[1:])
+				elif event[0] == 'delta':
+					return core.delta.Index.select(event[1:])
+				elif event[0] == 'transaction':
+					return core.transaction.Index.select(event[1:])
+				elif event[0] == 'console':
+					return core.console.Index.select(event[1:])
+		except LookupError:
+			pass
+
+		mn = 'event_' + '_'.join(event)
+		return getattr(Class, mn)
 
 	def __init__(self):
 		self.view = matrix.Screen() # used to draw the frame.
@@ -4110,7 +3087,7 @@ class Console(flows.Channel):
 		name = self.application.exe_command_name
 		args = self.executable.exe_invocation.args
 		initial = \
-			("Meta Escapes should be enabled.\n") + \
+			("Meta Escapes or CSI-u should be enabled.\n") + \
 			("Terminal.app: Preferences -> Profile -> Keyboard -> Use option as Meta Key\n") + \
 			("iTerm2: Preferences -> Profiles -> Keys -> +Esc Radio Buttons\n") + \
 			("Alacritty: Bindings must be configured\n") + \
@@ -4175,88 +3152,6 @@ class Console(flows.Channel):
 
 		return new
 
-	def event_toggle_prompt(self, event):
-		"""
-		# Toggle the focusing of the prompt.
-		"""
-		if self.refraction is self.prompt:
-			self.focus_pane()
-		else:
-			prompt = self.prompt
-			if not prompt.has_content(prompt.units[prompt.vertical_index]):
-				prompt.keyboard.set('edit')
-			self.focus_prompt()
-
-	def event_prepare_open(self, event):
-		prompt = self.prompt
-
-		fs = fields.String("")
-		prompt.prepare(fields.String("open"), fs)
-
-		prompt.event_select_horizontal_line(None)
-		prompt.horizontal.move(0, -1)
-		prompt.keyboard.set('edit')
-		self.focus_prompt()
-
-	def event_pane_rotate_refraction(self, event, direction = 1):
-		"""
-		# Display the next refraction in the current working pane according to
-		# the persistent rotation state.
-		"""
-		pid = self.pane
-		visibles = self.visible
-		current = self.visible[pid]
-		npanes = len(self.selected_refractions)
-
-		if direction > 0:
-			start = 0
-			stop = npanes
-		else:
-			start = npanes - 1
-			stop = -1
-
-		rotation = min(self.rotation + direction, npanes)
-		i = itertools.chain(range(rotation, stop, direction), range(start, rotation, direction))
-
-		for r in i:
-			p = self.selected_refractions[r]
-
-			if p in visibles:
-				continue
-
-			# found a refraction
-			break
-		else:
-			# cycled; all panes visible
-			return
-
-		self.rotation = r
-		self.display_refraction(pid, p)
-		self.focus_pane()
-
-	def event_console_rotate_pane_forward(self, event):
-		"""
-		# Select the next pane horizontally. If on the last pane, select the first one.
-		"""
-		p = self.pane + 1
-		if p >= self.count:
-			p = 0
-		self.focus(self.switch_pane(p))
-
-	def event_console_rotate_pane_backward(self, event):
-		"""
-		# Select the previous pane horizontally. If on the first pane, select the last one.
-		"""
-		p = self.pane - 1
-		if p < 0:
-			p = self.count - 1
-		self.focus(self.switch_pane(p))
-
-	@staticmethod
-	@functools.lru_cache(8)
-	def event_method(target, event):
-		return 'event_' + '_'.join(event)
-
 	def f_transfer(self, event, source=None,
 			sto=timetypes.Measure.of(millisecond=75),
 			sto_soon=timetypes.Measure.of(millisecond=50),
@@ -4300,10 +3195,9 @@ class Console(flows.Channel):
 				if trapped is not None:
 					# Global handlers intercepting application events.
 					(target_id, event_selection, params) = trapped
-					method_name = self.event_method(target_id, event_selection)
-					method = getattr(self, method_name)
+					method = self.event_method(target_id, event_selection)
 
-					result = method(k, *params)
+					result = method(self, k, *params)
 				else:
 					# refraction may change during iteration
 					try:
