@@ -162,9 +162,7 @@ def event_open_into(self, event):
 # Return or Enter
 @event('activate')
 def enter_key(self, event, quantity = 1):
-	mode = self.keyboard.current[0]
-	if mode == 'edit':
-		return self.returned(event)
+	return self.returned(event)
 
 @event('map')
 def configure_vertical_distribution(self, event):

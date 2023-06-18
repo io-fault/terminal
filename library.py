@@ -2049,10 +2049,6 @@ class Lines(Fields):
 		mode = self.keyboard.current[0]
 		if mode == 'edit':
 			return self.event_method('refraction', ('delta', 'line', 'break'))(self, event)
-		else:
-			inverse = self.open_vertical(self.get_indentation_level(), 1, quantity)
-			self.log(*inverse)
-			self.movement = True
 
 	def __init__(self, line_class=liblines.profile('text')[0]):
 		super().__init__()
