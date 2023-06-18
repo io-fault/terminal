@@ -7,6 +7,9 @@ from .. import fields
 
 keywords = {y: y for y in map(fields.String, keyword.kwlist)}
 cores = {y: y for y in map(fields.String, __builtins__.keys())}
+cores['match'] = fields.String('match')
+cores['case'] = fields.String('case')
+cores['async'] = fields.String('async')
 exowords = {y: y for y in map(fields.String, ['cachedproperty', 'cachedcalls', 'comethod'])}
 
 terminators = {y: y for y in map(fields.Constant, ":;#")}
