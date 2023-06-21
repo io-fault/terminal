@@ -184,7 +184,7 @@ lines = {
 }
 
 dotted = {
-	'horizontal': '┄',
+	'horizontal': '\u254C',
 	'vertical': '┆',
 }
 
