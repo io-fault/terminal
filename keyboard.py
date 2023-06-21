@@ -82,8 +82,12 @@ trap.assign(ctl('i', shiftmeta), 'console', ('navigation', 'pane', 'rotate', 'ba
 # refraction control mapping
 control = Mapping(('refraction', ('navigation', 'horizontal', 'jump', 'unit'), ()))
 ca = control.assign
-edit = Mapping(default = ('refraction', ('delta', 'insert', 'character'), ())) # insert
+edit = Mapping(default = ('refraction', ('delta', 'insert', 'character'), ()))
 ea = edit.assign
+
+# capture keystroke
+capture = Mapping(default = ('refraction', ('capture',), ()))
+ca(lit('r'), 'refraction', ('delta', 'replace', 'character'),)
 
 if True:
 	ca(lit('i'), 'refraction', ('delta', 'transition'))
@@ -202,8 +206,6 @@ ca(lit('x'), 'refraction', ('delta', 'delete', 'forward', 'unit'))
 ca(lit('X'), 'refraction', ('delta', 'delete', 'backward', 'unit'))
 ca(ctl('x'), 'refraction', ('delta', 'vertical', 'delete', 'unit'))
 
-ca(lit('r'), 'refraction', ('delta', 'replace', 'character'),)
-
 ca(ctl('i'), 'refraction', ('delta', 'indent', 'increment'))
 ca(ctl('i', shift), 'refraction', ('delta', 'indent', 'decrement'))
 ca(ctl('v'), 'refraction', ('delta', 'indent', 'void'))
@@ -229,9 +231,6 @@ ea(ctl('k'), 'refraction', ('delta', 'delete', 'following'))
 
 ea(ctl('w'), 'refraction', ('delta', 'delete', 'backward', 'adjacent', 'class'))
 ea(ctl('t'), 'refraction', ('delta', 'delete', 'forward', 'adjacent', 'class'))
-
-# capture keystroke
-capture = Mapping(default = ('refraction', ('capture',), ()))
 
 # field creation and type selection
 types = Mapping()

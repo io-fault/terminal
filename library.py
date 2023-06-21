@@ -1250,16 +1250,16 @@ class Fields(core.Refraction):
 		v = self.view
 		wl = self.window_line(self.vertical_index)
 
-		if wl < v.height and wl >= 0:
-			h = self.horizontal
-			if self.horizontal_focus is not None:
-				h.limit(0, self.horizontal_focus.characters())
+		if wl < 0 or wl >= v.height:
+			return ()
 
-			events = [v.reset_text(), v.seek((0, wl))]
-			events.extend(self.render_horizontal_indicators(self.horizontal_focus, h.snapshot()))
-			return events
+		h = self.horizontal
+		if self.horizontal_focus is not None:
+			h.limit(0, self.horizontal_focus.characters())
 
-		return ()
+		events = [v.reset_text(), v.seek((0, wl))]
+		events.extend(self.render_horizontal_indicators(self.horizontal_focus, h.snapshot()))
+		return events
 
 	def update_horizontal_indicators(self):
 		events = self.current_horizontal_indicators()
@@ -1866,13 +1866,17 @@ class Fields(core.Refraction):
 		"""
 		if key.type == 'literal':
 			self.insert_characters(key.string)
-			r = self.delete_characters(1)
-			self.sector.f_emit(self.clear_horizontal_indicators())
-			self.update(*r.exclusive())
+			if self.capture_overwrite:
+				r = self.delete_characters(1)
+				self.sector.f_emit(self.clear_horizontal_indicators())
+				self.update(*r.exclusive())
+			else:
+				self.sector.f_emit(self.clear_horizontal_indicators())
 			self.movement = True
 
 		self.transition_keyboard(self.previous_keyboard_mode)
 		del self.previous_keyboard_mode
+		del self.capture_overwrite
 
 	def transition_keyboard(self, mode):
 		"""
@@ -2580,6 +2584,8 @@ class Console(flows.Channel):
 					return core.transaction.Index.select(event[1:])
 				elif event[0] == 'console':
 					return core.console.Index.select(event[1:])
+				elif event[0] == 'capture':
+					return Class.transition_insert_character
 		except LookupError:
 			pass
 
@@ -3200,11 +3206,8 @@ class Console(flows.Channel):
 						result = refraction.key(self, k)
 					except Exception as failure:
 						self.system.process.error(self, failure, "User Event Operation")
-						result = None
-
-					if result is not None:
-						#self.rstack.append(result)
-						pass
+						refraction.transition_keyboard('control')
+						refraction.previous_keyboard_mode = None
 
 					if refraction.scrolling:
 						self.refreshing.add(refraction)

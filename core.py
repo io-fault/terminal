@@ -521,6 +521,8 @@ class Refraction(kcore.Processor):
 					return transaction.Index.select(event[1:])
 				elif event[0] == 'console':
 					return console.Index.select(event[1:])
+				elif event[0] == 'capture':
+					return Class.transition_insert_character
 		except LookupError:
 			pass
 

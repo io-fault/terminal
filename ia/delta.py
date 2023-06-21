@@ -315,8 +315,8 @@ def event_delta_replace_character(self, event):
 	"""
 	# Replace the character underneath the cursor and progress its position.
 	"""
-	self.event_capture = self.transition_insert_character
 	self.previous_keyboard_mode = self.keyboard.current[0]
+	self.capture_overwrite = True
 	self.transition_keyboard('capture')
 
 @event('insert', 'capture')
@@ -324,8 +324,8 @@ def insert_exact(self, event):
 	"""
 	# Insert an exact character with the value carried by the event. (^V)
 	"""
-	self.event_capture = self.transition_insert_character
 	self.previous_keyboard_mode = self.keyboard.current[0]
+	self.capture_overwrite = False
 	self.transition_keyboard('capture')
 
 @event('delete', 'backward', 'unit')
@@ -424,7 +424,7 @@ def delete_indentation(self, event, quantity = None):
 	# Remove all indentation from the line.
 	"""
 	il = self.get_indentation_level()
-	return self.event_delta_indent_decrement(event, il)
+	return dedent(self, event, il)
 
 @event('line', 'break')
 def event_delta_split(self, event):
