@@ -1,26 +1,14 @@
 """
-# Provides common mappings for keyboard based navigation and control.
-
-# Modifying the mappings is not recommended, but is possible. Interacting
-# with these mappings is the only way to modify the keyboard mappings used
-# by &.console.
-
-# [ Engineering ]
-# Currently, there are no hooks for customizing bindings.
+# Default keyboard mappings.
 
 # [ Properties ]
 
-# /trap/
-	# Console level events. Key events mapped here are trapped and are
-	# not propagated to Refractions. This is the "global" mapping.
 # /control/
 	# Control mode mapping is for navigation and high-level manipulation.
 # /edit/
 	# Mode used to manage the insertion and removal of characters from fields.
 # /capture/
-	# ...
-# /types/
-	# Mode used to select field types for custom interactions.
+	# Insert the exact character captured.
 """
 from fault.terminal import events
 
@@ -37,11 +25,11 @@ class Mapping(object):
 		self.mapping = dict()
 		self.reverse = dict()
 
-	def assign(self, character, context, action, parameters = ()):
+	def assign(self, character, category, action, parameters = ()):
 		"""
 		# Assign the character sequence to action.
 		"""
-		key = (context, action, parameters)
+		key = (category, action, parameters)
 		if key not in self.mapping:
 			self.mapping[key] = set()
 
@@ -67,187 +55,166 @@ def lit(x, mods=0):
 def ctl(x, mods=0):
 	return ('control', x, mods)
 def nav(x, mods=0):
-	return ('navigation', x, mods)
+	return 'navigation', (x, mods)
 
 # events trapped and handled by the console. These are not forwarded to the refraction.
 trap = Mapping()
-trap.assign(lit('`', meta), 'console', ('navigation', 'prompt', 'toggle'))
+trap.assign(lit('`', meta), 'navigation', ('prompt', 'toggle'))
 # pane management
-trap.assign(lit('j', meta), 'console', ('navigation', 'pane', 'rotate', 'refraction'), (1,))
-trap.assign(lit('k', meta), 'console', ('navigation', 'pane', 'rotate', 'refraction'), (-1,))
+trap.assign(lit('j', meta), 'navigation', ('pane', 'rotate', 'refraction'), (1,))
+trap.assign(lit('k', meta), 'navigation', ('pane', 'rotate', 'refraction'), (-1,))
 
-trap.assign(ctl('i', meta), 'console', ('navigation', 'pane', 'rotate', 'forward'))
-trap.assign(ctl('i', shiftmeta), 'console', ('navigation', 'pane', 'rotate', 'backward'))
+trap.assign(ctl('i', meta), 'navigation', ('pane', 'rotate', 'forward'))
+trap.assign(ctl('i', shiftmeta), 'navigation', ('pane', 'rotate', 'backward'))
 
 # refraction control mapping
-control = Mapping(('refraction', ('navigation', 'horizontal', 'jump', 'unit'), ()))
+control = Mapping(('navigation', ('horizontal', 'jump', 'unit'), ()))
 ca = control.assign
-edit = Mapping(default = ('refraction', ('delta', 'insert', 'character'), ()))
+edit = Mapping(default = ('delta', ('insert', 'character'), ()))
 ea = edit.assign
 
 # capture keystroke
-capture = Mapping(default = ('refraction', ('capture',), ()))
-ca(lit('r'), 'refraction', ('delta', 'replace', 'character'),)
+capture = Mapping(default = ('capture', (), ()))
+ca(lit('r'), 'delta', ('replace', 'character'),)
 
 if True:
-	ca(lit('i'), 'refraction', ('delta', 'transition'))
-	ca(lit('O'), 'refraction', ('delta', 'open', 'behind'))
-	ca(lit('o'), 'refraction', ('delta', 'open', 'ahead'))
-	ca(ctl('o'), 'refraction', ('delta', 'open', 'between'))
+	ca(lit('i'), 'delta', ('transition',))
+	ca(lit('O'), 'delta', ('open', 'behind'))
+	ca(lit('o'), 'delta', ('open', 'ahead'))
+	ca(ctl('o'), 'delta', ('open', 'between'))
 
 # Transaction management.
 if True:
-	ea(ctl('c'), 'refraction', ('transaction', 'abort')) # Default SIGINT.
-	ea(ctl('d'), 'refraction', ('transaction', 'commit')) # Default EOF.
-	ca(lit('u'), 'refraction', ('transaction', 'undo'))
-	ca(lit('U'), 'refraction', ('transaction', 'redo'))
+	ea(ctl('c'), 'transaction', ('abort',)) # Default SIGINT.
+	ea(ctl('d'), 'transaction', ('commit',)) # Default EOF.
+	ca(lit('u'), 'transaction', ('undo',))
+	ca(lit('U'), 'transaction', ('redo',))
 
 # Prompt initialization bindings.
 if True:
-	ca(lit('o', meta), 'refraction', ('console', 'prepare', 'open'))
-	ca(kmeta('l'), 'refraction', ('console', 'prepare', 'seek'))
-	ca(ctl('w'), 'refraction', ('console', 'prepare', 'write'))
-	ca(lit('q', meta), 'refraction', ('console', 'prepare', 'search'))
-	ca(ctl('q'), 'refraction', ('console', 'print', 'unit'))
+	ca(lit('o', meta), 'console', ('prepare', 'open'))
+	ca(kmeta('l'), 'console', ('prepare', 'seek'))
+	ca(ctl('w'), 'console', ('prepare', 'write'))
+	ca(lit('q', meta), 'console', ('prepare', 'search'))
+	ca(ctl('q'), 'console', ('print', 'unit'))
 
 # Cache operations.
 if True:
-	ca(lit('c', meta), 'refraction', ('delta', 'copy',))
-	ca(lit('c', shiftmeta), 'refraction', ('delta', 'cut',))
-	ca(lit('ξ'), 'refraction', ('delta', 'cut',))
-	ca(lit('p'), 'refraction', ('delta', 'paste', 'after'))
-	ca(lit('P'), 'refraction', ('delta', 'paste', 'before',))
+	ca(lit('c', meta), 'delta', ('copy',))
+	ca(lit('c', shiftmeta), 'delta', ('cut',))
+	ca(lit('ξ'), 'delta', ('cut',))
+	ca(lit('p'), 'delta', ('paste', 'after',))
+	ca(lit('P'), 'delta', ('paste', 'before',))
 
 # distribution of commands across the vertical range.
-ca(lit('y'), 'refraction', ('distribute', 'one'))
-ca(lit('Y'), 'refraction', ('distribute', 'sequence'))
-ca(ctl('y'), 'refraction', ('distribute', 'horizontal'))
-ca(kmeta('y'), 'refraction', ('distribute', 'full')) # replacement for sequence?
+ca(lit('y'), 'console', ('distribute', 'one'))
+ca(lit('Y'), 'console',('distribute', 'sequence'))
+ca(ctl('y'), 'console', ('distribute', 'horizontal'))
+ca(kmeta('y'), 'console', ('distribute', 'full'))
 
 # Reactions to return/enter and space in insert mode.
-ca(ctl('c'), 'refraction', ('interrupt',))
-ca(ctl('m'), 'refraction', ('delta', 'activate'))
-ea(ctl('m'), 'refraction', ('delta', 'activate'))
-ea(ctl('@'), 'refraction', ('delta', 'insert', 'space'))
-ea(ctl(' ', shift), 'refraction', ('delta', 'insert', 'literal', 'space'))
-ea(ctl(' ', ctlm), 'refraction', ('delta', 'insert', 'space'))
-ea(ctl(' '), 'refraction', ('delta', 'insert', 'space'))
+ca(ctl('m'), 'delta', ('activate',))
+ea(ctl('m'), 'delta', ('activate',))
+ea(ctl('@'), 'delta', ('insert', 'space'))
+ea(ctl(' ', shift), 'delta', ('insert', 'literal', 'space'))
+ea(ctl(' ', ctlm), 'delta', ('insert', 'space'))
+ea(ctl(' '), 'delta', ('insert', 'space'))
 
-ca(lit('f'), 'refraction', ('navigation', 'horizontal', 'forward'))
-ca(lit('d'), 'refraction', ('navigation', 'horizontal', 'backward'))
-ca(lit('F'), 'refraction', ('navigation', 'horizontal', 'stop'))
-ca(lit('D'), 'refraction', ('navigation', 'horizontal', 'start'))
-ca(ctl('f'), 'refraction', ('navigation', 'horizontal', 'query', 'forward'))
-ca(ctl('d'), 'refraction', ('navigation', 'horizontal', 'query', 'backward'))
-ea(ctl('a'), 'refraction', ('navigation', 'horizontal', 'beginning'))
-ca(ctl('a'), 'refraction', ('navigation', 'horizontal', 'beginning'))
-ea(ctl('e'), 'refraction', ('navigation', 'horizontal', 'end'))
-ca(ctl('e'), 'refraction', ('navigation', 'horizontal', 'end'))
-ca(ctl(' '), 'refraction', ('navigation', 'horizontal', 'forward', 'unit'))
-ca(ctl('?'), 'refraction', ('navigation', 'horizontal', 'backward', 'unit'))
-ca(ctl('h'), 'refraction', ('navigation', 'horizontal', 'backward', 'unit'))
-ea(nav('left'), 'refraction', ('navigation', 'horizontal', 'backward', 'unit'))
-ea(nav('right'), 'refraction', ('navigation', 'horizontal', 'forward', 'unit'))
-ea(nav('up'), 'refraction', ('navigation', 'horizontal', 'beginning'))
-ea(nav('down'), 'refraction', ('navigation', 'horizontal', 'end'))
+ca(lit('f'), 'navigation', ('horizontal', 'forward'))
+ca(lit('d'), 'navigation', ('horizontal', 'backward'))
+ca(lit('F'), 'navigation', ('horizontal', 'stop'))
+ca(lit('D'), 'navigation', ('horizontal', 'start'))
+ca(ctl('f'), 'navigation', ('horizontal', 'query', 'forward'))
+ca(ctl('d'), 'navigation', ('horizontal', 'query', 'backward'))
+ea(ctl('a'), 'navigation', ('horizontal', 'beginning'))
+ca(ctl('a'), 'navigation', ('horizontal', 'beginning'))
+ea(ctl('e'), 'navigation', ('horizontal', 'end'))
+ca(ctl('e'), 'navigation', ('horizontal', 'end'))
+ca(ctl(' '), 'navigation', ('horizontal', 'forward', 'unit'))
+ca(ctl('?'), 'navigation', ('horizontal', 'backward', 'unit'))
+ca(ctl('h'), 'navigation', ('horizontal', 'backward', 'unit'))
+ea(nav('left'), 'navigation', ('horizontal', 'backward', 'unit'))
+ea(nav('right'), 'navigation', ('horizontal', 'forward', 'unit'))
+ea(nav('up'), 'navigation', ('horizontal', 'beginning'))
+ea(nav('down'), 'navigation', ('horizontal', 'end'))
 
 # Cursor range controls.
-ca(lit('z'), 'refraction', ('navigation', 'place', 'stop',))
-ca(lit('Z'), 'refraction', ('navigation', 'place', 'start',))
-ca(ctl('z'), 'refraction', ('navigation', 'place', 'center'))
-ca(lit('s'), 'refraction', ('navigation', 'horizontal', 'select', 'series',))
-ca(lit('S'), 'refraction', ('navigation', 'horizontal', 'select', 'line'))
-ca(lit('a'), 'refraction', ('navigation', 'vertical', 'select', 'adjacent', 'local'))
-ca(lit('A'), 'refraction', ('navigation', 'vertical', 'select', 'adjacent'))
-ca(lit('b'), 'refraction', ('navigation', 'vertical', 'select', 'block'))
-ca(lit('B'), 'refraction', ('navigation', 'vertical', 'select', 'outerblock'))
-ca(lit('l'), 'refraction', ('navigation', 'vertical', 'select', 'line'))
-ca(lit('L'), 'refraction', ('navigation', 'vertical', 'select', 'block'))
-ca(lit('e'), 'refraction', ('navigation', 'vertical', 'sections'))
-ca(lit('E'), 'refraction', ('navigation', 'vertical', 'paging'))
+ca(lit('z'), 'navigation', ('place', 'stop',))
+ca(lit('Z'), 'navigation', ('place', 'start',))
+ca(ctl('z'), 'navigation', ('place', 'center'))
+ca(lit('s'), 'navigation', ('horizontal', 'select', 'series',))
+ca(lit('S'), 'navigation', ('horizontal', 'select', 'line'))
+ca(lit('a'), 'navigation', ('vertical', 'select', 'adjacent', 'local'))
+ca(lit('A'), 'navigation', ('vertical', 'select', 'adjacent'))
+ca(lit('b'), 'navigation', ('vertical', 'select', 'block'))
+ca(lit('B'), 'navigation', ('vertical', 'select', 'outerblock'))
+ca(lit('l'), 'navigation', ('vertical', 'select', 'line'))
+ca(lit('L'), 'navigation', ('vertical', 'select', 'block'))
+ca(lit('e'), 'navigation', ('vertical', 'sections'))
+ca(lit('E'), 'navigation', ('vertical', 'paging'))
 
-ca(lit('j'), 'refraction', ('navigation', 'vertical', 'forward', 'unit'))
-ca(lit('k'), 'refraction', ('navigation', 'vertical', 'backward', 'unit'))
-ca(lit('J'), 'refraction', ('navigation', 'vertical', 'stop'))
-ca(lit('K'), 'refraction', ('navigation', 'vertical', 'start'))
-ca(ctl('j'), 'refraction', ('navigation', 'void', 'forward'))
-ca(ctl('k'), 'refraction', ('navigation', 'void', 'backward'))
+ca(lit('j'), 'navigation', ('vertical', 'forward', 'unit'))
+ca(lit('k'), 'navigation', ('vertical', 'backward', 'unit'))
+ca(lit('J'), 'navigation', ('vertical', 'stop'))
+ca(lit('K'), 'navigation', ('vertical', 'start'))
+ca(ctl('j'), 'navigation', ('void', 'forward'))
+ca(ctl('k'), 'navigation', ('void', 'backward'))
 
+ca(lit('q'), 'navigation', ('range', 'enqueue'))
+ca(lit('Q'), 'navigation', ('range', 'dequeue'))
 
-ca(lit('q'), 'refraction', ('navigation', 'range', 'enqueue'))
-ca(lit('Q'), 'refraction', ('navigation', 'range', 'dequeue'))
+ca(lit('t'), 'delta', ('move', 'range'))
+ca(lit('T'), 'delta', ('transpose', 'range'))
+ca(ctl('t'), 'delta', ('truncate', 'range'))
 
-ca(lit('t'), 'refraction', ('delta', 'move', 'range'))
-ca(lit('T'), 'refraction', ('delta', 'transpose', 'range'))
-ca(ctl('t'), 'refraction', ('delta', 'truncate', 'range'))
-
-ca(lit('n'), 'refraction', ('delta', 'line', 'break',))
-ca(lit('N'), 'refraction', ('delta', 'line', 'join',))
+ca(lit('n'), 'delta', ('line', 'break',))
+ca(lit('N'), 'delta', ('line', 'join',))
 
 for i in range(10):
-	control.assign(lit(str(i)), 'refraction', ('index', 'reference'))
+	control.assign(lit(str(i)), 'navigation', ('index', 'reference'))
 
-ca(nav('left'), 'refraction', ('navigation', 'window', 'horizontal', 'backward'))
-ca(nav('right'), 'refraction', ('navigation', 'window', 'horizontal', 'forward'))
-ca(nav('down'), 'refraction', ('navigation', 'window', 'vertical', 'forward'))
-ca(nav('up'), 'refraction', ('navigation', 'window', 'vertical', 'backward'))
+ca(nav('left'), 'navigation', ('window', 'horizontal', 'backward'))
+ca(nav('right'), 'navigation', ('window', 'horizontal', 'forward'))
+ca(nav('down'), 'navigation', ('window', 'vertical', 'forward'))
+ca(nav('up'), 'navigation', ('window', 'vertical', 'backward'))
 
-ca(nav('page-down'), 'refraction', ('navigation', 'window', 'vertical', 'forward', 'jump'))
-ca(nav('page-up'), 'refraction', ('navigation', 'window', 'vertical', 'backward', 'jump'))
-ca(nav('home'), 'refraction', ('navigation', 'window', 'vertical', 'start'))
-ca(nav('end'), 'refraction', ('navigation', 'window', 'vertical', 'stop'))
+ca(nav('page-down'), 'navigation', ('window', 'vertical', 'forward', 'jump'))
+ca(nav('page-up'), 'navigation', ('window', 'vertical', 'backward', 'jump'))
+ca(nav('home'), 'navigation', ('window', 'vertical', 'start'))
+ca(nav('end'), 'navigation', ('window', 'vertical', 'stop'))
 
-ca(lit('I'), 'refraction', ('delta', 'split'),) # split field (reserved)
+ca(lit('I'), 'delta', ('split',)) # split field (reserved)
 
-ca(lit('c'), 'refraction', ('delta', 'horizontal', 'substitute', 'range'),)
-ca(lit('C'), 'refraction', ('delta', 'horizontal', 'substitute', 'again'),)
+ca(lit('c'), 'delta', ('horizontal', 'substitute', 'range'))
+ca(lit('C'), 'delta', ('horizontal', 'substitute', 'again'))
 
-ca(lit('x'), 'refraction', ('delta', 'delete', 'forward', 'unit'))
-ca(lit('X'), 'refraction', ('delta', 'delete', 'backward', 'unit'))
-ca(ctl('x'), 'refraction', ('delta', 'vertical', 'delete', 'unit'))
+ca(lit('x'), 'delta', ('delete', 'forward', 'unit'))
+ca(lit('X'), 'delta', ('delete', 'backward', 'unit'))
+ca(ctl('x'), 'delta', ('vertical', 'delete', 'unit'))
 
-ca(ctl('i'), 'refraction', ('delta', 'indent', 'increment'))
-ca(ctl('i', shift), 'refraction', ('delta', 'indent', 'decrement'))
-ca(ctl('v'), 'refraction', ('delta', 'indent', 'void'))
+ca(ctl('i'), 'delta', ('indent', 'increment'))
+ca(ctl('i', shift), 'delta', ('indent', 'decrement'))
+ca(ctl('v'), 'delta', ('indent', 'void'))
 
-ca(ctl('c', 1), 'control', ('navigation', 'console')) # focus control console
+ea(('paste', 'start', events.Modifiers(0)), 'transaction', ('checkpoint'))
+#ea(('paste', 'stop', events.Modifiers(0)), 'transaction', ('checkpoint'))
+ea(('data', 'paste', events.Modifiers(0)), 'delta', ('insert', 'data'))
+ea(ctl('v'), 'delta', ('insert', 'capture'))
 
-ea(('paste', 'start', events.Modifiers(0)), 'refraction', ('transaction', 'checkpoint'))
-#ea(('paste', 'stop', events.Modifiers(0)), 'refraction', ('transaction', 'checkpoint',))
-ea(('data', 'paste', events.Modifiers(0)), 'refraction', ('delta', 'insert', 'data'))
-ea(ctl('v'), 'refraction', ('delta', 'insert', 'capture'))
-
-ea(ctl('?'), 'refraction', ('delta', 'delete', 'backward', 'unit'))
-ea(ctl('h'), 'refraction', ('delta', 'delete', 'backward', 'unit'))
-ea(ctl('x'), 'refraction', ('delta', 'delete', 'forward', 'unit'))
+ea(ctl('?'), 'delta', ('delete', 'backward', 'unit'))
+ea(ctl('h'), 'delta', ('delete', 'backward', 'unit'))
+ea(ctl('x'), 'delta', ('delete', 'forward', 'unit'))
 
 # these are mapped to keyboard names in order to allow class-level overrides
 # and/or context sensitive action selection
-ea(ctl('i'), 'refraction', ('delta', 'indent', 'increment'))
-ea(ctl('i', shift), 'refraction', ('delta', 'indent', 'decrement'))
+ea(ctl('i'), 'delta', ('indent', 'increment'))
+ea(ctl('i', shift), 'delta', ('indent', 'decrement'))
 
-ea(ctl('u'), 'refraction', ('delta', 'delete', 'leading'))
-ea(ctl('k'), 'refraction', ('delta', 'delete', 'following'))
+ea(ctl('u'), 'delta', ('delete', 'leading'))
+ea(ctl('k'), 'delta', ('delete', 'following'))
 
-ea(ctl('w'), 'refraction', ('delta', 'delete', 'backward', 'adjacent', 'class'))
-ea(ctl('t'), 'refraction', ('delta', 'delete', 'forward', 'adjacent', 'class'))
-
-# field creation and type selection
-types = Mapping()
-field_type_mnemonics = {
-	'i': 'integer',
-	't': 'text',
-	'"': 'quotation',
-	"'": 'quotation',
-	'd': 'date',
-	'T': 'timestamp',
-	'n': 'internet', # address
-	'r': 'reference', # contextual reference (variables, environment)
-}
-for k, v in field_type_mnemonics.items():
-	types.assign(lit(k), 'refraction', ('type', v))
-
-types.assign(lit('l'), 'container', ('create', 'line'))
+ea(ctl('w'), 'delta', ('delete', 'backward', 'adjacent', 'class'))
+ea(ctl('t'), 'delta', ('delete', 'forward', 'adjacent', 'class'))
 
 del ea, ca, nav, ctl, lit, shift, kmeta
 
@@ -255,12 +222,11 @@ standard = {
 	'control': control,
 	'edit': edit,
 	'capture': capture,
-	'types': types,
 }
 
 class Selection(object):
 	"""
-	# A set of mappings used to interact with objects.
+	# A set of mappings used to interact with a matrix.
 	"""
 	__slots__ = ('index', 'current')
 

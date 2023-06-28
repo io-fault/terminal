@@ -763,7 +763,7 @@ class Fields(core.Refraction):
 		"""
 		self.vertical_query = self.horizontal_query = 'pattern'
 		self.pattern = pattern
-		self.event_method('refraction', ('navigation', 'vertical', 'stop'))(self, None)
+		self.event_method('navigation', ('vertical', 'stop'))(self, None)
 
 	@staticmethod
 	@functools.lru_cache(16)
@@ -1482,7 +1482,7 @@ class Fields(core.Refraction):
 		self.sector.f_emit(self.clear_horizontal_indicators())
 		s1 = self.vertical.snapshot()
 
-		self.event_method('refraction', ('navigation', 'range', 'dequeue'))(self, None)
+		self.event_method('navigation', ('range', 'dequeue'))(self, None)
 		s2 = self.vertical.snapshot()
 
 		# make s2 come second
@@ -2052,7 +2052,7 @@ class Lines(Fields):
 		"""
 		mode = self.keyboard.current[0]
 		if mode == 'edit':
-			return self.event_method('refraction', ('delta', 'line', 'break'))(self, event)
+			return self.event_method('delta', ('line', 'break'))(self, event)
 
 	def __init__(self, line_class=liblines.profile('text')[0]):
 		super().__init__()
@@ -2312,8 +2312,8 @@ class Prompt(Lines):
 			_subresource(ep, console)
 			console.selected_refractions.append(ep)
 
-		rmethod = ('navigation', 'pane', 'rotate', 'refraction')
-		console.event_method('refraction', rmethod)(console, None)
+		rmethod = ('pane', 'rotate', 'refraction')
+		console.event_method('navigation', rmethod)(console, None)
 		if p is not console.transcript and p in console.selected_refractions:
 			# Transcript is eternal.
 			console.selected_refractions.remove(p)
@@ -2572,25 +2572,20 @@ class Console(flows.Channel):
 
 	@classmethod
 	@functools.lru_cache(16)
-	def event_method(Class, target, event):
+	def event_method(Class, category, event):
 		# Redundant with core.Refraction.
-		try:
-			if event:
-				if event[0] == 'navigation':
-					return core.navigation.Index.select(event[1:])
-				elif event[0] == 'delta':
-					return core.delta.Index.select(event[1:])
-				elif event[0] == 'transaction':
-					return core.transaction.Index.select(event[1:])
-				elif event[0] == 'console':
-					return core.console.Index.select(event[1:])
-				elif event[0] == 'capture':
-					return Class.transition_insert_character
-		except LookupError:
-			pass
-
-		mn = 'event_' + '_'.join(event)
-		return getattr(Class, mn)
+		if category == 'navigation':
+			return core.navigation.Index.select(event)
+		elif category == 'delta':
+			return core.delta.Index.select(event)
+		elif category == 'transaction':
+			return core.transaction.Index.select(event)
+		elif category == 'console':
+			return core.console.Index.select(event)
+		elif category == 'capture':
+			return Class.transition_insert_character
+		else:
+			raise Exception("unknown category")
 
 	def __init__(self):
 		self.view = matrix.Screen() # used to draw the frame.
@@ -3196,8 +3191,8 @@ class Console(flows.Channel):
 				trapped = trap(k)
 				if trapped is not None:
 					# Global handlers intercepting application events.
-					(target_id, event_selection, params) = trapped
-					method = self.event_method(target_id, event_selection)
+					(category, event_selection, params) = trapped
+					method = self.event_method(category, event_selection)
 
 					result = method(self, k, *params)
 				else:

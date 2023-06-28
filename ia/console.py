@@ -60,3 +60,13 @@ def print_representation(self, event):
 	import pprint
 	s = pprint.pformat(self.phrase(hf))
 	self.transcript_write(s+'\n')
+
+@event('distribute', 'sequence')
+def distribute(self, event):
+	self.distributing = not self.distributing
+	self.distribute_once = False
+
+@event('distribute', 'once')
+def distribute_once(self, event):
+	self.distributing = not self.distributing
+	self.distribute_once = True

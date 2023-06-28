@@ -509,25 +509,20 @@ class Refraction(kcore.Processor):
 
 	@classmethod
 	@functools.lru_cache(16)
-	def event_method(Class, target, event):
-		# Redundant with core.Refraction.
-		try:
-			if event:
-				if event[0] == 'navigation':
-					return navigation.Index.select(event[1:])
-				elif event[0] == 'delta':
-					return delta.Index.select(event[1:])
-				elif event[0] == 'transaction':
-					return transaction.Index.select(event[1:])
-				elif event[0] == 'console':
-					return console.Index.select(event[1:])
-				elif event[0] == 'capture':
-					return Class.transition_insert_character
-		except LookupError:
-			pass
-
-		mn = 'event_' + '_'.join(event)
-		return getattr(Class, mn)
+	def event_method(Class, category, event):
+		# Redundant with library.Console.
+		if category == 'navigation':
+			return navigation.Index.select(event)
+		elif category == 'delta':
+			return delta.Index.select(event)
+		elif category == 'transaction':
+			return transaction.Index.select(event)
+		elif category == 'console':
+			return console.Index.select(event)
+		elif category == 'capture':
+			return Class.transition_insert_character
+		else:
+			raise Exception("unknown category")
 
 	def route(self, event, scrollmap={-1:'backward', 1:'forward'}):
 		"""
@@ -538,12 +533,12 @@ class Refraction(kcore.Processor):
 			point, mevent, activation = event.identity
 
 			if mevent in scrollmap:
-				return (None, ('refraction',
-					('navigation', 'window', 'vertical', scrollmap[mevent]), (activation, point,)
+				return (None, ('navigation',
+					('window', 'vertical', scrollmap[mevent]), (activation, point,)
 				))
 		elif event.type == 'click':
 			point, key_id, delay = event.identity
-			return (None, ('refraction', ('navigation', 'select', 'absolute'), (point[0], point[1])))
+			return (None, ('navigation', ('select', 'absolute'), (point[0], point[1])))
 		else:
 			mapping, event = self.keyboard.event(event)
 			if event is None:
@@ -560,10 +555,10 @@ class Refraction(kcore.Processor):
 		if routing is None:
 			return ()
 
-		mapping, (target_id, event_selection, params) = routing
-		method = self.event_method(target_id, event_selection)
+		mapping, (category, event_selection, params) = routing
+		method = self.event_method(category, event_selection)
 
-		if self.distributing and event_selection[0] == 'delta':
+		if self.distributing and category == 'delta':
 			self.clear_horizontal_indicators()
 			v = self.vertical
 			h = self.horizontal
@@ -603,18 +598,6 @@ class Refraction(kcore.Processor):
 			self.update_horizontal_indicators()
 
 		return rob
-
-	def event_distribute_sequence(self, event):
-		self.distributing = not self.distributing
-		self.distribute_once = False
-
-	def event_distribute_one(self, event):
-		self.distributing = not self.distributing
-		self.distribute_once = True
-
-	def event_prepare_open(self, event):
-		console = self.sector
-		return console.event_prepare_open(event)
 
 	def adjust(self, point, dimensions):
 		"""
