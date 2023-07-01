@@ -3,7 +3,7 @@
 """
 import itertools
 
-def address(seq, start, stop, len=len, range=range):
+def address(seq, start, stop, *, len=len, range=range):
 	"""
 	# Find the address of the absolute slice.
 	"""
@@ -54,7 +54,7 @@ def address(seq, start, stop, len=len, range=range):
 		(stop_index, stop_roffset),
 	)
 
-def delete(seq, start, stop, empty="", len=len, range=range):
+def delete(seq, start, stop, *, empty="", len=len, range=range):
 	starts, stops = address(seq, start, stop)
 	start_index, start_roffset = starts
 	stop_index, stop_roffset = stops
@@ -81,7 +81,7 @@ def delete(seq, start, stop, empty="", len=len, range=range):
 
 	return seq
 
-def insert(seq, offset, insertion, empty="", len=len):
+def insert(seq, offset, insertion, *, empty="", len=len):
 	if not insertion:
 		return seq
 
@@ -167,7 +167,7 @@ class Segments(object):
 			self.sequences = self.Type()
 			self._length = 0
 
-	def __getitem__(self, item, slice=slice, isinstance=isinstance):
+	def __getitem__(self, item, *, slice=slice, isinstance=isinstance):
 		if isinstance(item, slice):
 			start = item.start or 0
 			stop = len(self) if item.stop is None else item.stop
@@ -177,7 +177,7 @@ class Segments(object):
 			for x in self.select(start, stop):
 				return x
 
-	def __setitem__(self, item, value,
+	def __setitem__(self, item, value, *,
 			slice=slice, isinstance=isinstance, _address=address
 		):
 		if isinstance(item, slice):
@@ -191,7 +191,7 @@ class Segments(object):
 			saddress = _address(self.sequences, start, stop)
 			self.sequences[start[0]][start[1]] = value
 
-	def __delitem__(self, item,
+	def __delitem__(self, item, *,
 			isinstance=isinstance, slice=slice
 		):
 		if isinstance(item, slice):
@@ -209,7 +209,7 @@ class Segments(object):
 		append(self.sequences, sequence)
 		self._length += seqlen
 
-	def select(self, start, stop,
+	def select(self, start, stop, *,
 			whole=slice(None), _address=address,
 			from_iterable=itertools.chain.from_iterable,
 			len=len, range=range, slice=slice, iter=iter,
@@ -236,7 +236,7 @@ class Segments(object):
 			iter(self.sequences[p][pslice]) for p, pslice in slices
 		])
 
-	def __iter__(self, iter=iter, from_iterable=itertools.chain.from_iterable):
+	def __iter__(self, *, iter=iter, from_iterable=itertools.chain.from_iterable):
 		return from_iterable(iter(x) for x in self.sequences)
 
 	def clear(self):
@@ -246,7 +246,7 @@ class Segments(object):
 		self.__init__()
 		self._length = 0
 
-	def partition(self, iterable=None, len=len, iter=iter, islice=itertools.islice):
+	def partition(self, iterable=None, *, len=len, iter=iter, islice=itertools.islice):
 		"""
 		# Organize the segments so that they have appropriate sizes.
 		"""
@@ -285,12 +285,12 @@ class Segments(object):
 
 		self._length += newlen
 
-	def insert(self, offset, sequence, _insert=insert):
+	def insert(self, offset, sequence, *, _insert=insert):
 		seqlen = len(sequence)
 		self.sequences = _insert(self.sequences, offset, sequence)
 		self._length += seqlen
 
-	def delete(self, start, stop, _delete=delete, len=len, max=max):
+	def delete(self, start, stop, *, _delete=delete, len=len, max=max):
 		# normalize and restrict slice size as needed.
 		l = len(self)
 		stop = max(stop, 0)
