@@ -2089,6 +2089,7 @@ class Status(Fields):
 	# The status line above the console prompt.
 	"""
 	from fault.terminal.format.path import f_route_absolute as format_route
+	from fault.terminal.format.path import route_colors
 	format_route = staticmethod(format_route)
 
 	status_open_resource = fields.Styled('[', -1024)
@@ -2119,7 +2120,10 @@ class Status(Fields):
 		r = systemfiles.Path.from_absolute(str(path))
 		path_r = [
 			fields.Styled(x[0], x[1])
-			for x in self.format_route(r)
+			for x in (
+				(y[1], self.route_colors[y[0]])
+				for y in self.format_route(r)
+			)
 		]
 		self.units = [
 			fields.Sequence([
