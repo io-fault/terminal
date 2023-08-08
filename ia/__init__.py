@@ -8,7 +8,13 @@ def sections():
 	from . import delta
 	from . import navigation
 	from . import transaction
-	from . import console
+	from . import meta
+	return [
+		delta.Index,
+		navigation.Index,
+		transaction.Index,
+		meta.Index,
+	]
 
 @functools.lru_cache(32)
 def find(category, path):

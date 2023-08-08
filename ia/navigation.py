@@ -2,593 +2,656 @@
 # Navigation methods controlling cursor vectors.
 """
 import itertools
-from fault.range.types import IRange
+
+from ..format import Whitespace
+lil = Whitespace.il
+
 from . import types
-from .. import fields
 event, Index = types.Index.allocate('navigation')
 
+@event('activate')
+def execute(session, rf, event):
+	if rf.activate is not None:
+		return rf.activate(session, rf, event)
+	elif session.keyboard.mapping == 'insert':
+		session.events['delta'](('open', 'ahead'))(session, rf, event)
+
+@event('session', 'view', 'forward')
+def sv_foward(session, rf, event, *, quantity=1):
+	session.division += 1
+	session.refocus()
+
+@event('session', 'view', 'backward')
+def sv_backward(session, rf, event, quantity=1):
+	session.division -= 1
+	session.refocus()
+
+@event('session', 'rewrite', 'elements')
+def s_rq_rewrite(session, rf, event):
+	"""
+	# Prepare a line or field delta instruction in the refraction's heading.
+	"""
+
+	# Identify the field for preparing the rewrite context.
+	areas, ef = rf.fields(rf.focus[0].get())
+	hs = rf.focus[1].slice()
+	i = rf.field_index(areas, hs.start)
+	if areas[i] != hs:
+		i = rf.field_index(areas, rf.focus[1].get())
+
+	ext = "field " + str(i)
+	session.prepare("rewrite", (session.vertical, session.division), extension=ext)
+
+@event('session', 'search', 'resource')
+def s_rq_find(session, rf, event):
+	"""
+	# Search the resource's elements.
+	"""
+
+	session.prepare("search", (session.vertical, session.division))
+
+@event('session', 'seek', 'element', 'absolute')
+def s_rq_aseek(session, rf, event):
+	"""
+	# Seek to a specific absolute element.
+	"""
+
+	session.prepare("seek", (session.vertical, session.division), extension='absolute')
+
+@event('session', 'seek', 'element', 'relative')
+def s_rq_rseek(session, rf, event):
+	"""
+	# Seek to a specific element relative to the cursor.
+	"""
+
+	session.prepare("seek", (session.vertical, session.division), extension='relative')
+
+@event('session', 'load', 'resource')
+def s_open_resource(session, rf, event):
+	"""
+	# Navigate to the resource location.
+	"""
+
+	session.relocate((session.vertical, session.division))
+
+@event('session', 'store', 'resource')
+def s_update_resource(session, rf, event):
+	"""
+	# Update the resource to reflect the refraction's element state.
+	"""
+
+	session.rewrite((session.vertical, session.division))
+
+@event('session', 'cancel')
+def s_cancel(session, rf, event):
+	"""
+	# Refocus the subject refraction and reset any location area state.
+	"""
+
+	session.cancel()
+
 @event('horizontal', 'forward')
-def h_forward(self, event, quantity=1):
+def h_forward(session, rf, event, *, quantity=1):
 	"""
 	# Move the selection to the next significant field.
 	"""
-	h = self.horizontal
-	self.vector_last_axis = h
-	self.rotate(1, h, self.horizontal_focus, self.horizontal_focus.subfields(), quantity)
+
+	t = rf.field(quantity)
+	rf.focus[1].restore((t.start, t.start, t.stop))
 
 @event('horizontal', 'backward')
-def h_backward(self, event, quantity=1):
+def h_backward(session, rf, event, quantity=1):
 	"""
 	# Move the selection to the previous significant field.
 	"""
-	h = self.horizontal
-	self.vector_last_axis = h
-	self.rotate(-1, h, self.horizontal_focus, reversed(list(self.horizontal_focus.subfields())), quantity)
 
-@event('horizontal', 'beginning')
-def move_start_of_line(self, event):
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	offset = self.indentation_adjustments(self.horizontal_focus)
-	self.horizontal.move((-self.horizontal.datum)+offset, 1)
+	t = rf.field(-quantity)
+	rf.focus[1].restore((t.start, t.start, t.stop))
 
-@event('horizontal', 'end')
-def move_end_of_line(self, event):
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	offset = self.indentation_adjustments(self.horizontal_focus)
-	self.horizontal.move(offset + self.horizontal_focus[1].characters(), 0)
+@event('horizontal', 'backward', 'beginning')
+def move_start_of_line(session, rf, event):
+	line = rf.elements[rf.focus[0].get()]
+	rf.focus[1].set(lil(line))
+
+@event('horizontal', 'forward', 'end')
+def move_end_of_line(session, rf, event):
+	line = rf.elements[rf.focus[0].get()]
+	rf.focus[1].set(len(line))
 
 @event('horizontal', 'start')
-def move_start_of_range(self, event):
+def move_start_of_range(session, rf, event):
 	"""
 	# Horizontally move the cursor to the beginning of the range.
 	# or extend the range if already on the edge of the start.
 	"""
-	h = self.horizontal
-	self.vector_last_axis = h
-
+	h = rf.focus[1]
 	if h.offset == 0:
-		r = self.horizontal_focus.find(h.get()-1)
-		if r is not None:
-			# at the end
-			path, field, (start, length, fi) = r
-			change = h.datum - start
-			h.magnitude += change
-			h.datum -= change
-
-			# Disallow spanning of indentation.
-			self.constrain_horizontal_range()
+		n = rf.field(-1)
+		hs = h.snapshot()
+		h.restore((n.start, n.start, hs[2]))
 	elif h.offset < 0:
-		# move start exactly
+		# Move range start to offset.
 		h.datum += h.offset
+		h.magnitude -= h.offset
 		h.offset = 0
 	else:
+		# Cursor position was after start, move to zero.
 		h.offset = 0
 
-	self.movement = True
-
 @event('horizontal', 'stop')
-def move_end_of_range(self, event):
+def move_end_of_range(session, rf, event):
 	"""
 	# Horizontally move the cursor to the end of the range.
 	"""
-	h = self.horizontal
-	self.vector_last_axis = h
-
+	h = rf.focus[1]
 	if h.offset == h.magnitude:
-		edge = h.get()
-		r = self.horizontal_focus.find(edge)
-		if r is not None:
-			# at the end
-			path, field, (start, length, fi) = r
-			if start + length <= self.horizontal_focus.length():
-				h.magnitude += length
-				h.offset += length
-
+		n = rf.field(+1)
+		hs = h.snapshot()
+		h.restore((hs[0], n.stop, n.stop))
 	elif h.offset > h.magnitude:
 		# move start exactly
 		h.magnitude = h.offset
 	else:
 		h.offset = h.magnitude
 
-	self.movement = True
-
 @event('horizontal', 'forward', 'unit')
-def step_character_forward(self, event, quantity=1):
-	h = self.horizontal
-	self.vector_last_axis = h
-
-	h.move(quantity)
-	self.constrain_horizontal_range()
-	self.movement = True
+def step_character_forward(session, rf, event, *, quantity=1):
+	rf.focus[1].set(rf.unit(quantity))
 
 @event('horizontal', 'backward', 'unit')
-def step_character_backwards(self, event, quantity=1):
-	h = self.vector.horizontal
-	self.vector_last_axis = h
-
-	h.move(-quantity)
-	self.constrain_horizontal_range()
-	self.movement = True
+def step_character_backwards(session, rf, event, *, quantity=1):
+	rf.focus[1].set(rf.unit(-quantity))
 
 @event('vertical', 'forward', 'unit')
-def next_line(self, event, quantity=1):
-	"""
-	# Move the position to the next line.
-	"""
-	v = self.vertical
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	v.move(quantity)
-	self.vector_last_axis = v
-	self.update_vertical_state()
-	self.movement = True
+def cursor_latter_element(session, rf, event, quantity=1):
+	v = rf.focus[0]
+	ln = v.get() + quantity
+	v.set(min(ln, len(rf.elements)))
+	rf.vertical_changed(ln)
 
 @event('vertical', 'backward', 'unit')
-def previous_line(self, event, quantity=1):
-	"""
-	# Move the position to the previous line.
-	"""
-	v = self.vertical
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	v.move(-quantity)
-	self.vector_last_axis = v
-	self.update_vertical_state()
-	self.movement = True
+def cursor_former_element(session, rf, event, quantity=1):
+	v = rf.focus[0]
+	ln = v.get() + -quantity
+	v.set(max(0, ln))
+	rf.vertical_changed(ln)
 
 @event('vertical', 'paging')
-def configure_paging(self, event, quantity=1):
-	"""
-	# Modify the vertical range query for paging.
-	"""
-	v = self.vector.vertical
-	win = self.window.vertical.snapshot()
-	diff = (win[2] - win[1]) // 8
-	v.restore((win[0] + diff, v.get(), win[2] - diff))
-
-	self.vector_last_axis = v
-	self.vertical_query = 'paging'
-	self.update_vertical_state()
-	self.movement = True
+def configure_paging(session, rf, event, quantity=1):
+	height = view.display.height
+	delta = height // 8
+	top = rf.visible[0]
+	rf.focus[0].restore(top + delta, rf.focus[0].get(), top + height - delta)
 
 @event('vertical', 'sections')
-def configure_sections(self, event, quantity=1):
-	v = self.vector.vertical
-	win = self.window.vertical.snapshot()
-	height = abs(int((win[2] - win[0]) / 2.5))
-	v.restore((win[0] + height, v.get(), win[2] - height))
+def configure_sections(session, rf, event, quantity=1):
+	delta = 8
+	pos = rf.focus[0].get()
+	rf.focus[0].restore((pos - delta // 2, pos, pos + delta // 2))
 
-	self.vertical_query = 'paging'
-	self.vector_last_axis = v
-	self.update_vertical_state()
-	self.movement = True
+def start_ilevel(lines, position):
+	ln = position.datum
+	for line in lines[ln:ln+1]:
+		return lil(line)
+	else:
+		return 0
 
 @event('vertical', 'start')
-def v_seek_start(self, event):
+def v_seek_start(session, rf, event):
 	"""
 	# Relocate the vertical position to the start of the vertical range.
 	"""
-	v = self.vertical
-	self.vector_last_axis = v
-	self.sector.f_emit(self.clear_horizontal_indicators())
+	v = rf.focus[0]
 
-	if v.offset <= 0 or self.vertical_query == 'pattern':
-		# already at beginning, imply previous block at same level
-		self.vertical_query_previous()
+	if v.offset <= 0:
+		il = start_ilevel(rf.elements, v)
+		stop, start = find_indentation_block(rf.elements, v.slice().start, il, final=0)
+		v.restore((start, start, stop))
 	else:
 		v.offset = 0
-
-	self.update_vertical_state()
-	self.constrain_horizontal_range()
-	self.movement = True
+	rf.vertical_changed(v.get())
 
 @event('vertical', 'stop')
-def v_seek_stop(self, event):
-	v = self.vertical
-	self.vector_last_axis = v
-	self.sector.f_emit(self.clear_horizontal_indicators())
+def v_seek_stop(session, rf, event):
+	v = rf.focus[0]
 
-	if (v.offset+1) >= v.magnitude or self.vertical_query == 'pattern':
-		# already at end, imply next block at same level
-		self.vertical_query_next()
+	if (v.offset+1) >= v.magnitude:
+		il = start_ilevel(rf.elements, v)
+		start, stop = find_indentation_block(rf.elements, v.slice().stop-1, il, final=len(rf.elements))
+		v.restore((start+1, stop, stop+1))
 	else:
 		v.offset = v.magnitude - 1
+	rf.vertical_changed(v.get())
 
-	self.update_vertical_state()
-	self.constrain_horizontal_range()
-	self.movement = True
-
-@event('horizontal', 'jump', 'unit')
-def select_character(self, event, quantity=1):
+@event('horizontal', 'jump', 'string')
+def select_unit_string(session, rf, event, string, *, quantity=1):
 	"""
 	# Horizontally move the cursor to the character in the event.
 	"""
-	h = self.vector.horizontal
-	self.vector_last_axis = h
+	h = rf.focus[1]
 
-	character = event.string
-
-	il = self.indentation(self.horizontal_focus).characters()
-	line = str(self.horizontal_focus[1])
-	start = max(h.get() - il, 0)
-
-	if start < 0 or start > len(line):
+	start = h.get()
+	if start < 0:
 		start = 0
-	if line[start:start+1] == character:
-		# skip if it's on it already
-		start += 1
 
-	offset = line.find(character, start)
-
+	offset = rf.current(1).find(string, start + 1)
 	if offset > -1:
-		h.set(offset + il)
-	self.movement = True
+		h.set(offset)
 
-@event('void', 'forward')
-def move_next_void(self, event):
-	self.select_void(range(self.vertical_index+1, len(self.units)), direction=1)
+@event('horizontal', 'jump', 'unit')
+def select_character(*args, quantity=1):
+	"""
+	# Horizontally move the cursor to the character in the event.
+	"""
+	return select_unit_string(*args, args[-1].string)
 
-@event('void', 'backward')
-def move_previous_void(self, event):
-	self.select_void(range(self.vertical_index-1, -1, -1), direction=-1)
-
-@event('range', 'enqueue')
-def range_enqueue(self, event):
-	start, point, stop = self.axis.snapshot()
-	axis = self.last_axis
-
-	if axis == 'horizontal':
-		self.range_queue.append((axis, self.vertical.get(), point, IRange((start, stop-1))))
-	elif axis == 'vertical':
-		self.range_queue.append((axis, None, None, IRange((start, stop-1))))
+@event('vertical', 'void', 'forward')
+def move_next_void(session, rf, event, quantity=1):
+	for i in range(rf.focus[0].get()+1, len(rf.elements)):
+		if (rf.elements[i] or ' ').isspace():
+			break
 	else:
-		raise Exception("unknown axis")
+		i = len(rf.elements)
 
-@event('range', 'dequeue')
-def range_dequeue(self, event):
-	axis, dominate, current, range = self.range_queue.popleft()
+	rf.focus[0].set(i)
+	rf.vertical_changed(i)
 
-	if axis == 'horizontal':
-		self.sector.f_emit(self.clear_horizontal_indicators())
-		self.vertical.set(dominate)
-		self.horizontal.restore((range[0], self.horizontal.get(), range[1]+1))
-		self.update_vertical_state()
-	elif axis == 'vertical':
-		# no move is performed, so indicators don't need to be updaed.
-		self.vertical.restore((range[0], self.vertical.get(), range[1]+1))
-		self.movement = True
+@event('vertical', 'void', 'backward')
+def move_previous_void(session, rf, event):
+	for i in range(rf.focus[0].get()-1, -1, -1):
+		if (rf.elements[i] or ' ').isspace():
+			break
 	else:
-		raise Exception("unknown axis")
+		i = 0
+
+	rf.focus[0].set(i)
+	rf.vertical_changed(i)
 
 @event('horizontal', 'select', 'line')
-def span_line(self, event, quantity=1):
+def span_line(session, rf, event):
 	"""
 	# Alter the horizontal range to be the length of the current vertical index.
 	"""
-	h = self.horizontal
-
-	abs = h.get()
-	adjust = self.horizontal_focus[0].length()
-	ul = self.horizontal_focus.length()
-
-	self.sector.f_emit(self.clear_horizontal_indicators())
-
-	h.configure(adjust, ul - adjust)
-	self.vector_last_axis = h
-	self.horizontal_query = 'line'
-
-	if abs < adjust:
-		h.offset = 0
-	elif abs >= ul:
-		h.offset = h.magnitude
-	else:
-		h.move(abs - h.datum)
-
-	self.movement = True
-	self.update_horizontal_indicators()
+	ln = rf.focus[0].get()
+	line = rf.elements[ln]
+	i = 0
+	for i, x in enumerate(line):
+		if x != '\t':
+			break
+	rf.focus[1].restore((i, max(i, rf.focus[1].get()), len(line)))
 
 @event('vertical', 'select', 'line')
-def vertical_unit_select(self, event, quantity=1):
+def vertical_unit_select(session, rf, event, quantity=1):
 	"""
 	# Alter the vertical range to contain a single line.
 	"""
-	v = self.vertical
-	abs = v.get()
-	v.configure(abs, 1)
-	self.vector_last_axis = v
-	self.movement = True
-
-@event('horizontal', 'select', 'field')
-def event_select_single(self, event):
-	"""
-	# Modify the horizontal range to field beneath the position indicator.
-	"""
-	line = self.horizontal_focus[1]
-	fields = list(self.horizontal_focus.subfields())
-	offset = self.horizontal.get()
-
-	current = 0
-	index = 0
-	for path, field in fields:
-		l = field.length()
-		if offset - l < current:
-			break
-		index += 1
-		current += l
-
-	# index is the current field
-	nfields = len(fields)
-	start = index
-
-	for i in range(index, nfields):
-		path, f = fields[i]
-		if f.merge == False and f not in line.routers:
-			break
-	else:
-		# series query while on edge of line.
-		return
-
-	stop = self.horizontal_focus.offset(*fields[i])
-
-	for i in range(index, -1, -1):
-		path, f = fields[i]
-		if isinstance(f, fields.Indentation):
-			i = 1
-			break
-		if f.merge == False and f not in line.routers:
-			i += 1
-			break
-	start = self.horizontal_focus.offset(*fields[i])
-
-	self.horizontal_query = 'series'
-	h = self.vector_last_axis = self.horizontal
-
-	h.restore((start, offset, stop))
+	v = rf.focus[0]
+	v.configure(v.get(), 1)
 
 @event('select', 'absolute')
-def event_select_absolute(self, target, ax, ay):
+def event_select_absolute(session, rf, event):
 	"""
 	# Map the absolute position to the relative position and
 	# perform the &event_select_series operation.
 	"""
-	sx, sy = self.view.point
+	div, trf, view = session.target(event)
+	ax, ay = event.identity[0]
+
+	sx, sy = view.display.point
 	rx = ax - sx
 	ry = ay - sy
-	ry += self.window.vertical.get()
+	ry += trf.visible[0]
+	ry -= 1
+	rx -= 1
+	rx = max(0, rx)
 
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.vector.vertical.set(ry-1)
-	self.vector.horizontal.set(rx-1)
-	self.update_unit()
-	if self.vector.vertical.get() == ry-1:
-		event_select_series(self, None)
-	else:
-		self.movement = True
+	session.vertical = div[0]
+	session.division = div[1]
+	trf.focus[0].set(ry)
 
-	# Take focus.
-	self.sector.focus(self)
+	phrase = trf.render(trf.elements[ry])
+	cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
+	h = phrase.tell(cp, *phrase.m_codepoint)
+	trf.focus[1].set(h)
+
+	session.refocus()
+
+def identify_routing_series(fields, index, ftype='router'):
+	"""
+	# Identify the boundary of the field series where &ftype fields
+	# extend the range.
+
+	# [ Returns ]
+	# A pair of &fields indexes identifying the first and last fields
+	# of the series.
+	"""
+	scans = (
+		range(index - 1, -1, -1),
+		range(index + 1, len(fields), 1),
+	)
+	locations = []
+
+	# Iterate through both directions from &index.
+	for r in scans:
+		rs = 0
+		last = index
+
+		# Scan for series and exit when successive non-router
+		for fi in r:
+			ft, fc = fields[fi]
+			if ftype in ft:
+				# Continue series.
+				rs = 1
+				last = fi
+			else:
+				rs -= 1
+				if rs < 0:
+					# Successive decrement, end of series.
+					fi -= 1
+					break
+				else:
+					if ft in {'indentation', 'indentation-only', 'space'}:
+						break
+
+					last = fi
+
+		locations.append(last)
+
+	return tuple(locations)
 
 @event('horizontal', 'select', 'series')
-def event_select_series(self, event, Indentation=fields.Indentation):
+def select_series(session, rf, event):
 	"""
-	# Expand the horizontal range to include fields separated by an access, routing, delimiter.
+	# Expand the horizontal range to include fields separated by an routing delimiter.
 	"""
-	line = self.horizontal_focus[1]
-	fields = list(self.horizontal_focus.subfields())
-	offset = self.horizontal.get()
+	hcp = rf.focus[1].get()
+	areas, fields = rf.fields(rf.focus[0].get())
+	cfi = rf.field_index(areas, hcp)
 
-	current = 0
-	index = 0
-	for path, field in fields:
-		l = field.length()
-		if offset - l < current:
-			break
-		index += 1
-		current += l
+	first, last = identify_routing_series(fields, cfi)
 
-	# index is the current field
-	nfields = len(fields)
-	start = index
+	rf.focus[1].restore((
+		areas[first].start,
+		hcp,
+		areas[last].stop
+	))
 
-	# Scan for edge at ending.
-	for i in range(index, nfields):
-		path, f = fields[i]
-		if f.merge == False and f not in line.routers:
+def indentation_enclosure(lines, il, start, stop):
+	"""
+	# Identify the area of the header and footer of an indentation level.
+	"""
+	maxln = len(lines)
+
+	cil = il
+	for i, l in enumerate(lines.select(stop-1, maxln), stop-1):
+		if l:
+			# Only breaking on empty.
+			cil = lil(l)
+			if cil < il:
+				stop = i
+				break
+		elif cil == il:
+			# Empty *and* last indentation level was the inquired &il.
+			stop = i + 1
 			break
 	else:
-		# series query while on edge of line.
-		return
+		stop = maxln
 
-	stop = self.horizontal_focus.offset(*fields[i])
-
-	# Scan for edge at beginning.
-	for i in range(index, -1, -1):
-		path, f = fields[i]
-		if isinstance(f, Indentation):
-			i = 1
+	cil = il
+	for i, l in enumerate(lines.select(start, -1)):
+		if l:
+			# Only breaking on empty.
+			cil = lil(l)
+			if cil < il:
+				start -= i
+				start += 1
+				break
+		elif cil == il:
+			# Empty *and* last indentation level was the inquired &il.
+			start -= i
+			start += 1
 			break
-		if f.merge == False and f not in line.routers:
-			i += 1
-			break
-	start = self.horizontal_focus.offset(*fields[i])
-
-	self.horizontal_query = 'series'
-	h = self.vector_last_axis = self.horizontal
-
-	if start > stop:
-		start, stop = stop, start
-	h.restore((start, offset, stop))
-	self.movement = True
-
-@event('vertical', 'select', 'block')
-def event_select_block(self, event, quantity=1):
-	self.vertical_query = 'indentation'
-	self.block((self.vertical_index, self.vertical_index, self.vertical_index+1))
-
-@event('vertical', 'select', 'outerblock')
-def event_select_outerblock(self, event, quantity=1):
-	self.vertical_query = 'indentation'
-	self.outerblock(self.vector.vertical.snapshot())
-
-@event('vertical', 'select', 'adjacent')
-def event_select_adjacent(self, event, quantity=1):
-	self.vertical_query = 'adjacent'
-	self.adjacent((self.vertical_index, self.vertical_index, self.vertical_index))
-
-@event('place', 'start')
-def set_cursor_start(self, event):
-	a = self.axis
-	d, o, m = a.snapshot()
-	a.restore((o, o, m))
-
-	self.movement = True
-
-@event('place', 'stop')
-def set_cursor_stop(self, event):
-	a = self.axis
-	d, o, m = a.snapshot()
-	a.restore((d, o, o))
-
-	self.movement = True
-
-@event('place', 'center')
-def bisect_range(self, event):
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	a = self.axis
-	a.bisect()
-
-	self.update_vertical_state()
-	self.movement = True
-
-@event('window', 'horizontal', 'forward')
-def event_window_horizontal_forward(self, event, quantity=1, point=None):
-	"""
-	# Adjust the horizontal position of the window forward by the given quantity.
-	"""
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.window.horizontal.move(quantity)
-	self.movement = True
-	self.scrolled()
-
-@event('window', 'horizontal', 'backward')
-def event_window_horizontal_backward(self, event, quantity=1, point=None):
-	"""
-	# Adjust the horizontal position of the window forward by the given quantity.
-	"""
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.window.horizontal.move(-quantity)
-	self.movement = True
-	self.scrolled()
-
-@event('window', 'vertical', 'forward')
-def event_window_vertical_forward(self, event, quantity=1, point=None):
-	"""
-	# Adjust the vertical position of the window forward by the
-	# given quantity.
-	"""
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.window.vertical.move(quantity)
-	self.movement = True
-	self.scrolled()
-
-@event('window', 'vertical', 'backward')
-def event_window_vertical_backward(self, event, quantity=1, point=None):
-	"""
-	# Adjust the vertical position of the window backward by the
-	# given quantity. (Moves view port).
-	"""
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.window.vertical.move(-quantity)
-	self.movement = True
-	self.scrolled()
-
-@event('window', 'vertical', 'forward', 'jump')
-def event_window_vertical_forward_jump(self, event, quantity=32, point=None):
-	"""
-	# Adjust the vertical position of the window forward by the
-	# given quantity.
-	"""
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.window.vertical.move(quantity)
-	self.movement = True
-	self.scrolled()
-
-@event('window', 'vertical', 'backward', 'jump')
-def event_window_vertical_backward_jump(self, event, quantity=32, point=None):
-	"""
-	# Adjust the vertical position of the window backward by the
-	# given quantity. (Moves view port).
-	"""
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.window.vertical.move(-quantity)
-	self.movement = True
-	self.scrolled()
-
-@event('pane', 'rotate', 'refraction')
-def switch(self, event, direction = 1):
-	"""
-	# Display the next refraction in the current working pane according to
-	# the persistent rotation state.
-	"""
-	pid = self.pane
-	visibles = self.visible
-	current = self.visible[pid]
-	npanes = len(self.selected_refractions)
-
-	if direction > 0:
+	else:
 		start = 0
-		stop = npanes
+
+	return start, stop
+
+def find_indentation_block(lines, ln, il, *, final=0):
+	"""
+	# Identify the area of an adjacent indentation level.
+	"""
+
+	d = 1 if final > ln else -1
+
+	# Find the first line at the indentation level.
+	for i, l in enumerate(lines.select(ln + d, final)):
+		if l and lil(l) >= il:
+			start = ln + (d * i)
+			break
 	else:
-		start = npanes - 1
-		stop = -1
+		start = final
 
-	rotation = min(self.rotation + direction, npanes)
-	i = itertools.chain(range(rotation, stop, direction), range(start, rotation, direction))
-
-	for r in i:
-		p = self.selected_refractions[r]
-
-		if p in visibles:
+	last_void = -2
+	for i, l in enumerate(lines.select(start + d, final)):
+		if not l:
+			last_void = i
 			continue
 
-		# found a refraction
-		break
+		if l and lil(l) < il:
+			if last_void == i - 1:
+				stop = start + (d * last_void)
+			else:
+				stop = start + (d * i)
+			break
 	else:
-		# cycled; all panes visible
-		return
+		stop = final
 
-	self.rotation = r
-	self.display_refraction(pid, p)
-	self.focus_pane()
+	return start, stop
 
-@event('pane', 'rotate', 'forward')
-def event_console_rotate_pane_forward(self, event):
+def indentation_block(lines, il, start, stop):
 	"""
-	# Select the next pane horizontally. If on the last pane, select the first one.
+	# Identify the area of an indentation level.
 	"""
-	p = self.pane + 1
-	if p >= self.count:
-		p = 0
-	self.focus(self.switch_pane(p))
+	maxln = len(lines)
+	if il == 0:
+		return (0, maxln)
 
-@event('pane', 'rotate', 'backward')
-def event_console_rotate_pane_backward(self, event):
-	"""
-	# Select the previous pane horizontally. If on the first pane, select the last one.
-	"""
-	p = self.pane - 1
-	if p < 0:
-		p = self.count - 1
-	self.focus(self.switch_pane(p))
-
-@event('prompt', 'toggle')
-def event_toggle_prompt(self, event):
-	"""
-	# Toggle the focusing of the prompt.
-	"""
-	if self.refraction is self.prompt:
-		self.focus_pane()
+	for i, l in enumerate(lines.select(stop, maxln), stop):
+		if l and lil(l) < il:
+			stop = i
+			break
 	else:
-		prompt = self.prompt
-		if not prompt.has_content(prompt.units[prompt.vertical_index]):
-			prompt.keyboard.set('edit')
-		self.focus_prompt()
+		stop = maxln
 
+	for i, l in enumerate(lines.select(start, -1)):
+		if l and lil(l) < il:
+			start -= i
+			# Start is inclusive, so +1 as the change in level is after the edge.
+			start += 1
+			break
+	else:
+		start = 0
+
+	return start, stop
+
+def contiguous_block(lines, il, start, stop):
+	"""
+	# Identify the area of an indentation level.
+	"""
+	maxln = len(lines)
+
+	for i, l in enumerate(lines.select(stop, maxln)):
+		if not l:
+			stop += i
+			break
+	else:
+		stop = maxln
+
+	for i, l in enumerate(lines.select(start-1, -1)):
+		if not l:
+			start -= i
+			break
+	else:
+		start = 0
+
+	return start, stop
+
+@event('vertical', 'select', 'indentation')
+def select_indentation(session, rf, event):
+	ln = rf.focus[0].get()
+	try:
+		il = lil(rf.elements[ln])
+	except IndexError:
+		il = 0
+
+	if il == 0:
+		start, stop = contiguous_block(rf.elements, il, ln, ln)
+	else:
+		start, stop = indentation_block(rf.elements, il, ln, ln)
+	rf.focus[0].restore((start, ln, stop))
+
+@event('vertical', 'select', 'indentation', 'level')
+def select_outer_indentation_level(session, rf, quantity=1):
+	start, ln, stop = rf.focus[0].snapshot()
+	il = lil(rf.elements[start])
+
+	d = indentation_block(rf.elements, il, start, stop)
+	if d == (start, stop):
+		# Change levels selecting the surrounding areas of the IL.
+		d = indentation_enclosure(rf.elements, il-1, start, stop)
+
+	rf.focus[0].restore((d[0], ln, d[1]))
+
+@event('vertical', 'place', 'start')
+def set_cursor_start(session, rf, event):
+	offset = rf.focus[0].offset
+	rf.focus[0].offset = 0
+	rf.focus[0].datum += offset
+	rf.focus[0].magnitude -= offset
+
+@event('vertical', 'place', 'stop')
+def set_cursor_stop(session, rf, event):
+	rf.focus[0].halt()
+
+@event('vertical', 'place', 'center')
+def bisect_range(session, rf, event):
+	rf.focus[0].offset = (rf.focus[0].magnitude // 2)
+
+@event('view', 'horizontal', 'forward')
+def pan_forward_cell(session, rf, event, quantity=1):
+	"""
+	# Adjust the horizontal position of the window forward by the given quantity.
+	"""
+
+	fi, rf, view = session.target(event)
+	# rf.visible[1] += quantity
+
+@event('view', 'horizontal', 'backward')
+def pan_backward_cell(session, rf, event, quantity=1):
+	"""
+	# Adjust the horizontal position of the window forward by the given quantity.
+	"""
+
+	fi, rf, view = session.target(event)
+	# rf.visible[1] += -quantity
+
+@event('view', 'vertical', 'forward')
+def scroll_forward_unit(session, rf, event, quantity=1):
+	"""
+	# Adjust the vertical position of the window forward by the
+	# given quantity.
+	"""
+
+	fi, rf, view = session.target(event)
+	rf.scroll(quantity.__add__)
+
+@event('view', 'vertical', 'backward')
+def scroll_backward_unit(session, rf, event, quantity=1):
+	"""
+	# Adjust the vertical position of the window backward by the
+	# given quantity. (Moves view port).
+	"""
+
+	fi, rf, view = session.target(event)
+	rf.scroll((-quantity).__add__)
+
+@event('view', 'vertical', 'forward', 'third')
+def scroll_forward_many(session, rf, event, quantity=1):
+	"""
+	# Adjust the vertical position of the window forward by the
+	# given quantity.
+	"""
+
+	fi, rf, view = session.target(event)
+	q = ((rf.dimensions[1] // 3) or 1) * quantity
+	rf.scroll(q.__add__)
+
+@event('view', 'vertical', 'backward', 'third')
+def scroll_backward_many(session, rf, event, quantity=1):
+	"""
+	# Adjust the vertical position of the window backward by the
+	# given quantity. (Moves view port).
+	"""
+
+	fi, rf, view = session.target(event)
+	q = ((rf.dimensions[1] // 3) or 1) * quantity
+	rf.scroll((-q).__add__)
+
+@event('view', 'vertical', 'start')
+def scroll_first(session, rf, event, *, quantity=1):
+	"""
+	# Change the view's display to show the first page.
+	"""
+
+	fi, rf, view = session.target(event)
+	rf.scroll((0).__mul__)
+
+@event('view', 'vertical', 'stop')
+def scroll_last(session, rf, event, *, quantity=1):
+	"""
+	# Change the view's display to show the last page.
+	"""
+
+	fi, rf, view = session.target(event)
+	offset = len(rf.elements)
+	rf.scroll(lambda x: offset)
+
+@event('operation', 'find')
+def query_find(session, rf, event):
+	"""
+	# Find the next occurrence of the horizontal range in &rf.elements.
+	"""
+
+	session.prepare("find", rf.search)
+
+@event('find', 'selected')
+def find_string(session, rf, event):
+	"""
+	# Find the next occurrence of the horizontal range in &rf.elements.
+	"""
+
+	v, h = rf.focus
+	ln = v.get()
+	line = rf.elements[v.get()]
+	w = h.slice()
+	term = line[w]
+	rf.query['search'] = term
+	rf.find(rf.forward(len(rf.elements), ln, w.stop), term)
+
+@event('find', 'previous')
+def find_previous_string(session, rf, event):
+	"""
+	# Find the next occurrence of the horizontal range in &rf.elements.
+	"""
+
+	v, h = rf.focus
+	rf.find(rf.backward(len(rf.elements), v.get(), h.minimum), rf.query.get('search') or '')
+
+@event('find', 'next')
+def find_next_string(session, rf, event):
+	"""
+	# Find the next occurrence of the horizontal range in &rf.elements.
+	"""
+
+	v, h = rf.focus
+	rf.find(rf.forward(len(rf.elements), v.get(), h.maximum), rf.query.get('search') or '')

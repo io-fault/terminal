@@ -1,7 +1,8 @@
 """
-# Segmented implementation for large sequences.
+# Segmented sequence implementation for large lists.
 """
 import itertools
+from collections.abc import Sequence, Iterable
 
 def address(seq, start, stop, *, len=len, range=range):
 	"""
@@ -48,7 +49,6 @@ def address(seq, start, stop, *, len=len, range=range):
 
 	stop_roffset = stop - stop_index_offset
 
-	# compound slice
 	return (
 		(start_index, start_roffset),
 		(stop_index, stop_roffset),
@@ -63,9 +63,10 @@ def delete(seq, start, stop, *, empty="", len=len, range=range):
 
 	if start_index == stop_index:
 		# removing a substring
-		s = seq[start_index]
-		# overwrite the index
-		seq[start_index] = s.__class__(s[:start_roffset] + s[stop_roffset:])
+		if start_index < len(seq):
+			s = seq[start_index]
+			# overwrite the index
+			seq[start_index] = s[:start_roffset] + s[stop_roffset:]
 	else:
 		s = seq[start_index]
 		seq[start_index] = s.__class__(s[:start_roffset])
@@ -83,6 +84,7 @@ def delete(seq, start, stop, *, empty="", len=len, range=range):
 
 def insert(seq, offset, insertion, *, empty="", len=len):
 	if not insertion:
+		# Empty insertion.
 		return seq
 
 	if offset <= 0:
@@ -103,13 +105,14 @@ def insert(seq, offset, insertion, *, empty="", len=len):
 		if position > offset:
 			break
 	else:
-		# appending
+		# appending, position never exceeded &offset
 		if seq and seq[-1] == empty:
 			seq[-1] = insertion
 		else:
 			seq.append(insertion)
 		return seq
 
+	# Identify (subsequence) relative offset.
 	roffset = offset - (position - ilen)
 
 	if roffset == 0 and seq[i-1] == empty:
@@ -173,30 +176,61 @@ class Segments(object):
 			stop = len(self) if item.stop is None else item.stop
 			return list(self.select(start, stop))
 		else:
+			if item < 0:
+				item = item + len(self)
 			start, stop = item, item+1
 			for x in self.select(start, stop):
 				return x
+			else:
+				raise IndexError("segments index out of range")
 
 	def __setitem__(self, item, value, *,
-			slice=slice, isinstance=isinstance, _address=address
+			slice=slice,
+			isinstance=isinstance,
+			_address=address,
 		):
-		if isinstance(item, slice):
-			start = item.start or 0
-			stop = len(self) if item.stop is None else item.stop
-			if (stop - start) > 0:
-				self.delete(start, stop)
-			self.insert(start, value)
-		else:
-			start, stop = item, item+1
-			saddress = _address(self.sequences, start, stop)
-			self.sequences[start[0]][start[1]] = value
+		l = len(self)
 
-	def __delitem__(self, item, *,
-			isinstance=isinstance, slice=slice
-		):
+		if not isinstance(item, slice):
+			start = item if item >= 0 else item + l
+			if start >= l:
+				raise IndexError("segments index out of range")
+			stop = item + 1
+
+			seq = self.sequences
+			astart, astop = _address(seq, start, stop)
+			while astart[1] >= len(seq[astart[0]]):
+				# Traverse to the beginning of the next segment.
+				astart = (astart[0]+1, 0)
+			self.sequences[astart[0]][astart[1]] = value
+		else:
+			start = item.start
+			if start is None:
+				start = 0
+			else:
+				if start < 0:
+					start = l + start
+
+			stop = item.stop
+			if stop is None:
+				stop = l
+			else:
+				if stop < 0:
+					stop = l + stop
+
+			self.delete(start, stop)
+			self.insert(start, value)
+
+	def __delitem__(self, item, *, isinstance=isinstance, slice=slice):
+		l = len(self)
 		if isinstance(item, slice):
 			start = item.start or 0
-			stop = len(self) if item.stop is None else item.stop
+			if start < 0:
+				start += l
+
+			stop = item.stop or l
+			if stop < 0:
+				stop += l
 		else:
 			start, stop = item, item+1
 		self.delete(start, stop)
@@ -208,6 +242,7 @@ class Segments(object):
 		seqlen = len(sequence)
 		append(self.sequences, sequence)
 		self._length += seqlen
+		assert self._length >= 0
 
 	def select(self, start, stop, *,
 			whole=slice(None), _address=address,
@@ -215,15 +250,20 @@ class Segments(object):
 			len=len, range=range, slice=slice, iter=iter,
 		):
 		"""
-		# Return an iterator to the requested slice.
+		# Return an iterable to the requested slice.
 		"""
+		if start > stop:
+			Iter = reversed
+			start, stop = stop+1, start+1
+		else:
+			Iter = iter
 		start, stop = _address(self.sequences, start, stop)
 
 		n = stop[0] - start[0]
 		if not n:
 			# same sequence; simple slice
 			if self.sequences and start[0] < len(self.sequences):
-				return iter(self.sequences[start[0]][start[1] : stop[1]])
+				return Iter(self.sequences[start[0]][start[1] : stop[1]])
 			else:
 				# empty
 				return iter(())
@@ -233,7 +273,8 @@ class Segments(object):
 		slices.append((stop[0], slice(0, stop[1])))
 
 		return from_iterable([
-			iter(self.sequences[p][pslice]) for p, pslice in slices
+			Iter(self.sequences[p][pslice])
+			for p, pslice in Iter(slices)
 		])
 
 	def __iter__(self, *, iter=iter, from_iterable=itertools.chain.from_iterable):
@@ -271,24 +312,25 @@ class Segments(object):
 
 		self.sequences = sequences
 		self._length = newlen
+		assert self._length >= 0
 
 	def prepend(self, sequence):
 		seqlen = len(sequence)
 		self.sequences = prepend(self.sequences, sequence)
 		self._length += seqlen
+		assert self._length >= 0
 
 	def append(self, sequence):
-		offset = len(self)
 		newlen = len(sequence)
-
 		self.sequences.append(sequence)
-
 		self._length += newlen
+		assert self._length >= 0
 
 	def insert(self, offset, sequence, *, _insert=insert):
 		seqlen = len(sequence)
 		self.sequences = _insert(self.sequences, offset, sequence)
 		self._length += seqlen
+		assert self._length >= 0
 
 	def delete(self, start, stop, *, _delete=delete, len=len, max=max):
 		# normalize and restrict slice size as needed.
@@ -300,9 +342,61 @@ class Segments(object):
 		if start > l:
 			start = l
 		if start > stop:
-			l = start
-			start = stop
-			stop = l
+			start, stop = stop, start
 
 		_delete(self.sequences, start, stop)
 		self._length -= (stop - start)
+		assert self._length >= 0
+
+class Immutable(object):
+	"""
+	# Segments compatible sequence that disregards manipulations to provide, cooperative,
+	# read-only access to an element sequence. Internal storage is a regular list and
+	# no attempt is made to enforce immutability outside of the interface.
+	"""
+	__slots__ = ('_constant',)
+
+	def __init__(self, items:Iterable[object]):
+		self._constant = list(items)
+
+	def select(self, start, stop, *, islice=itertools.islice):
+		return self._constant[start:stop]
+
+	def __iter__(self):
+		return iter(self._constant)
+
+	def __getitem__(self, item):
+		try:
+			return self._constant[item]
+		except IndexError:
+			return ""
+
+	def __setitem__(self, item, value):
+		pass
+
+	def __delitem__(self, item):
+		pass
+
+	def __len__(self):
+		return len(self._constant)
+
+	def __iadd__(self, sequence):
+		pass
+
+	def clear(self):
+		pass
+
+	def partition(self, iterable=None):
+		pass
+
+	def prepend(self, sequence):
+		pass
+
+	def append(self, sequence):
+		pass
+
+	def insert(self, offset, sequence):
+		pass
+
+	def delete(self, start, stop):
+		pass

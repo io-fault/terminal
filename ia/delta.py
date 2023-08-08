@@ -1,515 +1,695 @@
 """
-# Document manipulation methods.
+# Manipulation instructions for modifying a resource's elements.
 """
+import itertools
+
 from fault.range.types import IRange
 from . import types
+from ..delta import Update, Lines
 event, Index = types.Index.allocate('delta')
 
+def insert_defer(rf, lo, offset, string):
+	"""
+	# Insert the &string at the given &offset without committing or applying.
+	"""
+
+	(rf.log
+		.write(Update(lo, string, "", offset)))
+
+def delete_defer(rf, lo, offset, deletion):
+	"""
+	# Remove &deletion from the element, &lo, at &offset.
+	"""
+
+	(rf.log
+		.write(Update(lo, "", deletion, offset)))
+
+def commit(rf):
+	(rf.log.apply(rf.elements)
+		.collapse()
+		.commit())
+
+def insert(rf, lo, offset, string):
+	"""
+	# Insert the &string at the given &offset.
+	"""
+	(rf.log
+		.write(Update(lo, string, "", offset))
+		.apply(rf.elements)
+		.collapse()
+		.commit())
+
+def delete(rf, lo, offset, length):
+	"""
+	# Remove &length Character Units from the &element at &offset.
+
+	# [ Returns ]
+	# The logged deletion.
+	"""
+	line = rf.elements[lo]
+	phrase = rf.render(line)
+
+	p, r = phrase.seek((0, 0), offset)
+	assert r == 0
+	n, r = phrase.seek(p, length, *phrase.m_unit)
+	assert r == 0
+	stop = phrase.tell(n, *phrase.m_codepoint)
+
+	deleted = line[offset:stop]
+	(rf.log
+		.write(Update(lo, "", deleted, offset)))
+	return deleted
+
+def join(rf, lo, count, *, withstring=''):
+	"""
+	# Join &count lines onto &lo using &withstring.
+
+	# [ Parameters ]
+	# /rf/
+		# The refraction.
+	# /lo/
+		# The element offset.
+	# /count/
+		# The number of lines after &lo to join.
+	# /withstring/
+		# The character placed between the joined lines.
+		# Defaults to an empty string.
+	"""
+	lines = rf.elements[lo:lo+1+count]
+	combined = withstring.join(lines)
+	rf.delta(lo+1, -len(lines))
+
+	(rf.log
+		.write(Update(lo, combined, lines[0], 0))
+		.write(Lines(lo+1, [], [lines[-1]]))
+		.apply(rf.elements)
+		.collapse()
+		.commit())
+
+def split(rf, lo, offset):
+	"""
+	# Split the line identified by &lo at &offset.
+	"""
+	rf.delta(lo+1, 1)
+
+	line = rf.elements[lo]
+	nl = line[offset:]
+
+	(rf.log
+		.write(Update(lo, "", nl, offset))
+		.write(Lines(lo+1, [nl], []))
+		.apply(rf.elements)
+		.collapse()
+		.commit())
+
+def _delete_lines(rf, lo, lines):
+	"""
+	# Remove &count lines from &rf starting at &lo.
+	"""
+	rf.delta(lo, -len(lines))
+
+	(rf.log
+		.write(Lines(lo, [], lines))
+		.apply(rf.elements)
+		.commit())
+
+def delete_lines(rf, lo, count):
+	"""
+	# Remove &count lines from &rf starting at &lo.
+	"""
+	lines = rf.elements[lo:lo+count]
+	rf.delta(lo, -len(lines))
+
+	(rf.log
+		.write(Lines(lo, [], lines))
+		.apply(rf.elements)
+		.commit())
+
+	return lines
+
+def insert_lines(rf, lo, lines):
+	"""
+	# Remove &count lines from &rf starting at &lo.
+	"""
+	rf.delta(lo, len(lines))
+
+	(rf.log
+		.write(Lines(lo, lines, []))
+		.apply(rf.elements)
+		.commit())
+
+def move(rf, lo, start, stop):
+	"""
+	# Relocate the range after the current vertical position.
+	# Insertion is performed first in order to maintain visibility
+	# state when on the last page.
+	"""
+
+	# Capture lines before motion.
+	lines = rf.elements[start:stop]
+	count = len(lines)
+
+	# Potentially effects update alignment.
+	# When a move is performed, update only looks at the final
+	# view and elements state. If insertion is performed before
+	# delete, the final state will not be aligned and the wrong
+	# elements will be represented at the insertion point.
+	if start < lo:
+		# Deleted range comes before insertion line.
+		rf.delta(start, -count)
+		_delete_lines(rf, start, lines)
+
+		rf.delta(lo - count, count)
+		insert_lines(rf, lo - count, lines)
+	else:
+		# Deleted range comes after insertion line.
+		assert lo <= start
+
+		rf.delta(start, -count)
+		_delete_lines(rf, start, lines)
+
+		rf.delta(lo, count)
+		insert_lines(rf, lo, lines)
+
 @event('insert', 'character')
-def char_insert(self, event):
+def insert_character_units(session, rf, event, quantity=1):
 	"""
 	# Insert a character at the current cursor position.
 	"""
-	if event.type == 'literal':
-		if event.modifiers.meta:
-			mchar = meta.select(event.identity)
-		else:
-			mchar = event.identity
 
-		self.insert_characters(mchar)
-		self.movement = True
-	elif event.type == 'navigation':
-		self.insert_characters(symbols.arrows.get(event.identity))
-		self.movement = True
+	v, h = (x.get() for x in rf.focus)
+	string = event.identity * quantity
 
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.update(self.vertical_index, self.vertical_index+1)
+	insert(rf, v, h, string)
+	rf.focus[1].changed(h, len(string))
 
-@event('insert', 'data')
-def insert(self, event):
+@event('insert', 'capture')
+def insert_captured_character_unit(session, rf, event, quantity=1):
 	"""
-	# Endpoint for terminal paste events.
-	"""
-	h, v = self.vector
-	lines = event.string.split('\n')
-
-	count = len(lines)
-	if count == 0:
-		return
-
-	self.movement = True
-
-	original_lineno = v.get()
-	self.sector.f_emit(self.clear_horizontal_indicators())
-
-	hf = self.horizontal_focus
-	aoffset = h.get() - self.indentation_adjustments(hf) # absolute offset
-
-	if lines[0]:
-		existing = hf[1].characters()
-		insertion = lines[0].lstrip('\t')
-
-		r = IRange.single(self.vertical_index)
-		self.log(hf[1].insert(aoffset, insertion), r)
-		indent = len(lines[0]) - len(insertion)
-		self.indent(hf, indent)
-		self.log((self.indent, (self.horizontal_focus, -indent)), r)
-	else:
-		insertion = ""
-
-	if count == 1:
-		h.update(len(lines[0]))
-		self.update_horizontal_indicators()
-		return
-
-	nextl = self.breakline(original_lineno, aoffset+len(insertion))
-
-	# Translate leading tabs; breakline logs the split, so no need here.
-	r = IRange.single(original_lineno+1)
-	insertion = lines[-1].lstrip('\t')
-	nextl[1].insert(0, insertion)
-	indent = len(lines[-1]) - len(insertion)
-	self.indent(nextl, indent)
-
-	self.insert_lines(original_lineno+1, lines[1:-1])
-	v.configure(original_lineno, count, count-1)
-	indenta = self.indentation_adjustments(nextl)
-	chars = indenta + len(insertion)
-	h.configure(0, chars, chars)
-
-	self.update_vertical_state(force=True)
-	self.update_horizontal_indicators()
-
-	return self.update(original_lineno, None)
-
-@event('insert', 'space')
-def insert_space(self, event):
-	"""
-	# Insert a space.
-	"""
-	self.movement = True
-	self.insert_space()
-
-@event('insert', 'literal', 'space')
-def literal_space(self, event):
-	"""
-	# Literal space insertion for prompt.
-	"""
-	self.movement = True
-	self.insert_literal_space()
-
-@event('transition')
-def edit(self, event):
-	"""
-	# Transition into edit-mode. If the line does not have an initialized field
-	# or the currently selected field is a Constant, an empty Text field will be created.
-	"""
-	self.transition_keyboard('edit')
-
-@event('open', 'behind')
-def event_open_behind(self, event, quantity = 1):
-	"""
-	# Open a new vertical behind the current vertical position.
-	"""
-	inverse = self.open_vertical(self.get_indentation_level(), 0, quantity)
-	self.log(*inverse)
-	self.keyboard.set('edit')
-	self.movement = True
-
-@event('open', 'ahead')
-def event_open_ahead(self, event, quantity = 1):
-	"""
-	# Open a new vertical ahead of the current vertical position.
-	"""
-	if len(self.units) == 0:
-		return self.event_open_behind(event, quantity)
-
-	inverse = self.open_vertical(self.get_indentation_level(), 1, quantity)
-	self.log(*inverse)
-	self.keyboard.set('edit')
-	self.movement = True
-
-@event('open', 'between')
-def event_open_into(self, event):
-	"""
-	# Open a newline between the line at the current position with greater indentation.
-	"""
-	h = self.horizontal
-	hs = h.snapshot()
-	self.sector.f_emit(self.clear_horizontal_indicators())
-
-	adjustment = self.indentation_adjustments(self.horizontal_focus)
-	start, position, stop = map((-adjustment).__add__, hs)
-
-	remainder = str(self.horizontal_focus[1])[position:]
-
-	r = IRange.single(self.vertical_index)
-	self.log(self.horizontal_focus[1].delete(position, position+len(remainder)), r)
-
-	ind = self.Indentation.acquire(self.get_indentation_level() + 1)
-	inverse = self.open_vertical(ind, 1, 2)
-	self.log(*inverse)
-
-	new = self.units[self.vertical.get()+1][1]
-	nr = IRange.single(self.vertical_index+1)
-
-	self.log(new.insert(0, remainder), nr)
-	new.reformat()
-
-	self.update(self.vertical_index-1, None)
-	self.movement = True
-
-# Return or Enter
-@event('activate')
-def enter_key(self, event, quantity = 1):
-	return self.returned(event)
-
-@event('map')
-def configure_vertical_distribution(self, event):
-	"""
-	# Map the the following commands across the vertical range.
-	"""
-	self.distribution = 'vertical'
-
-@event('vertical', 'delete', 'unit')
-def delete_current_line(self, event):
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	record = self.truncate_vertical(self.vertical_index, self.vertical_index+1)
-	self.log(record, IRange.single(self.vertical_index))
-	self.movement = True
-	self.update_unit()
-
-@event('move', 'range')
-def move_line_range(self, event):
-	"""
-	# Relocate the range to the current position.
-	"""
-	axis = self.last_axis
-	self.sector.f_emit(self.clear_horizontal_indicators())
-
-	if axis == 'vertical':
-		start, position, stop = self.vertical.snapshot()
-		size = stop - start
-
-		if position > start:
-			newstart = position - size
-			newstop = position
-		else:
-			newstart = position
-			newstop = position + size
-
-		self.translocate_vertical(None, self.units, position, start, stop)
-		self.vertical.restore((newstart, self.vertical.get(), newstop))
-		self.movement = True
-	elif axis == 'horizontal':
-		adjustment = self.indentation_adjustments(self.horizontal_focus)
-		start, position, stop = map((-adjustment).__add__, self.horizontal.snapshot())
-		size = stop - start
-
-		if position > start:
-			newstart = position - size
-			newstop = position
-		else:
-			newstart = position
-			newstop = position + size
-
-		self.translocate_horizontal(self.vertical_index, self.horizontal_focus, position, start, stop)
-		self.horizontal.restore((newstart, self.vertical.get(), newstop))
-		self.movement = True
-	else:
-		pass
-
-	self.checkpoint()
-
-@event('transpose', 'range')
-def transpose(self, event):
-	"""
-	# Relocate the current range with the queued.
+	# Replace the character at the cursor with the event's identity.
 	"""
 
-	axis = self.last_axis
+	v, h = (x.get() for x in rf.focus)
+	string = event.string * quantity
 
-	if axis == 'vertical':
-		self.event_delta_transpose_vertical(event)
-	elif axis == 'horizontal':
-		self.event_delta_transpose_horizontal(event)
-	else:
-		pass
+	insert(rf, v, h, string)
+	rf.focus[1].changed(h, len(string))
+	session.keyboard.revert()
 
-@event('truncate', 'range')
-def truncate(self, event):
+@event('replace', 'capture')
+def replace_captured_character_unit(session, rf, event, quantity=1):
 	"""
-	# Remove the range of the last axis.
+	# Replace the character at the cursor with the event's identity.
 	"""
-	axis = self.last_axis
-	self.sector.f_emit(self.clear_horizontal_indicators())
 
-	if axis == 'vertical':
-		start, position, stop = self.vertical.snapshot()
+	delete_characters_ahead(session, rf, event, quantity)
+	insert_captured_character_unit(session, rf, event, quantity)
 
-		self.log(self.truncate_vertical(start, stop), IRange((start, stop-1)))
-		self.vertical.contract(0, stop - start)
-		self.vertical.set(position)
-		self.movement = True
-	elif axis == 'horizontal':
-		adjustment = self.indentation_adjustments(self.horizontal_focus)
-		start, position, stop = map((-adjustment).__add__, self.horizontal.snapshot())
-
-		r = IRange.single(self.vertical_index)
-		self.log(self.horizontal_focus[1].delete(start, stop), r)
-		abs = self.horizontal.get()
-		self.horizontal.contract(0, stop - start)
-		self.horizontal.set(abs)
-		self.update(*r.exclusive())
-		self.movement = True
-	else:
-		pass
-
-	self.checkpoint()
-	self.update_unit()
-
-@event('horizontal', 'substitute', 'range')
-def subrange(self, event):
+@event('insert', 'string')
+def insert_string_argument(session, rf, event, string, *, quantity=1):
 	"""
-	# Substitute the contents of the selection.
+	# Insert a string at the current cursor position disregarding &event.
 	"""
-	self.constrain_horizontal_range()
-	h = self.horizontal
-	focus = self.horizontal_focus
-	start, position, stop = self.extract_horizontal_range(focus, h)
-	vi = self.vertical_index
+	v, h = (x.get() for x in rf.focus)
+	string = string * quantity
 
-	inverse = focus[1].delete(start, stop)
-	r = IRange.single(vi)
-	self.log(inverse, r)
+	insert(rf, v, h, string)
+	rf.focus[1].changed(h, len(string))
 
-	h.zero()
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.update(*r.exclusive())
-	self.transition_keyboard('edit')
-
-@event('horizontal', 'substitute', 'again')
-def subagain(self, event):
+@event('delete', 'unit', 'former')
+def delete_characters_behind(session, rf, event, quantity=1):
 	"""
-	# Substitute the horizontal selection with previous substitution later.
+	# Remove the codepoints representing the Character Unit
+	# immediately before the cursor.
 	"""
-	h = self.horizontal
-	focus = self.horizontal_focus
-	start, position, stop = self.extract_horizontal_range(focus, h)
+	v, h = (x.get() for x in rf.focus)
+	line = rf.elements[v]
 
-	self.sector.f_emit(self.clear_horizontal_indicators())
+	phrase = rf.render(line)
+	p, r = phrase.seek((0, 0), h, *phrase.m_codepoint)
+	assert r == 0
+	n, r = phrase.seek(p, -quantity, *phrase.m_unit)
+	assert r == 0
+	offset = phrase.tell(n, *phrase.m_codepoint)
 
-	self.horizontal_focus[1].delete(start, stop)
-	le = self.last_edit
-	self.horizontal_focus[1].insert(start, le)
-	self.horizontal_focus[1].reformat()
+	removed = line[offset:h]
+	(rf.log
+		.write(Update(v, "", removed, offset))
+		.apply(rf.elements)
+		.collapse()
+		.commit())
 
-	h.configure(start, len(le))
+	rf.focus[1].changed(h, -len(removed))
 
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.update(*self.current_vertical.exclusive())
-	self.render_horizontal_indicators(self.horizontal_focus, h.snapshot())
+@event('delete', 'unit', 'current')
+def delete_characters_ahead(session, rf, event, quantity=1):
+	"""
+	# Remove the codepoints representing the Character Unit
+	# that the cursor is current positioned at.
+	"""
+	v, h = (x.get() for x in rf.focus)
+	line = rf.elements[v]
 
-@event('replace', 'character')
-def event_delta_replace_character(self, event):
+	phrase = rf.render(line)
+	p, r = phrase.seek((0, 0), h, *phrase.m_codepoint)
+	assert r == 0
+	n, r = phrase.seek(p, quantity, *phrase.m_unit)
+	assert r == 0
+	offset = phrase.tell(n, *phrase.m_codepoint)
+
+	removed = line[h:offset]
+	(rf.log
+		.write(Update(v, "", removed, h))
+		.apply(rf.elements)
+		.collapse()
+		.commit())
+
+	rf.focus[1].changed(h, -len(removed))
+	rf.focus[1].update(len(removed))
+
+@event('delete', 'element', 'former')
+def delete_current_line(session, rf, event, quantity=1):
+	vp = rf.focus[0]
+	ln = vp.get() - 1
+	delete_lines(rf, ln, quantity)
+	vp.changed(ln, -quantity)
+	vp.set(min(ln, len(rf.elements)))
+
+@event('delete', 'element', 'current')
+def delete_current_line(session, rf, event, quantity=1):
+	vp = rf.focus[0]
+	ln = vp.get()
+	delete_lines(rf, ln, quantity)
+	vp.changed(ln, -quantity)
+	vp.set(min(ln, len(rf.elements)))
+
+@event('delete', 'backward', 'adjacent', 'class')
+def delete_previous_field(session, rf, event):
+	"""
+	# Remove the field before the cursor's position including any
+	"""
+	v, h = (x.get() for x in rf.focus)
+	areas, fields = rf.fields(v)
+
+	i = rf.field_index(areas, h)
+	while i and fields[i][0] in {'space'}:
+		i -= 1
+	word = areas[max(0, i-1)]
+
+	removed = rf.elements[v][word.start:h]
+	(rf.log
+		.write(Update(v, "", removed, word.start))
+		.apply(rf.elements)
+		.collapse()
+		.commit())
+
+	rf.focus[1].changed(word.start, -len(removed))
+
+@event('horizontal', 'replace', 'unit')
+def replace_character_unit(session, rf, event):
 	"""
 	# Replace the character underneath the cursor and progress its position.
 	"""
-	self.previous_keyboard_mode = self.keyboard.current[0]
-	self.capture_overwrite = True
-	self.transition_keyboard('capture')
 
-@event('insert', 'capture')
-def insert_exact(self, event):
+	session.keyboard.transition('capture')
+
+@event('indentation', 'increment')
+def insert_indentation_level(session, rf, event, quantity=1):
 	"""
-	# Insert an exact character with the value carried by the event. (^V)
-	"""
-	self.previous_keyboard_mode = self.keyboard.current[0]
-	self.capture_overwrite = False
-	self.transition_keyboard('capture')
-
-@event('delete', 'backward', 'unit')
-def remove_prev_char(self, event, quantity = 1):
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	r = self.delete_characters(-1*quantity)
-	self.constrain_horizontal_range()
-	if r is not None:
-		self.update(*r.exclusive())
-		self.movement = True
-
-@event('delete', 'forward', 'unit')
-def remove_next_char(self, event, quantity = 1):
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	r = self.delete_characters(quantity)
-	self.constrain_horizontal_range()
-	if r is not None:
-		self.update(*r.exclusive())
-		self.movement = True
-
-@event('delete', 'leading')
-def event_delta_delete_tobol(self, event):
-	"""
-	# Delete all characters between the current position and the begining of the line.
-	"""
-	u = self.horizontal_focus[1]
-	adjustments = self.indentation_adjustments(self.horizontal_focus)
-	offset = self.horizontal.get() - adjustments
-	inverse = u.delete(0, offset)
-
-	r = IRange.single(self.vertical.get())
-	self.log(inverse, r)
-
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.horizontal.set(adjustments)
-	self.update(*r.exclusive())
-
-@event('delete', 'following')
-def event_delta_delete_toeol(self, event):
-	"""
-	# Delete all characters between the current position and the end of the line.
+	# Increment the indentation of the current line.
 	"""
 
-	u = self.horizontal_focus[1]
-	adjustments = self.indentation_adjustments(self.horizontal_focus)
-	offset = self.horizontal.get() - adjustments
-	eol = len(u)
-	inverse = u.delete(offset, eol)
+	insert(rf, rf.focus[0].get(), 0, "\t")
+	rf.focus[1].datum += 1
 
-	r = IRange.single(self.vertical.get())
-	self.log(inverse, r)
-
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.update(*r.exclusive())
-
-
-@event('indent', 'increment')
-def indent(self, event, quantity = 1):
-	"""
-	# Increment indentation of the current line.
-	"""
-	if self.distributing and not self.has_content(self.horizontal_focus):
-		# ignore indent if the line is empty and deltas are being distributed
-		return
-
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.indent(self.horizontal_focus, quantity)
-
-	r = IRange.single(self.vertical_index)
-	self.log((self.indent, (self.horizontal_focus, -quantity)), r)
-
-	self.update(*r.exclusive())
-	self.constrain_horizontal_range()
-
-@event('indent', 'decrement')
-def dedent(self, event, quantity = 1):
+@event('indentation', 'decrement')
+def delete_indentation_level(session, rf, event, quantity=1):
 	"""
 	# Decrement the indentation of the current line.
 	"""
-	if self.distributing and not self.has_content(self.horizontal_focus):
-		# ignore indent if the line is empty and deltas are being distributed
-		return
 
-	self.sector.f_emit(self.clear_horizontal_indicators())
-	self.indent(self.horizontal_focus, -quantity)
+	ln = rf.focus[0].get()
+	if rf.elements[ln].startswith("\t"):
+		delete(rf, ln, 0, 1)
+		commit(rf)
+		rf.focus[1].datum -= 1
 
-	r = IRange.single(self.vertical_index)
-	self.log((self.indent, (self.horizontal_focus, quantity)), r)
-
-	self.update(*r.exclusive())
-	self.constrain_horizontal_range()
-
-@event('indent', 'void')
-def delete_indentation(self, event, quantity = None):
+@event('indentation', 'zero')
+def delete_indentation(session, rf, event):
 	"""
 	# Remove all indentation from the line.
 	"""
-	il = self.get_indentation_level()
-	return dedent(self, event, il)
+
+	ln = rf.focus[0].get()
+	fields = rf.structure(rf.elements[ln])
+	il = 0
+	if fields and fields[0][0] in {'indentation-only', 'indentation'}:
+		il = len(fields[0][1])
+
+	delete(rf, ln, 0, il)
+	commit(rf)
+	rf.focus[1].datum -= il
+
+@event('indentation', 'increment', 'range')
+def insert_indentation_levels_v(session, rf, event, quantity=1):
+	"""
+	# Increment the indentation of the vertical range.
+	"""
+
+	v, h = rf.focus
+	start, position, stop = v.snapshot()
+	for lo in range(start, stop):
+		if not rf.elements[lo]:
+			continue
+		insert_defer(rf, lo, 0, '\t' * quantity)
+	rf.log.apply(rf.elements).commit().checkpoint()
+
+	if position >= start and position < stop:
+		rf.focus[1].datum += quantity
+
+@event('indentation', 'decrement', 'range')
+def delete_indentation_levels_v(session, rf, event, quantity=1):
+	"""
+	# Decrement the indentation of the current line.
+	"""
+
+	v, h = rf.focus
+	start, position, stop = v.snapshot()
+	for lo in range(start, stop):
+		q = min(rf.elements[lo][:quantity].count('\t'), quantity)
+		delete_defer(rf, lo, 0, '\t' * q)
+	rf.log.apply(rf.elements).commit().checkpoint()
+
+	if position >= start and position < stop:
+		# Doesn't cover cases where indentation was short.
+		rf.focus[1].datum -= quantity
+
+@event('indentation', 'zero', 'range')
+def delete_indentation_v(session, rf, event, *, offset=None, quantity=1):
+	"""
+	# Remove all indentations from the vertical range.
+	"""
+
+	v, h = rf.focus
+	start, position, stop = v.snapshot()
+	for lo in range(start, stop):
+		fields = rf.structure(rf.elements[lo])
+		il = 0
+		if fields and fields[0][0] in {'indentation-only', 'indentation'}:
+			il = len(fields[0][1])
+
+		delete_defer(rf, lo, 0, '\t' * il)
+	rf.log.apply(rf.elements).commit().checkpoint()
+
+@event('delete', 'leading')
+def delete_to_beginning_of_line(session, rf, event):
+	"""
+	# Delete all characters between the current position and the begining of the line.
+	"""
+	v, h = (x.get() for x in rf.focus)
+	delete(rf, v, 0, h)
+	commit(rf)
+	rf.focus[1].changed(0, -h)
+
+@event('delete', 'following')
+def delete_to_end_of_line(session, rf, event):
+	"""
+	# Delete all characters between the current position and the end of the line.
+	"""
+	v, h = (x.get() for x in rf.focus)
+	delete(rf, v, h, len(rf.elements[v]))
+	commit(rf)
+
+@event('open', 'behind')
+def open_newline_behind(session, rf, event, quantity=1):
+	"""
+	# Open a new vertical behind the current vertical position.
+	"""
+	ln = max(0, min(len(rf.elements), rf.focus[0].get()))
+
+	area = rf.elements[ln-1:ln+1]
+	for line in area:
+		il = line.count('\t')
+		if il:
+			break
+	else:
+		il = 0
+
+	insert_lines(rf, ln, ["\t" * il])
+	rf.focus[0].changed(ln, quantity)
+	rf.focus[0].update(-1)
+	session.keyboard.set('insert')
+
+@event('open', 'ahead')
+def open_newline_ahead(session, rf, event, quantity=1):
+	"""
+	# Open a new vertical ahead of the current vertical position.
+	"""
+	ln = max(0, min(len(rf.elements), rf.focus[0].get() + 1))
+
+	area = rf.elements[ln-1:ln+1]
+	for line in area:
+		il = line.count('\t')
+		if il:
+			break
+	else:
+		il = 0
+
+	insert_lines(rf, ln, ["\t" * il])
+	rf.focus[0].changed(ln, quantity)
+	session.keyboard.set('insert')
+
+@event('transition')
+def atposition_insert_mode_switch(session, rf, event):
+	"""
+	# Transition into insert-mode.
+	"""
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = 0
+
+@event('transition', 'start-of-field')
+def fieldend_insert_mode_switch(session, rf, event):
+	"""
+	# Transition into insert-mode moving the cursor to the start
+	# of the horizontal range.
+	"""
+	rf.focus[1].move(0, +1)
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = -1
+
+@event('transition', 'end-of-field')
+def fieldend_insert_mode_switch(session, rf, event):
+	"""
+	# Transition into insert-mode moving the cursor to the end
+	# of the horizontal range.
+	"""
+	rf.focus[1].move(0, -1)
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = +1
+
+@event('transition', 'start-of-line')
+def startofline_insert_mode_switch(session, rf, event):
+	"""
+	# Transition into insert-mode moving the cursor to the beginning of the line.
+	"""
+	ln = rf.focus[0].get()
+	i = 0
+	for i, x in enumerate(rf.elements[ln]):
+		if x != '\t':
+			break
+	rf.focus[1].set(i)
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = -2
+
+@event('transition', 'end-of-line')
+def endofline_insert_mode_switch(session, rf, event):
+	"""
+	# Transition into insert-mode moving the cursor to the end of the line.
+	"""
+	ln = rf.focus[0].get()
+	rf.focus[1].set(len(rf.elements[ln]))
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = +2
+
+@event('move', 'range', 'ahead')
+def move_vertical_range_ahead(session, rf, event):
+	"""
+	# Relocate the range after the current vertical position.
+	"""
+	v = rf.focus[0]
+
+	start, position, stop = v.snapshot()
+	vr = stop - start
+	position += 1
+	if position >= start:
+		if position <= stop:
+			# Moved within range.
+			return
+		before = True
+	else:
+		before = False
+
+	move(rf, position, start, stop)
+	if before:
+		position -= vr
+
+	v.restore((position, position-1, position + vr))
+	rf.vertical_changed(position-1)
+
+@event('move', 'range', 'behind')
+def move_vertical_range_behind(session, rf, event):
+	"""
+	# Relocate the range after the current vertical position.
+	"""
+	v = rf.focus[0]
+
+	start, position, stop = v.snapshot()
+	vr = stop - start
+	if position >= start:
+		if position <= stop:
+			# Moved within range.
+			return
+		before = True
+	else:
+		before = False
+
+	move(rf, position, start, stop)
+	if before:
+		position -= vr
+
+	v.restore((position, position, position + vr))
+	rf.vertical_changed(position)
+
+
+@event('delete', 'vertical', 'column')
+def delete_element_v(session, rf, event):
+	"""
+	# Remove the vertical range.
+	"""
+
+	start, _, stop = rf.focus[0].snapshot()
+	hstart, h, hstop = rf.focus[1].snapshot()
+
+	for lo in range(start, stop):
+		delete(rf, lo, h, 1)
+
+	rf.log.apply(rf.elements).commit().checkpoint()
+
+@event('delete', 'vertical', 'range')
+def delete_element_v(session, rf, event):
+	"""
+	# Remove the vertical range.
+	"""
+
+	start, position, stop = rf.focus[0].snapshot()
+	d = len(delete_lines(rf, start, stop - start))
+	v = rf.focus[0]
+	v.changed(start, -d)
+	if position < stop:
+		v.set(position)
+	else:
+		v.set(position - d)
+
+	v.limit(0, len(rf.elements))
+	rf.vertical_changed(v.get())
+
+@event('delete', 'horizontal', 'range')
+def delete_unit_range(session, rf, event):
+	"""
+	# Remove the horizontal range of the current line.
+	"""
+
+	lo = rf.focus[0].get()
+	start, p, stop = rf.focus[1].snapshot()
+	delete(rf, lo, start, stop - start)
+	commit(rf)
+	rf.focus[1].changed(0, -(stop - start))
+
+@event('horizontal', 'substitute', 'range')
+def subrange(session, rf, event):
+	"""
+	# Substitute the contents of the cursor's horizontal range.
+	"""
+	ln = rf.focus[0].get()
+	start, p, stop = rf.focus[1].snapshot()
+
+	dsize = stop - start
+	delete(rf, ln, start, dsize)
+	commit(rf)
+	rf.focus[1].restore((start, start, start))
+	session.keyboard.set('insert')
+
+@event('horizontal', 'substitute', 'again')
+def subagain(session, rf, event, *, islice=itertools.islice):
+	"""
+	# Substitute the horizontal selection with previous substitution later.
+	"""
+	ln = rf.focus[0].get()
+	start, p, stop = rf.focus[1].snapshot()
+
+	dsize = stop - start
+	for r in islice(reversed(rf.log.records), 0, 8):
+		last = r.insertion
+		if last is not None:
+			break
+	else:
+		# Default to empty string.
+		last = ""
+
+	delete(rf, ln, start, dsize)
+	insert(rf, ln, start, last)
+	rf.focus[1].restore((start, start, start+len(last)))
 
 @event('line', 'break')
-def event_delta_split(self, event):
+def split_line_at_cursor(session, rf, event):
 	"""
 	# Create a new line splitting the current line at the horizontal position.
 	"""
-	h = self.horizontal
-	hs = h.snapshot()
-	self.sector.f_emit(self.clear_horizontal_indicators())
-
-	adjustment = self.indentation_adjustments(self.horizontal_focus)
-	start, position, stop = map((-adjustment).__add__, hs)
-
-	remainder = str(self.horizontal_focus[1])[position:]
-
-	r = IRange.single(self.vertical_index)
-	if remainder:
-		self.log(self.horizontal_focus[1].delete(position, position+len(remainder)), r)
-
-	inverse = self.open_vertical(self.get_indentation_level(), 1, 1)
-	self.log(*inverse)
-
-	new = self.horizontal_focus[1]
-	nr = IRange.single(self.vertical_index)
-
-	self.log(new.insert(0, remainder), nr)
-	new.reformat()
-
-	self.update(self.vertical_index-1, None)
-	self.movement = True
+	ln = rf.focus[0].get()
+	offset = rf.focus[1].get()
+	split(rf, ln, offset)
 
 @event('line', 'join')
-def event_delta_join(self, event):
+def join_line_with_following(session, rf, event, quantity=1):
 	"""
 	# Join the current line with the following.
 	"""
-	join = self.horizontal_focus[1]
-	ulen = self.horizontal_focus.characters()
-	collapse = self.vertical_index+1
-	following = str(self.units[collapse][1])
-
-	joinlen = len(join.value())
-	self.log(join.insert(joinlen, following), IRange.single(self.vertical_index))
-	join.reformat()
-
-	self.log(self.truncate_vertical(collapse, collapse+1), IRange.single(collapse))
-
-	self.update(self.vertical_index, None)
-	h = self.horizontal.set(ulen)
-
-	self.movement = True
+	ln = rf.focus[0].get()
+	join(rf, ln, quantity)
 
 @event('copy')
-def copy(self, event):
+def copy(session, rf, event):
 	"""
-	# Copy the range to the default cache entry.
+	# Copy the vertical range to the session cache entry.
 	"""
-	if self.last_axis == 'vertical':
-		start, p, stop = self.vertical.snapshot()
-		r = '\n'.join([
-			''.join(map(str, x.value())) for x in
-			self.units.select(start, stop)
-		])
-	else:
-		r = str(self.horizontal_focus[1])[self.horizontal.slice()]
-	self.sector.cache.put(None, ('text', r))
+	start, position, stop = rf.focus[0].snapshot()
+	session.cache = rf.elements[start:stop]
 
 @event('cut')
-def cut(self, event):
+def cut(session, rf, event):
 	"""
 	# Copy and truncate the focus range.
 	"""
-	copy(self, event)
-	truncate(self, event)
+	copy(session, rf, event)
+	truncate_vertical_range(session, rf, event)
 
 @event('paste', 'after')
-def paste_after_line(self, event):
+def paste_after_line(session, rf, event):
 	"""
 	# Paste cache contents after the current vertical position.
 	"""
-	self.paste(self.vertical_index+1)
+	ln = rf.focus[0].get()
+	insert_lines(rf, ln+1, session.cache)
 
 @event('paste', 'before')
-def paste_before_line(self, event):
+def paste_before_line(session, rf, event):
 	"""
 	# Paste cache contents before the current vertical position.
 	"""
-	self.paste(self.vertical_index)
+	ln = rf.focus[0].get()
+	insert_lines(rf, ln, session.cache)

@@ -1,145 +1,165 @@
 """
-# Horizontal and vertical query for range selection.
+# Support functions for refraction query commands.
 """
+from . import format
+from . import types
+from . import projection
+from . import delta
 
-punctuation = set(";:.,!?")
-operation = set("-+/*&^%!~")
-quotation = set("'\"`")
+def type():
+	# Currently, just &format.Lambda.
+	return format.prepare(format.files.root)
 
-def classify(string):
+def refract(session, view, qtype, state, action):
 	"""
-	# Identify the class of the given character.
+	# Construct a Refraction for representing a query.
 	"""
 
-	if string.isalpha():
-		return 'alpha'
-	if string.isdecimal():
-		return 'decimal'
-	if string in punctuation:
-		return 'punctuation'
-	if string in operation:
-		return 'operation'
-	if string in quotation:
-		return 'quotation'
+	meta = types.Reference(
+		'/../',
+		'query-instructions',
+		format.files.root@'/dev',
+		format.files.root@'/dev/void',
+		None,
+	)
 
-class Query(object):
+	lrf = types.Refraction(
+		meta,
+		*session.open_type(format.files.root),
+		list(map(str, [qtype, state])),
+		delta.Log(),
+	)
+	lrf.configure(view.display.dimensions)
+	lrf.activate = action # location.open or location.save
+	view.version = lrf.log.snapshot()
+
+	# Set the range to all lines and place the cursor on the relative path..
+	lrf.focus[0].restore((0, 1, 2))
+	last = lrf.elements[-1]
+	lrf.focus[1].restore((0, 0, len(state)))
+	session.defer(projection.refresh(lrf, view, 0))
+
+	if not state:
+		session.keyboard.set('insert')
+	return lrf
+
+def find(session, rf, event):
 	"""
-	# Range queries for managing range operations.
-
-	# Manages the collection of query operations for selecting ranges.
+	# Perform a find operation against the subject's elements.
 	"""
-	def __init__(self, type, scanner, condition):
-		self.type = type
-		self.scanner = scanner
-		self.condition = condition
-		self.state = None
-		self.paramters = ()
 
-	def dispatch(self, sequence, index, minimum, maximum):
-		"""
-		# Identify the range where the given conditions hold True.
-		"""
-		l = []
-		start, pos, stop = index # position is reference point
+	*context, string = rf.elements
+	session.cancel()
+	subject = session.focus
+	v, h = subject.focus
+	subject.query['search'] = string
+	ctl = subject.forward(len(subject.elements), v.get(), h.maximum)
+	session.focus.find(ctl, string)
+	session.deltas.append((session.focus, session.view))
 
-		ranges = ((-1, minimum, range(start, minimum-1, -1)), (1, maximum, range(stop, maximum+1)))
-
-		for direction, default, r in ranges:
-			condition = condition_constructor(direction, sequence[pos], *self.parameters)
-			if condition is None:
-				# all
-				l.append(default)
-			else:
-				r = iter(r)
-
-				for i in r:
-					offset = condition(sequence[i])
-					if offset is not None:
-						l.append(i - (offset * direction))
-						break
-				else:
-					l.append(default)
-					continue
-
-		return tuple(l)
-
-def indentation(seq):
+def seek(session, rf, event):
 	"""
-	# Return the indentation level or zero if none.
+	# Perform a seek operation on the refraction.
 	"""
-	if seq is None:
-		return None
 
-	if not seq.empty:
-		if isinstance(seq[0], Indentation):
-			return seq[0]
-	return Indentation(0)
+	try:
+		*context, string = [y for y in (x.strip() for x in rf.elements) if y]
+	except ValueError:
+		# Empty
+		session.cancel()
+		return
 
-def has_content(line):
-	"""
-	# Whether or not the non-formatting fields have content.
-	"""
-	for path, x in line.subfields():
-		if isinstance(x, Formatting):
-			continue
-		if x.length() > 0:
-			return True
-	return False
+	session.cancel()
+	subject = session.focus
 
-def indentation_block(direction, initial, level = None, level_adjustment = 0):
-	"""
-	# Select indentation block.
-	"""
-	# if there's no indentation and it's not empty, check contiguous lines
-	if level is None:
-		il = indentation(initial)
+	if context:
+		op, whence = ' '.join(context).split()
 	else:
-		il = level
+		try:
+			op, whence = string.split()
+		except ValueError:
+			op = string
+			whence = 'absolute'
 
-	if il == 0:
-		# document-level; that is all units
-		return None
+		string = ''
 
-	ilevel = il + level_adjustment
+	assert op == 'seek'
 
-	def indentation_condition(item, ilevel=ilevel, cstate=list((0,None))):
-		iil = indentation(item)
-
-		if iil < ilevel:
-			if has_content(item):
-				# non-empty decrease in indentation
-				return 1 + cstate[0]
-			else:
-				# track empty line
-				cstate[0] += 1
+	if whence == 'absolute':
+		string = string
+		if string.startswith('-'):
+			ln = len(subject.elements)
 		else:
-			if cstate[0]:
-				cstate[0] = 0
-
-		return None
-
-	return indentation_condition
-
-def contiguous_block(direction, initial, level = None, level_adjustment = 0):
-	"""
-	# Select a contiguous range.
-	"""
-	if level is None:
-		il = indentation(initial)
+			ln = -1
+	elif whence == 'relative':
+		ln = subject.focus[0].get()
 	else:
-		il = Indentation(level)
+		log("Unrecognized seek whence " + repr(whence) + ".")
+		return
 
-	if has_content(initial):
-		def contiguous_content(item, ilevel = il + level_adjustment):
-			if indentation(item) != il or not has_content(item):
-				# the item was empty or the indentation didn't match
-				return 1
-			return None
-		return contiguous_content
+	ln += int(string) if string else len(subject.elements)
+
+	subject.seek(max(0, ln), 0)
+	session.deltas.append((session.focus, session.view))
+
+def getfield(fields, index):
+	fa, fp = fields
+	return (fa[index], *fp[index])
+
+def prepare(rf, context, command):
+	"""
+	# Identify the requested change.
+	"""
+
+	rws, strctx, *index = context.strip().split()
+	if index:
+		# field indexes
+		index = int(index[0])
+		assert strctx == 'field'
+		selector = (lambda lo: getfield(rf.fields(lo), index))
 	else:
-		def contiguous_empty(item, ilevel = il + level_adjustment):
-			if indentation(item) != il or has_content(item):
-				# the item was empty or the indentation didn't match
-				return 1
-			return None
-		return contiguous_empty
+		assert strctx == 'line'
+		selector = (lambda lo: (slice(0, None), 'line', rf.elements[lo]))
+
+	di, arg = command.split(None, 1)
+	op = {
+		'prefix': (lambda a, t, f: (a.start, arg, "")),
+		'suffix': (lambda a, t, f: (a.stop, arg, "")),
+	}[di]
+
+	return selector, op
+
+def rewrite(session, rf, event):
+	"""
+	# Rewrite the lines or fields of a vertical range.
+	"""
+
+	context, command = rf.elements
+	session.cancel()
+	subject = session.focus
+
+	s, d = prepare(subject, context, command)
+	v, h = subject.focus
+	lspan = v.slice()
+
+	# Identify first IL.
+	elements = subject.elements
+	lil = format.Whitespace.il
+	il = lil(elements[lspan.start])
+
+	subject.log.checkpoint()
+	for lo in range(lspan.start, lspan.stop):
+		if il != lil(elements[lo]):
+			# Match starting IL.
+			continue
+		try:
+			selection = s(lo)
+		except IndexError:
+			# Handle shorter line cases by skipping them.
+			continue
+		else:
+			position, sub, removed = d(*selection)
+			subject.log.write(delta.Update(lo, sub, removed, position))
+	subject.log.apply(subject.elements).commit().checkpoint()
+
+	session.deltas.append((session.focus, session.view))
