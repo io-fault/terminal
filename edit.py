@@ -855,9 +855,19 @@ def main(inv:process.Invocation) -> process.Exit:
 		config, recognition.legacy(restricted, required, inv.argv),
 	)
 
-	executable = str(inv.parameters['system']['name'])
-	exepath = files.root@executable
-	editor = Session(exepath, matrix.Screen(matrix.utf8_terminal_type))
+	from fault.system.query import executables as qexe
+	exepath = str(inv.parameters['system']['name'])
+	if exepath[:1] != '/':
+		for executable in qexe(exepath):
+			path = executable
+			break
+		else:
+			# Unrecognized origin.
+			path = files.root@'/var/empty/sy'
+	else:
+		path = files.root@exepath
+
+	editor = Session(path, matrix.Screen(matrix.utf8_terminal_type))
 
 	try:
 		editor.connect()
