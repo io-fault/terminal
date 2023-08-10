@@ -538,6 +538,7 @@ class Session(object):
 		"""
 
 		rf = self.focus
+		view = self.view
 		dpath = (self.vertical, self.division)
 		self.keyboard.set('control')
 
@@ -548,7 +549,9 @@ class Session(object):
 
 		# Restore location.
 		del rf.elements[:]
-		rf.visible[0] = 0
+		rf.visibility[0].datum = view.offset
+		rf.visibility[1].datum = view.horizontal_offset
+		rf.visible[:] = (view.offset, view.horizontal_offset)
 		self.defer(self.chpath(dpath, self.focus.origin, snapshot=rf.log.snapshot()))
 
 	def prepare(self, type, dpath, *, extension=None):
@@ -769,7 +772,7 @@ class Session(object):
 			# Extend the delta so cursor resets are applied
 			# before any scrolling is performed.
 			current = rf.log.snapshot()
-			voffsets = (view.offset, view.horizontal_offset)
+			voffsets = [view.offset, view.horizontal_offset]
 			if current != view.version or rf.visible != voffsets:
 				drecords = rf.log.since(view.version)
 				self.defer(projection.update(rf, view, drecords))
