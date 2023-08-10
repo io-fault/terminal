@@ -538,22 +538,25 @@ def bisect_range(session, rf, event):
 	rf.focus[0].offset = (rf.focus[0].magnitude // 2)
 
 @event('view', 'horizontal', 'forward')
-def pan_forward_cell(session, rf, event, quantity=1):
+def pan_forward_cells(session, rf, event, quantity=3):
 	"""
 	# Adjust the horizontal position of the window forward by the given quantity.
 	"""
 
 	fi, rf, view = session.target(event)
-	# rf.visible[1] += quantity
+	rf.visible[1] += quantity
+	rf.visibility[1].datum += quantity
 
 @event('view', 'horizontal', 'backward')
-def pan_backward_cell(session, rf, event, quantity=1):
+def pan_backward_cells(session, rf, event, quantity=3):
 	"""
 	# Adjust the horizontal position of the window forward by the given quantity.
 	"""
 
 	fi, rf, view = session.target(event)
-	# rf.visible[1] += -quantity
+	i = max(0, rf.visible[1] - quantity)
+	rf.visible[1] = i
+	rf.visibility[1].datum = i
 
 @event('view', 'vertical', 'forward')
 def scroll_forward_unit(session, rf, event, quantity=1):

@@ -11,6 +11,9 @@ from fault.terminal import matrix
 from fault.terminal.types import Unit, Phrase
 from fault.terminal.types import Traits, RenderParameters
 
+# Single space phrase for representing end of line positions.
+Empty = Phrase([Unit((1, ' ', RenderParameters.default))])
+
 def mode_config(style, mode, relation):
 	if mode == 'insert':
 		return style.apply('underline', textcolor=relation, cellcolor=-1024)
@@ -118,21 +121,20 @@ def collect_horizontal_range(
 def collect_horizontal_positions(
 		phrase, positions,
 		*,
-		len=len, list=list, set=set,
-		iter=iter, range=range, tuple=tuple,
-		Empty=Phrase([Unit((1, ' ', RenderParameters((Traits(0), -1024, -1024, -1024))))]),
+		len=len,
 	):
 	"""
 	# Collect the style information and character unit content at the requested positions
 	# of the &phrase.
 	"""
+
 	pl = len(phrase)
 	for x, size in positions:
 		if pl == 0:
 			yield (0, Empty)
 			continue
 
-		start, re = phrase.seek((0,0), x, *phrase.m_codepoint)
+		start, re = phrase.seek((0, 0), x, *phrase.m_codepoint)
 		assert re == 0
 
 		# Skip words without text content. (Empty Redirect)
@@ -205,7 +207,7 @@ def prepare_line_updates(mode, visible:Phrase, horizontal,
 
 	# Apply changes to horizontal range first.
 	hs = horizontal
-	hrange, prefix, suffix = collect_horizontal_range(visible, hs[0], hs[2])
+	hrange, prefix, suffix = collect_horizontal_range(visible, max(0, hs[0]), max(0, hs[2]))
 	roffset = prefix.cellcount()
 
 	# Reconstruct line with range changes for position collection.
@@ -214,12 +216,12 @@ def prepare_line_updates(mode, visible:Phrase, horizontal,
 
 	# Set Cursor Positions, using &rline to respect changes made by &select_hri
 	rline = Phrase(prefix + rrange + suffix)
-	offset_and_size = tuple(zip(hs, (1, 1, 1))) # Size in Character Units.
-	hp = tuple(collect_horizontal_positions(rline, offset_and_size))
+	cp = [(i, y, 1) for i, y in zip(names, (hs[0], hs[2], hs[1])) if y >= 0]
+	hp = tuple(collect_horizontal_positions(rline, [t[1:] for t in cp]))
 
 	# Position order is changed so that the cursor is set last.
-	for (i, (aoffset, phrase)) in enumerate((hp[0], hp[2], hp[1])):
-		s = select_hpi(mode, names[i], inverted, phrase, hs)
+	for xcp, (aoffset, phrase) in zip(cp, hp):
+		s = select_hpi(mode, xcp[0], inverted, phrase, hs)
 		yield (aoffset, s, phrase)
 
 	# Sequence cursor range reset last.

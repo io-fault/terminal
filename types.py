@@ -1,6 +1,7 @@
 """
 # Data structures for supporting the manipulation of text in an &.edit.Session instance.
 """
+import itertools
 
 from dataclasses import dataclass
 from fault.context import tools
@@ -756,6 +757,7 @@ class View(object):
 	edges: Mapping[str, str]
 	version: object = (0, 0, None)
 	offset: int = 0
+	horizontal_offset = 0
 
 	def update(self, area, phrases):
 		"""
@@ -764,7 +766,7 @@ class View(object):
 
 		self.image[area] = phrases
 		self.whence[area] = [
-			ph.seek((0, 0), 0, *ph.m_cell)
+			ph.seek((0, 0), self.horizontal_offset, *ph.m_cell)
 			for ph in phrases
 		]
 
@@ -811,13 +813,15 @@ class View(object):
 		context = self.display
 		limit = context.width
 		voffset = area.start or 0 # Context seek offset.
+		hoffset = self.horizontal_offset
 		rtx = context.reset_text()
 
 		yield rtx
 		for (phrase, w) in zip(self.image[area], self.whence[area]):
 			yield context.seek((0, voffset))
 			yield from context.render(context.view(phrase, *w, limit))
-			void_cells = limit - phrase.cellcount()
+			visible = max(0, phrase.cellcount() - hoffset)
+			void_cells = limit - visible
 			yield context.erase(max(0, void_cells)) + rtx
 			voffset += 1
 
@@ -829,15 +833,31 @@ class View(object):
 		h = rf.visible[1]
 		return slice(h, h+self.display.width, 1)
 
-	def pan(self, cells):
+	def pan_relative(self, area, offset, *, islice=itertools.islice):
 		"""
-		# Update the image's whence column by advancing the positions by &cells.
+		# Update the image's whence column by advancing the positions with &offset.
+		# The seek is performed relative to the current positions.
 		"""
 
-		self.whence[area] = [
-			ph.seek((0, 0), cells, *ph.m_cell)
-			for ph in self.phrase
-		]
+		wcopy = self.whence[area]
+		ipairs = zip(wcopy, islice(self.image, area.start, area.stop))
+		self.whence[area] = (
+			ph.seek(w[0], offset-w[1], *ph.m_cell)
+			for w, ph in ipairs
+		)
+
+	def pan_absolute(self, area, offset, *, islice=itertools.islice):
+		"""
+		# Update the &whence of the phrases identified by &area.
+		# The seek is performed relative to the beginning of the phrase.
+		"""
+
+		wcopy = self.whence[area]
+		ipairs = zip(wcopy, islice(self.image, area.start, area.stop))
+		self.whence[area] = (
+			ph.seek((0, 0), offset, *ph.m_cell)
+			for w, ph in ipairs
+		)
 
 	def prefix(self, phrases):
 		"""
@@ -852,7 +872,11 @@ class View(object):
 		self.image[0:0] = phrases
 		self.whence[0:0] = [((0, 0), 0) for x in range(len(phrases))]
 		self.offset -= count
-		return slice(0, len(phrases))
+
+		area = slice(0, len(phrases))
+		if self.horizontal_offset:
+			self.pan_absolute(area, self.horizontal_offset)
+		return area
 
 	def suffix(self, phrases):
 		"""
@@ -867,7 +891,11 @@ class View(object):
 		il = len(self.image)
 		self.image.extend(phrases)
 		self.whence.extend([((0, 0), 0)] * count)
-		return slice(il, il + count)
+
+		area = slice(il, il + count)
+		if self.horizontal_offset:
+			self.pan_absolute(area, self.horizontal_offset)
+		return area
 
 	def delete(self, index, count):
 		"""
@@ -881,6 +909,7 @@ class View(object):
 		isize = len(self.image)
 		del self.image[index:stop]
 		del self.whence[index:stop]
+
 		return slice(index, stop)
 
 	def insert(self, index, count):
@@ -893,4 +922,8 @@ class View(object):
 
 		self.image[index:index] = [self.Empty] * count
 		self.whence[index:index] = [((0, 0), 0)] * count
-		return slice(index, index + count)
+
+		area = slice(index, index + count)
+		if self.horizontal_offset:
+			self.pan_absolute(area, self.horizontal_offset)
+		return area

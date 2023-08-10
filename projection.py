@@ -140,6 +140,15 @@ def update(rf, view, changes, *,
 	# to render a new image.
 	"""
 
+	dvh = rf.visibility[1].datum
+	if view.horizontal_offset != dvh:
+		# Full refresh for horizontal scrolls. Panning being
+		# irregular, leave suboptimal for the moment.
+		view.pan_relative(slice(0, None), dvh - view.horizontal_offset)
+		view.horizontal_offset = dvh
+		yield from refresh(rf, view, rf.visible[0])
+		return
+
 	# Future state; view.offset is current.
 	visible = view.display.height
 	start_of_view = rf.visible[0]

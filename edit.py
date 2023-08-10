@@ -620,8 +620,10 @@ class Session(object):
 		# Iterable of reset sequences that clears the cursor position.
 		"""
 
+		ctx = view.display
 		rx, ry = self.screen.point
-		vx, vy = view.display.point
+		vx, vy = ctx.point
+		hoffset = view.horizontal_offset
 
 		v, h = focus.focus
 		ln = focus.focus[0].get()
@@ -630,31 +632,44 @@ class Session(object):
 		except IndexError:
 			line = ""
 		top, left = focus.visible
-		edge = view.display.height
+		hedge, edge = ctx.dimensions
 
 		# Redraw cursor line.
 		rln = ln - top
-		ph = focus.render(line)
+		if rln >= 0 and rln < edge:
+			whole = view.image[rln]
+			w = view.whence[rln]
+		else:
+			# Still need translations for scale_ipositions,
+			# render off screen line as well.
+			whole = focus.render(line)
+			w = whole.seek((0, 0), hoffset, *whole.m_cell)
+		m_cell = whole.m_cell
+		m_cp = whole.m_codepoint
+		ph = whole.__class__(view.display.view(whole, *w, hedge))
+
 		rlns = slice(rln, rln+1)
 
 		hs = h.snapshot()
-		c = list(cursor.prepare_line_updates(self.keyboard.mapping, ph, hs))
+		hcp = whole.tell(w[0], *m_cp)
+		rhs = tuple(x-hcp for x in hs)
+		c = list(cursor.prepare_line_updates(self.keyboard.mapping, ph, rhs))
 		if rln >= 0 and rln < edge:
-			cset, crst = cursor.r_cursor(view.display, rln, c)
+			cset, crst = cursor.r_cursor(ctx, rln, c)
 			self.send(*cset)
 		else:
 			crst = []
 
-		# Undesirable means of getting the translated offsets,
-		# but avoid redundant Phrase.tell's or caching by
-		# reaching into the prepared cursor's HPI records to
-		# get the absolute offsets.
-		hc = [x[0] for x in c[1:-1]]
+		# Translate codepoint offsets to cell offsets.
+		hc = [
+			whole.tell(whole.seek((0, 0), x, *m_cp)[0], *m_cell)
+			for x in hs
+		]
 		si = list(self.frame.scale_ipositions(
 			self.frame.indicate,
 			(vx - rx, vy - ry),
 			view.display.dimensions,
-			(hc[0], hc[2], hc[1]),
+			hc,
 			v.snapshot(),
 			focus.visible[1],
 			focus.visible[0],
@@ -754,7 +769,8 @@ class Session(object):
 			# Extend the delta so cursor resets are applied
 			# before any scrolling is performed.
 			current = rf.log.snapshot()
-			if current != view.version or rf.visible[0] != view.offset:
+			voffsets = (view.offset, view.horizontal_offset)
+			if current != view.version or rf.visible != voffsets:
 				drecords = rf.log.since(view.version)
 				self.defer(projection.update(rf, view, drecords))
 				view.version = current
