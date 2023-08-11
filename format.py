@@ -258,10 +258,10 @@ def control(theme, ftype, field):
 		return Redirect((n, display, rp, field))
 
 constants = {
-	# Display Field Separator control character as a caret.
+	# Display Unit Separator control character as a caret.
 	0x1c: Redirect((1, '\u2038', RenderParameters.default.update(
 		palette.colors['gray'],
-	), "\x1c"))
+	), "\x1f"))
 }
 obstruction = RenderParameters.default.update(
 	palette.colors['absolute-blue'],

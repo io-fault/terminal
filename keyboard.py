@@ -204,8 +204,8 @@ ca(ctl('v'), 'delta', ('indentation', 'zero'))
 ea(ctl('i'), 'delta', ('indentation', 'increment'))
 ea(ctl('i', shift), 'delta', ('indentation', 'decrement'))
 
-ea(ctl(' ', ctlm), 'delta', ('insert', 'string',), ("\x1c",))
-ca(ctl(' ', ctlm), 'navigation', ('horizontal', 'jump', 'string',), ("\x1c",))
+ea(ctl(' ', ctlm), 'delta', ('insert', 'string',), ("\x1f",))
+ca(ctl(' ', ctlm), 'navigation', ('horizontal', 'jump', 'string',), ("\x1f",))
 
 ea(ctl('?'), 'delta', ('delete', 'unit', 'former'))
 ea(ctl('h'), 'delta', ('delete', 'unit', 'former'))
