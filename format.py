@@ -259,7 +259,7 @@ def control(theme, ftype, field):
 
 constants = {
 	# Display Unit Separator control character as a caret.
-	0x1c: Redirect((1, '\u2038', RenderParameters.default.update(
+	0x1f: Redirect((1, '\u2038', RenderParameters.default.update(
 		palette.colors['gray'],
 	), "\x1f"))
 }
