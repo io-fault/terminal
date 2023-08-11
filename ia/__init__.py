@@ -15,7 +15,3 @@ def sections():
 		transaction.Index,
 		meta.Index,
 	]
-
-@functools.lru_cache(32)
-def find(category, path):
-	return ias[category].select(path)
