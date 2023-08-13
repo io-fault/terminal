@@ -16,7 +16,7 @@ Empty = Phrase([Unit((1, ' ', RenderParameters.default))])
 
 def mode_config(style, mode, relation):
 	if mode == 'insert':
-		return style.apply('underline', textcolor=relation, cellcolor=-1024)
+		return style.apply('underline', textcolor=relation)
 	else:
 		return style.apply(textcolor=palette.theme['cursor-text'], cellcolor=relation)
 
@@ -216,6 +216,7 @@ def prepare_line_updates(mode, visible:Phrase, horizontal,
 
 	# Set Cursor Positions, using &rline to respect changes made by &select_hri
 	rline = Phrase(prefix + rrange + suffix)
+
 	cp = [(i, y, 1) for i, y in zip(names, (hs[0], hs[2], hs[1])) if y >= 0]
 	hp = tuple(collect_horizontal_positions(rline, [t[1:] for t in cp]))
 
