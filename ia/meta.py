@@ -13,6 +13,20 @@ def operation_not_found(session, rf, event):
 	"""
 	pass
 
+@event('terminal', 'focus', 'acquire')
+def application_focused(session, rf, event):
+	"""
+	# Received explicit focus in event.
+	"""
+	pass
+
+@event('terminal', 'focus', 'release')
+def application_switched(session, rf, event):
+	"""
+	# Received explicit focus out event.
+	"""
+	pass
+
 @event('transition', 'capture', 'replace')
 def transition_capture_replace(session, rf, event):
 	"""

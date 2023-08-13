@@ -326,7 +326,7 @@ class Selection(object):
 		# Route the event to the target given the current processing state.
 		"""
 
-		if event.type in {'mouse', 'scroll', 'data', 'paste'}:
+		if event.type in {'focus', 'mouse', 'scroll', 'data', 'paste'}:
 			if event.type == 'mouse':
 				point, key_id, delay = event.identity
 				return (None, ('navigation', ('select', 'absolute'), ()))
@@ -354,6 +354,11 @@ class Selection(object):
 					return op
 				else:
 					assert False # Unknown paste event.
+			elif event.type == 'focus':
+				if event.identity == 'in':
+					return (None, ('meta', ('terminal', 'focus', 'acquire'), ()))
+				elif event.identity == 'out':
+					return (None, ('meta', ('terminal', 'focus', 'release'), ()))
 
 		mapping, operation = self.event(event)
 		if operation is None:
