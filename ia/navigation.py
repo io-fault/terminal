@@ -272,8 +272,13 @@ def span_line(session, rf, event):
 	"""
 	# Alter the horizontal range to be the length of the current vertical index.
 	"""
+
 	ln = rf.focus[0].get()
-	line = rf.elements[ln]
+	try:
+		line = rf.elements[ln]
+	except IndexError:
+		line = ""
+
 	i = 0
 	for i, x in enumerate(line):
 		if x != '\t':
