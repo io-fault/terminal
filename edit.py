@@ -105,6 +105,7 @@ class Session(object):
 
 		self.frame = frame.Model(self.screen)
 		self.theme = format.integrate(self.screen, format.theme)
+		self.theme['reset'] = format.RenderParameters.default
 
 	def lookup_type(self, resource:files.Path):
 		"""
@@ -520,7 +521,7 @@ class Session(object):
 
 		header = self.headings[self.index[dpath]]
 
-		lrender = location.type(reference.ref_context, header.display)[-1]
+		lrender = location.type(self.theme, reference.ref_context, header.display)[-1]
 		header.truncate()
 		header.offset = 0
 		header.version = snapshot
@@ -595,7 +596,7 @@ class Session(object):
 		# Update session state.
 		view = self.headings[vi]
 		self.focus, self.view = (
-			location.refract(view, ref.ref_context, ref.ref_path, location.open),
+			location.refract(self.theme, view, ref.ref_context, ref.ref_path, location.open),
 			view,
 		)
 

@@ -152,6 +152,33 @@ theme = {
 	'indentation': 'terminal-default', # Indentation (tabs) with following line content.
 	'indentation-only': 'background-adjacent', # Indentation (tabs) without line content.
 	'trailing-whitespace': 'absolute-red',
+
+	'field-annotation-start': 'absolute-blue',
+	'field-annotation-title': 'absolute-green',
+	'field-annotation-stop': 'absolute-blue',
+	'field-annotation-separator': 'terminal-default',
+
+	'filesystem-root': 'orange',
+	'warning': 'yellow',
+
+	'directory': 'blue',
+	'relatives': 'blue',
+	'executable': 'green',
+	'data': 'white',
+
+	'dot-file': 'gray',
+	'file-not-found': 'absolute-red',
+	'void': 'absolute-red',
+
+	'link': 'violet',
+	'device': 'orange',
+	'socket': 'orange',
+	'pipe': 'orange',
+
+	'path-separator': 'background-adjacent',
+	'path-directory': 'gray',
+	'path-link': 'violet',
+	'path-empty': 'terminal-default',
 }
 
 def qualify(tokens, context='inclusion'):
@@ -295,6 +322,10 @@ def compose(context, theme, sline, *,
 		chain=itertools.chain,
 		islice=itertools.islice,
 	):
+	"""
+	# Construct a Phrase instance representing the structured line.
+	"""
+
 	return context.Phrase(
 		chain(
 			map(partial(control, theme, sline[0][0]), sline[0][1]),
