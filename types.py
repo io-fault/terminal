@@ -594,23 +594,27 @@ class Refraction(object):
 		# Constrain the focus and apply margin scrolls.
 		"""
 
+		total = len(self.elements)
+
+		# Constrain vertical and identify indentation level (bol).
 		try:
-			total = len(self.elements)
 			line = self.elements[ln]
-			ll = len(line)
 		except IndexError:
 			line = ""
 			ll = 0
 			bol = 0
-			if ln >= total:
+			if ln >= total or ln < 0:
 				# Constrain vertical; may be zero.
 				self.focus[0].set(total)
 		else:
+			ll = len(line)
 			bol = lil(line)
 
+		# Constrain cursor.
 		h = self.focus[1]
 		h.datum = max(bol, h.datum)
-		h.set(min(len(line), max(bol, h.get())))
+		h.magnitude = min(ll, h.magnitude)
+		h.set(min(ll, max(bol, h.get())))
 		assert h.get() >= 0 and h.get() <= ll
 
 		# Margin scrolling.
@@ -637,20 +641,27 @@ class Refraction(object):
 
 	del Whitespace
 
+	def field_areas(self, element):
+		"""
+		# Get the slices of the structured &element.
+		"""
+
+		areas = []
+		offset = 0
+		for typ, segment in element:
+			s = slice(offset, offset + len(segment))
+			areas.append(s)
+			offset = s.stop
+
+		return areas
+
 	def fields(self, element:int):
 		"""
 		# Get the slices of the structured element.
 		"""
 
 		fs = self.structure(self.elements[element])
-		areas = []
-		offset = 0
-		for typ, segment in fs:
-			s = slice(offset, offset + len(segment))
-			areas.append(s)
-			offset = s.stop
-
-		return areas, fs
+		return self.field_areas(fs), fs
 
 	def field_index(self, areas, offset):
 		for i, s in enumerate(areas):
@@ -663,7 +674,7 @@ class Refraction(object):
 		i -= 1
 		return i
 
-	def field(self, quantity):
+	def field_select(self, quantity):
 		hstart, h, hstop = self.focus[1].snapshot()
 		if h >= hstart and h <= hstop:
 			if quantity < 0:
@@ -709,7 +720,10 @@ class Refraction(object):
 			fi = -1
 
 		t = areas[fi]
-		return t
+		return fi, t
+
+	def field(self, quantity):
+		return self.field_select(quantity)[1]
 
 	def unit(self, quantity):
 		# Find the current position.
