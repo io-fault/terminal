@@ -137,6 +137,10 @@ if True:
 	ca(ctl('m'), 'navigation', ('activate',))
 	ea(ctl('m'), 'navigation', ('activate',))
 
+if 'annotations':
+	ea(ctl('g'), 'delta', ('insert', 'annotation'))
+	ea(ctl('f'), 'meta', ('query',))
+
 ca(lit('f'), 'navigation', ('horizontal', 'forward'))
 ca(lit('d'), 'navigation', ('horizontal', 'backward'))
 ca(lit('F'), 'navigation', ('horizontal', 'stop'))
@@ -216,7 +220,6 @@ ea(ctl('k'), 'delta', ('delete', 'following'))
 
 ea(ctl('w'), 'delta', ('delete', 'backward', 'adjacent', 'class'))
 ea(ctl('t'), 'delta', ('delete', 'forward', 'adjacent', 'class'))
-
 
 del ea, ca, nav, ctl, lit, shift, kmeta
 
@@ -301,6 +304,12 @@ class Selection(object):
 		self.last = self.current
 		self.current = (name, self.index[name])
 		return self.current
+
+	def mode(self, name):
+		"""
+		# Whether the given mode, &name, is currently active.
+		"""
+		return self.current[0] == name
 
 	def qualify(self, qid):
 		"""

@@ -2,6 +2,7 @@
 # Data structures for supporting the manipulation of text in an &.edit.Session instance.
 """
 import itertools
+from typing import Optional, Protocol
 
 from dataclasses import dataclass
 from fault.context import tools
@@ -11,6 +12,41 @@ from collections.abc import Sequence
 from collections.abc import Mapping
 
 from . import alignment
+
+class Annotation(Protocol):
+	"""
+	# Interface for cursor annotation status displays conveying additional
+	# information regarding an identified subject with respect to some
+	# connected information context.
+	"""
+
+	def close(self):
+		"""
+		# Signal end of use.
+		"""
+
+	def update(self, refraction):
+		"""
+		# Adjust the annotation to accommodate for &refraction state changes.
+		"""
+
+	def rotate(self, quantity=1):
+		"""
+		# Cycle through the list of representations to be displayed.
+		"""
+
+	def insertion(self) -> str:
+		"""
+		# Get the &str that should be inserted if a capture operation were performed.
+		# Primarily for completion, but applicable to other annotations.
+		"""
+
+	def image(self) -> object:
+		"""
+		# Get the primary structured fields representing the state of the annotation.
+		# Usually this contains the &insertion in part or whole, but is always
+		# implementation dependent.
+		"""
 
 class Position(object):
 	"""
@@ -379,6 +415,8 @@ class Refraction(object):
 	# /format/
 		# The structured line processor formatting the fields
 		# into a &matrix.Context.Phrase.
+	# /annotation/
+		# Field annotation state.
 	# /elements/
 		# The contents of the connected resource.
 		# The sequence of lines being refracted.
@@ -402,6 +440,7 @@ class Refraction(object):
 	structure: object
 	format: object
 	render: object
+	annotation: Optional[Annotation]
 	elements: Sequence[object]
 	log: object
 	focus: Sequence[object]
@@ -442,6 +481,7 @@ class Refraction(object):
 		self.structure = structure
 		self.format = format
 		self.render = render
+		self.annotation = None
 
 		# State. Document elements, cursor, and camera.
 		self.elements = elements
@@ -759,6 +799,7 @@ class View(object):
 		# The identifier of the element that is first seen in &image. (where)
 	"""
 
+	# Placeholder insertion used to compensate for image changes.
 	Empty = matrix.Context.Phrase([
 		matrix.Context.Words((0, "", matrix.Context.RenderParameters(
 			(matrix.Context.Traits(0), -1024, -1024, -1024)
@@ -818,6 +859,26 @@ class View(object):
 		assert len(self.whence) == self.display.height
 		yield from self.render(slice(start, len(self.image)))
 
+	def renderline(self, offset, phrase):
+		"""
+		# Sequence the necessary display instructions for rendering
+		# a single line.
+		"""
+
+		context = self.display
+		limit = context.width
+		rtx = context.reset_text()
+
+		yield rtx
+		yield context.seek((0, offset))
+		yield from context.render(phrase)
+
+		# Erase to margin.
+		void_cells = context.width - phrase.cellcount()
+		if void_cells > 0:
+			yield context.erase(void_cells)
+		yield rtx
+
 	def render(self, area):
 		"""
 		# Sequence the necessary display instructions for rendering
@@ -836,7 +897,9 @@ class View(object):
 			yield from context.render(context.view(phrase, *w, limit))
 			visible = max(0, phrase.cellcount() - hoffset)
 			void_cells = limit - visible
-			yield context.erase(max(0, void_cells)) + rtx
+			if void_cells > 0:
+				yield context.erase(void_cells)
+			yield rtx
 			voffset += 1
 
 	def vertical(self, rf):

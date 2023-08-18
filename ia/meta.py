@@ -27,6 +27,21 @@ def application_switched(session, rf, event):
 	"""
 	pass
 
+@event('query')
+def directory_annotation_request(session, rf, event):
+	"""
+	# Construct and display the default directory annotation
+	# for the Refraction's syntax type or &.types.Annotation.rotate
+	# the selection if an annotation is already present.
+	"""
+
+	q = rf.annotation
+	if q is not None:
+		q.rotate()
+	else:
+		# Configure annotation based on syntax type.
+		pass
+
 @event('transition', 'capture', 'replace')
 def transition_capture_replace(session, rf, event):
 	"""

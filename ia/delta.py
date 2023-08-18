@@ -693,3 +693,19 @@ def paste_before_line(session, rf, event):
 	"""
 	ln = rf.focus[0].get()
 	insert_lines(rf, ln, session.cache)
+
+@event('insert', 'annotation')
+def insert_annotation(session, rf, event):
+	"""
+	# Apply the &rf.annotation.insertion as an insert at the cursor location.
+	"""
+
+	cq = rf.annotation
+	if cq is None:
+		return
+
+	string = cq.insertion()
+
+	v, h = (x.get() for x in rf.focus)
+	insert(rf, v, h, string)
+	rf.focus[1].changed(h, len(string))

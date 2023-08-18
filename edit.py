@@ -26,6 +26,7 @@ from . import cursor
 from . import frame
 from . import location
 from . import projection
+from . import annotations
 
 def fkrt(inv:process.Invocation) -> process.Exit:
 	"""
@@ -545,7 +546,10 @@ class Session(object):
 
 		self.refocus()
 		if rf is self.focus:
-			# Nothing to cancel.
+			# Not a location or command; check annotation.
+			if rf.annotation is not None:
+				rf.annotation.close()
+				rf.annotation = None
 			return
 
 		# Restore location.
@@ -600,6 +604,12 @@ class Session(object):
 			view,
 		)
 
+		self.focus.annotation = annotations.Filesystem('open',
+			self.focus.structure,
+			self.focus.elements,
+			*self.focus.focus
+		)
+
 	def rewrite(self, dpath):
 		"""
 		# Adjust the location of the division identified by &dpath and
@@ -612,13 +622,25 @@ class Session(object):
 		# Update session state.
 		view = self.headings[vi]
 		self.focus, self.view = (
-			location.refract(view, ref.ref_context, ref.ref_path, location.save),
+			location.refract(self.theme, view, ref.ref_context, ref.ref_path, location.save),
 			view,
+		)
+
+		self.focus.annotation = annotations.Filesystem('save',
+			self.focus.structure,
+			self.focus.elements,
+			*self.focus.focus
 		)
 
 	def indicate(self, focus, view):
 		"""
 		# Render the (cursor) status indicators.
+
+		# [ Parameters ]
+		# /focus/
+			# The &types.Refraction whose position indicators are being drawn.
+		# /view/
+			# The &types.View connected to the refraction.
 
 		# [ Returns ]
 		# Iterable of reset sequences that clears the cursor position.
@@ -628,35 +650,53 @@ class Session(object):
 		rx, ry = self.screen.point
 		vx, vy = ctx.point
 		hoffset = view.horizontal_offset
+		top, left = focus.visible
+		hedge, edge = ctx.dimensions
 
+		# Get the cursor line.
 		v, h = focus.focus
 		ln = focus.focus[0].get()
 		try:
 			line = focus.elements[ln]
 		except IndexError:
 			line = ""
-		top, left = focus.visible
-		hedge, edge = ctx.dimensions
 
-		# Redraw cursor line.
+		# Render cursor line.
+		erase = 0
 		rln = ln - top
+		fai = focus.annotation
+		real = None
 		if rln >= 0 and rln < edge:
+			# Use cached version in image if available.
 			whole = view.image[rln]
 			w = view.whence[rln]
+			if fai is not None:
+				# Overwrite, but get the cell count of the un-annotated form first.
+				real = whole.cellcount()
+				lfields = focus.structure(line)
+				fai.update(line, lfields)
+				afields = annotations.extend(fai, lfields)
+				whole = focus.format(list(afields))
+				w = whole.seek((0, 0), hoffset, *whole.m_cell)
 		else:
 			# Still need translations for scale_ipositions,
 			# render off screen line as well.
+			fai = None
 			whole = focus.render(line)
 			w = whole.seek((0, 0), hoffset, *whole.m_cell)
+
 		m_cell = whole.m_cell
 		m_cp = whole.m_codepoint
-		ph = whole.__class__(view.display.view(whole, *w, hedge))
-
-		rlns = slice(rln, rln+1)
-
 		hs = h.snapshot()
+
 		hcp = whole.tell(w[0], *m_cp)
 		rhs = tuple(x-hcp for x in hs)
+
+		ph = whole.__class__(ctx.view(whole, *w, hedge))
+		if fai is not None:
+			# Update annotation.
+			self.send(*view.renderline(rln, ph))
+
 		c = list(cursor.prepare_line_updates(self.keyboard.mapping, ph, rhs))
 		if rln >= 0 and rln < edge:
 			cset, crst = cursor.r_cursor(ctx, rln, c)
@@ -672,7 +712,7 @@ class Session(object):
 		si = list(self.frame.scale_ipositions(
 			self.frame.indicate,
 			(vx - rx, vy - ry),
-			view.display.dimensions,
+			ctx.dimensions,
 			hc,
 			v.snapshot(),
 			focus.visible[1],
@@ -681,6 +721,11 @@ class Session(object):
 		s, r = self.frame.r_indicators(si, rtypes=view.edges)
 		self.send(s)
 		self.send(self.screen.reset_text())
+
+		if real is not None:
+			# Only when an annotation is present.
+			rvisible = max(0, real - hoffset)
+			crst.append(ctx.seek((rvisible, rln)) + ctx.erase(hedge - rvisible))
 
 		return [r] + crst
 
@@ -799,7 +844,7 @@ introduction = [
 	"sy, a character matrix based syntax editor",
 ]
 
-def initialize(editor, options, sources, *, root=files.root):
+def initialize(editor, options, sources):
 	"""
 	# Apply configuration &options and load initial &sources for the &editor &Session.
 	"""
@@ -807,7 +852,7 @@ def initialize(editor, options, sources, *, root=files.root):
 	if options['working-directory'] is None:
 		wd = options['working-directory'] = process.fs_pwd()
 	else:
-		wd = options['working-directory'] = root@options['working-directory']
+		wd = options['working-directory'] = files.root@options['working-directory']
 		process.fs_chdir(wd)
 
 	def klog(*lines, depth=[0], elog=editor.log):
