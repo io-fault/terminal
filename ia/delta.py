@@ -676,7 +676,7 @@ def cut(session, rf, event):
 	# Copy and truncate the focus range.
 	"""
 	copy(session, rf, event)
-	truncate_vertical_range(session, rf, event)
+	delete_element_v(session, rf, event)
 
 @event('paste', 'after')
 def paste_after_line(session, rf, event):
