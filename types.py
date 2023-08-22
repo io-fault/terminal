@@ -460,6 +460,17 @@ class Refraction(object):
 				return ""
 		return d or ""
 
+	def annotate(self, annotation):
+		"""
+		# Assign the given &annotation to the refraction after closing
+		# and deleting any currently configured annotation.
+		"""
+
+		if self.annotation is not None:
+			self.annotation.close()
+
+		self.annotation = annotation
+
 	def retype(self, type, structure, format, render):
 		"""
 		# Reconstruct &self with a new syntax type.

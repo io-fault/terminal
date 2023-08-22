@@ -68,10 +68,12 @@ def nav(x, mods=0):
 # Modes
 control = Mode(('navigation', ('horizontal', 'jump', 'unit'), ()))
 insert = Mode(('delta', ('insert', 'character'), ()))
+annotations = Mode(('meta', ('transition', 'annotation', 'void'), ()))
 
 # Shorthands
 ca = control.assign
 ea = insert.assign
+aa = annotations.assign
 
 ca(lit('j', meta), 'navigation', ('view', 'next', 'refraction'))
 ca(lit('k', meta), 'navigation', ('view', 'previous', 'refraction'))
@@ -97,7 +99,7 @@ ca(ctl('m', ctlm), 'meta', ('view', 'refresh'))
 ca(ctl('r'), 'navigation', ('session', 'rewrite', 'elements'))
 ca(lit('r', ctlm), 'navigation', ('session', 'rewrite', 'elements'))
 
-if True:
+if 'insert-transitions':
 	ca(lit('O'), 'delta', ('open', 'behind'))
 	ca(lit('o'), 'delta', ('open', 'ahead'))
 
@@ -114,23 +116,20 @@ if True:
 	# Distribution of commands across the vertical range.
 	ca(lit('y'), 'meta', ('select', 'distributed', 'operation'))
 
-# Transaction management.
-if True:
+if 'transactions-management':
 	ea(ctl('c'), 'transaction', ('abort',)) # Default SIGINT.
 	ea(ctl('d'), 'transaction', ('commit',)) # Default EOF.
 	ca(lit('u'), 'transaction', ('undo',))
 	ca(lit('U'), 'transaction', ('redo',))
 
-# Cache operations.
-if True:
+if 'cache-operations':
 	ca(lit('c', meta), 'delta', ('copy',))
 	ca(lit('c', shiftmeta), 'delta', ('cut',))
 	ca(lit('ξ'), 'delta', ('cut',))
 	ca(lit('p'), 'delta', ('paste', 'after',))
 	ca(lit('P'), 'delta', ('paste', 'before',))
 
-# Return/Enter binding.
-if True:
+if 'activations':
 	# Refractions need to respond differently here, so a generic term is used.
 	# Notably, the location area needs to perform an open or switch operation
 	# when return is pressed regardless of the mode.
@@ -140,6 +139,15 @@ if True:
 if 'annotations':
 	ea(ctl('g'), 'delta', ('insert', 'annotation'))
 	ea(ctl('f'), 'meta', ('query',))
+	ca(lit('v'), 'meta', ('transition', 'annotations', 'select'))
+	ca(lit('V'), 'meta', ('annotation', 'rotate'))
+	aa(lit('s'), 'meta', ('status',))
+	aa(lit('c'), 'meta', ('integer', 'color', 'swatch'))
+	aa(lit('x'), 'meta', ('integer', 'select', 'hexadecimal'))
+	aa(lit('o'), 'meta', ('integer', 'select', 'octal'))
+	aa(lit('b'), 'meta', ('integer', 'select', 'binary'))
+	aa(lit('d'), 'meta', ('integer', 'select', 'decimal'))
+	aa(lit('8'), 'meta', ('codepoint', 'select', 'utf-8'))
 
 ca(lit('f'), 'navigation', ('horizontal', 'forward'))
 ca(lit('d'), 'navigation', ('horizontal', 'backward'))
@@ -226,6 +234,7 @@ del ea, ca, nav, ctl, lit, shift, kmeta
 standard = {
 	'control': control,
 	'insert': insert,
+	'annotations': annotations,
 	'capture-insert': Mode(('delta', ('insert', 'capture'), ())),
 	'capture-replace': Mode(('delta', ('replace', 'capture'), ())),
 }
