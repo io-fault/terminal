@@ -146,6 +146,7 @@ theme = {
 	'inclusion-operation': 'terminal-default',
 	'inclusion-space': 'terminal-default',
 
+	'error-condition': 'absolute-red',
 	'cell': 'terminal-default', # (terminal) default cell color
 	'border': 'application-border',
 
@@ -154,7 +155,7 @@ theme = {
 	'trailing-whitespace': 'absolute-red',
 
 	'field-annotation-start': 'absolute-blue',
-	'field-annotation-title': 'absolute-green',
+	'field-annotation-title': 'green',
 	'field-annotation-stop': 'absolute-blue',
 	'field-annotation-separator': 'terminal-default',
 
@@ -321,16 +322,18 @@ def compose(context, theme, sline, *,
 		partial=functools.partial,
 		chain=itertools.chain,
 		islice=itertools.islice,
+		map=map,
 	):
 	"""
 	# Construct a Phrase instance representing the structured line.
 	"""
 
+	tg = theme.get
 	return context.Phrase(
 		chain(
 			map(partial(control, theme, sline[0][0]), sline[0][1]),
 			redirects(context.Phrase.segment(
-				(theme[ft], segmentation(field))
+				(tg(ft, ft), segmentation(field))
 				for ft, field in islice(sline, 1, len(sline)-1)
 			)),
 			map(partial(control, theme, sline[-1][0]), sline[-1][1]),
