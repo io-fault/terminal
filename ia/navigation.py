@@ -90,6 +90,14 @@ def s_cancel(session, rf, event):
 
 	session.cancel()
 
+@event('view', 'return')
+def s_returnview(session, rf, event, *, quantity=1):
+	"""
+	# Swap the refraction selecting the previously viewed resource.
+	"""
+
+	session.returnview((session.vertical, session.division))
+
 @event('horizontal', 'forward')
 def h_forward(session, rf, event, *, quantity=1):
 	"""

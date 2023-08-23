@@ -96,6 +96,7 @@ ca(lit('N'), 'navigation', ('find', 'previous'))
 ca(lit('r'), 'meta', ('transition', 'capture', 'replace'))
 ea(ctl('v'), 'meta', ('transition', 'capture', 'insert'))
 ca(ctl('m', ctlm), 'meta', ('view', 'refresh'))
+ca(ctl('m', shift), 'navigation', ('view', 'return'))
 ca(ctl('r'), 'navigation', ('session', 'rewrite', 'elements'))
 ca(lit('r', ctlm), 'navigation', ('session', 'rewrite', 'elements'))
 

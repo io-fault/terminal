@@ -75,6 +75,7 @@ class Session(object):
 		self.screen = terminal
 		self.placement = (position, dimensions)
 		self.refractions = []
+		self.returns = []
 		self.views = []
 		self.deltas = []
 		self._reflections = {}
@@ -272,6 +273,7 @@ class Session(object):
 
 		vi = self.index[dpath]
 		current = self.refractions[vi]
+		self.returns[vi] = current
 		view = self.views[vi]
 		self._reflections[current.origin.ref_path].discard((current, view))
 
@@ -285,13 +287,15 @@ class Session(object):
 
 		# Configure and refresh.
 		refraction.configure(view.display.dimensions)
+		view.offset = refraction.visible[0]
+		view.horizontal_offset = refraction.visible[1]
 		view.version = refraction.log.snapshot()
 		view.update(slice(0, None), [
 			refraction.render(ln)
 			for ln in refraction.elements[view.vertical(refraction)]
 		])
-		self.send(*view.render(slice(0, None)))
-		self.send(*view.compensate())
+		self.defer(view.render(slice(0, None)))
+		self.defer(view.compensate())
 
 	def suspend(self, link=None):
 		"""
@@ -430,12 +434,28 @@ class Session(object):
 		self.remodel()
 		self.defer(self.renderframe())
 
+	def returnview(self, dpath):
+		"""
+		# Switch the Refraction selected at &dpath with the one stored in &returns.
+		"""
+
+		previous = self.returns[self.index[dpath]]
+		if previous is not None:
+			self.attach(dpath, previous)
+			self.defer(self.chpath(dpath, previous.origin))
+
 	def fill(self, refractions):
 		"""
 		# Fill the views with the given &refractions overwriting any.
 		"""
 
 		self.refractions[:] = refractions
+
+		# Align returns size.
+		n = len(self.refractions)
+		self.returns[:] = self.returns[:n]
+		if len(self.returns) < n:
+			self.returns.extend([None] * (n - len(self.returns)))
 
 		for ((v, d), rf, view) in zip(self.panes, self.refractions, self.views):
 			rf.configure(view.display.dimensions)
