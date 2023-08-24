@@ -107,7 +107,8 @@ class Session(object):
 
 		self.frame = frame.Model(self.screen)
 		self.theme = format.integrate(self.screen, format.theme)
-		self.theme['reset'] = format.RenderParameters.default
+		rp = self.theme['reset'] = format.RenderParameters.default
+		self.theme['title'] = rp.apply('bold')
 
 	def lookup_type(self, resource:files.Path):
 		"""

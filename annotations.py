@@ -185,7 +185,7 @@ class Status(object):
 		pass
 
 	def image(self):
-		yield ('inclusion-identifier', self.mode)
+		yield ('title', self.mode)
 		l, o = self.position
 		yield ('inclusion-space', ' ')
 		yield ('inclusion-identifier', f"L{l+1}.{o}")
