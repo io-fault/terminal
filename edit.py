@@ -61,9 +61,22 @@ class Session(object):
 		# Resource path to views associated with their refraction.
 	"""
 
+	typepath: Sequence[files.Path]
+	executable: files.Path
+
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	resources: Mapping[files.Path, sequence.Segments]
 	types: Mapping[files.Path, tuple[object, object]]
+
+	# Frame Status
+	focus: types.Refraction
+	view: types.View
+	vertical: int
+	division: int
+
+	# View connections and their last working refractions(returns).
+	refractions: Sequence[types.Refraction]
+	returns: Sequence[types.Refraction|None]
 
 	def __init__(self, executable, terminal, position=(0,0), dimensions=None):
 		self.vertical = 0
@@ -830,14 +843,21 @@ class Session(object):
 			del derror
 
 	def cycle(self):
-		# Execute deferred display instructions
-		# and render the new position indicators.
+		"""
+		# Tranmit deferred instructions, indicate cursor position,
+		# process user events, and prepare differential updates.
+		"""
+
+		# Execute deferred display instructions; cursor reset.
 		self.drain()
+
+		# Indicate directly transmits cursor set instructions and
+		# returns cursor reset instructions for defer.
 		self.defer(self.indicate(self.focus, self.view))
 
 		for (rf, view) in self.io(self._read(512)):
-			# Extend the delta so cursor resets are applied
-			# before any scrolling is performed.
+			# Process events in &io and defer differential updates
+			# to avoid writing on the cursor overlay.
 			current = rf.log.snapshot()
 			voffsets = [view.offset, view.horizontal_offset]
 			if current != view.version or rf.visible != voffsets:
