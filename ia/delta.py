@@ -1,5 +1,9 @@
 """
 # Manipulation instructions for modifying a resource's elements.
+
+# [ Engineering ]
+# The functions implementing deltas and applying the log should be integrated
+# into Refractions or a delegated interface.
 """
 import itertools
 
@@ -117,6 +121,7 @@ def delete_lines(rf, lo, count):
 	"""
 	# Remove &count lines from &rf starting at &lo.
 	"""
+
 	lines = rf.elements[lo:lo+count]
 	rf.delta(lo, -len(lines))
 
@@ -131,12 +136,42 @@ def insert_lines(rf, lo, lines):
 	"""
 	# Remove &count lines from &rf starting at &lo.
 	"""
+
 	rf.delta(lo, len(lines))
 
 	(rf.log
 		.write(Lines(lo, lines, []))
 		.apply(rf.elements)
 		.commit())
+
+def insert_lines_into(rf, ln, offset, lines):
+	"""
+	# Insert the given &lines at the &offset in the line identified by &ln.
+
+	# [ Returns ]
+	# # Change in line count at &ln.
+	# # Change (codepoint length) in characters at &offset.
+	"""
+
+	try:
+		line = rf.elements[ln]
+	except IndexError:
+		line = ""
+
+	prefix = line[:offset]
+	suffix = line[offset:]
+	lines[0] = prefix + lines[0]
+	lines[-1] = lines[-1] + suffix
+
+	rf.delta(ln+1, len(lines) - 1)
+
+	(rf.log
+		.write(Lines(ln, [], [line]))
+		.write(Lines(ln, lines, []))
+		.apply(rf.elements)
+		.commit())
+
+	return len(lines) - 1, len(lines[-1]) - len(suffix) - offset
 
 def move(rf, lo, start, stop):
 	"""
@@ -650,6 +685,7 @@ def split_line_at_cursor(session, rf, event):
 	"""
 	# Create a new line splitting the current line at the horizontal position.
 	"""
+
 	ln = rf.focus[0].get()
 	offset = rf.focus[1].get()
 	split(rf, ln, offset)
@@ -659,6 +695,7 @@ def join_line_with_following(session, rf, event, quantity=1):
 	"""
 	# Join the current line with the following.
 	"""
+
 	ln = rf.focus[0].get()
 	join(rf, ln, quantity)
 
@@ -667,6 +704,7 @@ def copy(session, rf, event):
 	"""
 	# Copy the vertical range to the session cache entry.
 	"""
+
 	start, position, stop = rf.focus[0].snapshot()
 	session.cache = rf.elements[start:stop]
 
@@ -675,6 +713,7 @@ def cut(session, rf, event):
 	"""
 	# Copy and truncate the focus range.
 	"""
+
 	copy(session, rf, event)
 	delete_element_v(session, rf, event)
 
@@ -683,6 +722,7 @@ def paste_after_line(session, rf, event):
 	"""
 	# Paste cache contents after the current vertical position.
 	"""
+
 	ln = rf.focus[0].get()
 	insert_lines(rf, ln+1, session.cache)
 
@@ -691,8 +731,35 @@ def paste_before_line(session, rf, event):
 	"""
 	# Paste cache contents before the current vertical position.
 	"""
+
 	ln = rf.focus[0].get()
 	insert_lines(rf, ln, session.cache)
+
+@event('insert', 'data')
+def insert_segments(session, rf, event, segments):
+	"""
+	# Break the string instances in &segments into individual lines
+	# and insert them into the document at the cursor's position and
+	# advance the cursor to the end of the insertion.
+	"""
+
+	lines = ['']
+	for lineseq in segments:
+		new = lineseq.splitlines(keepends=False)
+		if not new:
+			continue
+		lines[-1] += new[0]
+		lines.extend(new[1:])
+
+	if not lines:
+		return
+
+	ln = rf.focus[0].get()
+	offset = rf.focus[1].get()
+	dy, dx = insert_lines_into(rf, ln, offset, lines)
+	rf.focus[0].set(ln + dy)
+	rf.focus[1].set(offset + dx)
+	rf.log.checkpoint()
 
 @event('insert', 'annotation')
 def insert_annotation(session, rf, event):
