@@ -220,9 +220,10 @@ class Session(object):
 			# but only update the snapshot if it's the same.
 			eseq, log, shot, last_st = self.resources[path]
 			if last_st is not None:
-				m = last_st.last_modified.measure(st.last_modified)
+				m = last_st.last_modified.measure(st.last_modified).truncate('millisecond')
 
-				m = m.truncate('millisecond')
+				D = m.select('day')
+				m = m.decrease(day=D)
 				H = m.select('hour')
 				m = m.decrease(hour=H)
 				M = m.select('minute')
@@ -232,11 +233,13 @@ class Session(object):
 
 				fmt = [
 					f"{c} {unit}" for (c, unit) in zip(
-						[H, M, S, MS],
-						['hours', 'minutes', 'seconds', 'ms']
+						[D, H, M],
+						['days', 'hours', 'minutes']
 					)
 					if c > 0
 				]
+				fmt.append(f"{S}.{MS:03} seconds")
+
 				self.log("Last modification was " + ' '.join(fmt) + " ago.")
 
 			# last_st is unconditionally discarded here.
