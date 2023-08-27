@@ -57,7 +57,7 @@ class Session(object):
 		# Mapping of file paths to loaded lines.
 	# /types/
 		# Mapping of file paths to loaded syntax (profile) types.
-	# /reflections/
+	# /_reflections/
 		# Resource path to views associated with their refraction.
 	"""
 

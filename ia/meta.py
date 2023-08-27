@@ -14,6 +14,14 @@ def operation_not_found(session, rf, event):
 	"""
 	pass
 
+@event('session', 'exit')
+def application_quit(session, rf, event):
+	"""
+	# Raise SystemExit. Unsaved changes are ignored.
+	"""
+
+	raise SystemExit(0)
+
 @event('terminal', 'focus', 'acquire')
 def application_focused(session, rf, event):
 	"""

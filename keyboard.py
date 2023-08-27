@@ -75,6 +75,9 @@ ca = control.assign
 ea = insert.assign
 aa = annotations.assign
 
+if 'exits':
+	ca(ctl('q'), 'meta', ('session', 'exit'))
+
 ca(lit('j', meta), 'navigation', ('view', 'next', 'refraction'))
 ca(lit('k', meta), 'navigation', ('view', 'previous', 'refraction'))
 ca(ctl('i', meta), 'navigation', ('session', 'view', 'forward'))
