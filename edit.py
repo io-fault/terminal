@@ -845,6 +845,15 @@ class Session(object):
 			self.renderframe()
 			del derror
 
+	if os.environ.get('XTERM_VERSION', '0').lower().strip('xterm()') == '0':
+		@staticmethod
+		def _render(rf, view, *, Method=projection.refresh):
+			return Method(rf, view, rf.visible[0])
+	else:
+		@staticmethod
+		def _render(rf, view, *, Method=projection.update):
+			return Method(rf, view, rf.log.since(view.version))
+
 	def cycle(self):
 		"""
 		# Tranmit deferred instructions, indicate cursor position,
@@ -864,8 +873,7 @@ class Session(object):
 			current = rf.log.snapshot()
 			voffsets = [view.offset, view.horizontal_offset]
 			if current != view.version or rf.visible != voffsets:
-				drecords = rf.log.since(view.version)
-				self.defer(projection.update(rf, view, drecords))
+				self.defer(self._render(rf, view))
 				view.version = current
 
 restricted = {}
