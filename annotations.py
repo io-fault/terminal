@@ -303,6 +303,7 @@ integer_representations = [
 	('binary', bin),
 	('octal', oct),
 	('decimal', str),
+	('glyph', chr),
 ]
 
 def number_tokenize(ctx, v, src, sign, i):
