@@ -1,0 +1,52 @@
+! CONTEXT:
+	/protocol/
+		&<http://if.fault.io/chapters/project.documentation>
+
+[ macOS ]
+
+/Apple Developer Documentation/
+	&<https://developer.apple.com/documentation/>
+
+	Apple's documentation seems to vary in quality. Likely in part due to the swift
+	transition and the expectation of Xcode usage. Supplementary resources were
+	often critical for usage. However, judgement may not be fair due to the
+	author's limited Objective-C and Swift experience.
+/CGBitmapContext/
+	&<https://developer.apple.com/documentation/coregraphics/cgbitmapcontext>
+
+	Method used for rasterizing the cached images of a cell.
+	A critical point being the configuration of the scale factor for proper
+	high resolution support: `CGContextScaleCTM` is given the `backingScaleFactor`
+	of the target window.
+
+	Windows should likely be screen locked here in order to avoid resolution mismatches;
+	the application seeks to avoid or limit window change events as the expected usage
+	is constant fullscreen for the duration of the application.
+/NSImage Drawing Handler/
+	&<https://developer.apple.com/documentation/appkit/nsimage/1519860-imagewithsize>
+
+	Likely superior solution for rasterizing cells as it will automatically adjust
+	for the resolution of the target context being drawn in.
+/Bitmap Captures for Smooth Scrolling Support/
+	&<https://developer.apple.com/documentation/appkit/nsview/1483552-cachedisplayinrect>
+
+	Repeatedly dirty the scroll area and shift the image in the scroll direction until
+	the final image is reached.
+/Transparency/
+	&<https://discussions.apple.com/thread/1772438>
+
+[ > Fonts ]
+
+/Loading from URLs/
+	- &<https://stackoverflow.com/questions/2703085/how-can-you-load-a-font-ttf-from-a-file-using-core-text>
+
+[ > Caching ]
+
+Predominately, NSCache oriented. A minor issue for the implementation being the
+Cell structure not being an NSObject. Whenever a cell image lookup is performed, a new
+key object is allocated and discarded. Creation during a cache miss is desired, but
+not on hits.
+
+- &<https://stackoverflow.com/questions/33282502/any-way-to-store-struct-in-nscache>
+- &<https://stackoverflow.com/questions/38890174/use-nsvalue-to-wrap-a-c-pointer>
+- &<https://stackoverflow.com/questions/12423627/objective-c-allocating-objects-on-the-stack>
