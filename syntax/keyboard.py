@@ -422,30 +422,3 @@ def input_line_state(encoding='utf-8', error='surrogateescape'):
 	while True:
 		chars = parse((decode(b''.join(datav)), 0))
 		datav = (yield merge(chars))
-
-if __name__ == '__main__':
-	kb = Selection(standard)
-	kb.set('insert')
-	import os, sys, time
-	from fault.terminal import matrix, control
-	from fault.time.system import elapsed
-	tty, pre, res = control.setup()
-	S = matrix.Screen(matrix.utf8_terminal_type)
-	ctx = matrix.Context(matrix.utf8_terminal_type)
-	ctx.context_set_position((0, 0))
-	w, h = tty.get_window_dimensions()
-	ctx.context_set_dimensions((w, h))
-	sys.stdout.buffer.write(S.store_cursor_location())
-	pre()
-	try:
-		ils = input_line_state(elapsed)
-		ils.send(None)
-		while True:
-			raw = os.read(sys.stdin.fileno(), 1024)
-			ts, events = ils.send([raw])
-			for event in events:
-				xev = kb.interpret(event)
-				print(repr(xev)+'\r')
-	finally:
-		res()
-		sys.stdout.buffer.write(S.restore_cursor_location())
