@@ -13,6 +13,7 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <IOSurface/IOSurface.h>
+#import <CoreImage/CIFilterBuiltins.h>
 
 #include <io/device.h>
 #include <io/cocoa.h>
@@ -260,7 +261,7 @@ staleIcon
 	struct timespec tp;
 
 	clock_gettime(CLOCK_MONOTONIC, &tp);
-	if (tp.tv_sec - self.iconUpdated < 30)
+	if (tp.tv_sec - self.iconUpdated < 60)
 		return(NO);
 
 	self.iconUpdated = tp.tv_sec;
@@ -272,15 +273,36 @@ captureScreen
 {
 	CellMatrix *mv = self.root.contentView;
 	CIImage *ci = [[CIImage alloc] initWithIOSurface: mv.pixelImage];
-	CIFilter *resize = [CIFilter filterWithName: @"CILanczosScaleTransform"];
 	CGSize d = ci.extent.size;
 
-	[resize setValue: ci forKey: kCIInputImageKey];
-	[resize setValue: @(0.2) forKey: kCIInputScaleKey];
-	[resize setValue: @(1.0) forKey: kCIInputAspectRatioKey];
+	CGSize target = CGSizeMake(256, 256);
+	CGFloat hpad = 8.0, vpad = 8.0;
+	CGFloat screen_height = target.height - vpad * 4;
 
-	CIImage *co = [resize valueForKey: kCIOutputImageKey];
-	NSCIImageRep *ir = [NSCIImageRep imageRepWithCIImage: co];
+	/* Generate the surrounding rectangle with rounded corners. */
+	CGAffineTransform rrelocate = CGAffineTransformMakeTranslation(-hpad, -vpad);
+	CIFilter<CIRoundedRectangleGenerator> *round = [CIFilter roundedRectangleGeneratorFilter];
+	round.color = [[CIColor alloc] initWithColor: rgb(0x444444)];
+	round.extent = CGRectMake(hpad, vpad, target.width - hpad, target.height - vpad);
+	round.radius = 16.0;
+	CIImage *rect = [round.outputImage imageByApplyingTransform: rrelocate];
+
+	/* Resize and relocate the captured screen. */
+	CGAffineTransform crelocate = CGAffineTransformMakeTranslation(hpad*1.5, vpad*1.5);
+	CIFilter<CILanczosScaleTransform> *resize = [CIFilter lanczosScaleTransformFilter];
+	resize.inputImage = ci;
+	resize.scale = (screen_height / d.height);
+	resize.aspectRatio = d.height / d.width;
+
+	CIImage *resized = resize.outputImage;
+	CIImage *capture = [resized imageByApplyingTransform: crelocate];
+
+	CIFilter<CICompositeOperation> *overlay = [CIFilter sourceOverCompositingFilter];
+	overlay.backgroundImage = rect;
+	overlay.inputImage = capture;
+	CIImage *combined = overlay.outputImage;
+
+	NSCIImageRep *ir = [NSCIImageRep imageRepWithCIImage: combined];
 	NSImage *ni = [[NSImage alloc] initWithSize: ir.size];
 
 	[ni addRepresentation: ir];
