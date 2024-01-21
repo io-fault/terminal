@@ -111,7 +111,7 @@ class Session(object):
 		self.focus = None
 		self.view = None
 
-		self.keyboard = keyboard.Selection(keyboard.standard)
+		self.keyboard = ia.types.Selection(keyboard.default)
 		self.keyboard.set('control')
 		self.keyboard.redirections['distributed'] = keyboard.distributions
 		self.events = {
