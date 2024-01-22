@@ -830,32 +830,37 @@ ScreenType = {
 	// A `NULL` &Matrix.m_context field indicates that there is no
 	// pending connections to be accepted.
 */
+#define Device(OB) (((DeviceObject) OB)->dev_terminal)
+#define DeviceController(OB) (((DeviceObject) OB)->dev_terminal->cmd_status)
+#define DeviceMatrixParameters(OB) (((DeviceObject) OB)->dev_terminal->cmd_dimensions)
 #define terminal_context (((DeviceObject) self)->dev_terminal->cmd_context)
 
-void device_key_status(void *context, uint32_t *keys);
 static PyObject *
 device_get_key_status(PyObject *self)
 {
-	uint32_t ks = 0;
-	device_key_status(terminal_context, &ks);
+	struct ControllerStatus *ctl_st = DeviceController(self);
+	uint32_t ks = ctl_st->st_keys;
 	return(PyLong_FromUnsignedLong(ks));
 }
 
-void device_cursor_status(void *context, pixel_offset_t *top, pixel_offset_t *left);
 static PyObject *
 device_get_cursor_status(PyObject *self)
 {
-	pixel_offset_t top = -1, left = -1;
-	device_cursor_status(terminal_context, &top, &left);
-	return(Py_BuildValue("ii", top, left));
+	struct ControllerStatus *ctl_st = DeviceController(self);
+
+	return(Py_BuildValue("ii", ctl_st->st_top, ctl_st->st_left));
 }
 
-void device_cursor_cell_status(void *context, unsigned short *top, unsigned short *left);
 static PyObject *
 device_get_cursor_cell_status(PyObject *self)
 {
+	struct MatrixParameters *mp = DeviceMatrixParameters(self);
+	struct ControllerStatus *ctl_st = DeviceController(self);
 	unsigned short top = 0, left = 0;
-	device_cursor_cell_status(terminal_context, &top, &left);
+
+	top = ctl_st->st_top / (mp->y_cell_units * mp->scale_factor);
+	left = ctl_st->st_left / (mp->x_cell_units * mp->scale_factor);
+
 	return(Py_BuildValue("HH", top, left));
 }
 
@@ -873,11 +878,10 @@ device_get_text_insertion(PyObject *self)
 		Py_RETURN_NONE;
 }
 
-int32_t device_quantity(void *context);
 static PyObject *
 device_get_event_quantity(PyObject *self)
 {
-	return(PyLong_FromLong(device_quantity(terminal_context)));
+	return(PyLong_FromLong(DeviceController(self)->st_quantity));
 }
 
 int32_t device_transfer_event(void *context);
@@ -932,15 +936,19 @@ _device_render_delta(PyObject *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-void device_synchronize(void *context, int level);
+void device_dispatch_frame(void *context);
 static PyObject *
-_device_synchronize(PyObject *self, PyObject *args)
+_device_dispatch_frame(PyObject *self)
 {
-	int level = 0;
-	if (!PyArg_ParseTuple(args, "|i", &level))
-		return(NULL);
+	device_dispatch_frame(terminal_context);
+	Py_RETURN_NONE;
+}
 
-	device_synchronize(terminal_context, level);
+void device_synchronize(void *context);
+static PyObject *
+_device_synchronize(PyObject *self)
+{
+	device_synchronize(terminal_context);
 	Py_RETURN_NONE;
 }
 
@@ -954,7 +962,8 @@ static PyMethodDef device_methods[] = {
 	{"replicate_cells", (PyCFunction) _device_replicate_cells, METH_VARARGS, NULL},
 	{"invalidate_cells", (PyCFunction) _device_invalidate_cells, METH_VARARGS, NULL},
 	{"render_delta", (PyCFunction) _device_render_delta, METH_VARARGS, NULL},
-	{"synchronize", (PyCFunction) _device_synchronize, METH_VARARGS, NULL},
+	{"dispatch_frame", (PyCFunction) _device_dispatch_frame, METH_NOARGS, NULL},
+	{"synchronize", (PyCFunction) _device_synchronize, METH_NOARGS, NULL},
 	{NULL, NULL, 0, NULL}
 };
 

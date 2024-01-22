@@ -780,7 +780,7 @@ class Session(object):
 
 		screen = self.device.screen
 
-		self.device.synchronize(1) # Wait for render queue to clear.
+		self.device.synchronize() # Wait for render queue to clear.
 		events = self.device.wait()
 		for r in self.device._resets:
 			screen.rewrite(*r)
@@ -917,7 +917,7 @@ class LocalDevice(Device):
 
 	def commit(self):
 		self.render_delta()
-		self.synchronize(-1)
+		self.dispatch_frame()
 
 	def wait(self):
 		ev = [self.wait_event()]

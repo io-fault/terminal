@@ -1566,74 +1566,25 @@ device_render_delta(void *context)
 }
 
 void
-device_synchronize(void *context, int level)
+device_dispatch_frame(void *context, int level)
 {
 	CellMatrix *terminal = context;
 
-	switch (level)
-	{
-		/* Dispatch synchronization blocking render queue until completion on main thread. */
-		case -1:
-			dispatch_async(terminal.render_queue, ^(void) {
-				dispatch_sync(dispatch_get_main_queue(), ^(void) {
-					[terminal signalDisplay];
-				});
-			});
-		break;
-
-		/* Block caller, render queue, and main thread until signallying is complete. */
-		case -2:
-			dispatch_sync(terminal.render_queue, ^(void) {
-				dispatch_sync(dispatch_get_main_queue(), ^(void) {
-					[terminal signalDisplay];
-				});
-			});
-		break;
-
-		/* Synchronize without blocking anything except the main queue. */
-		case -3:
-			dispatch_async(terminal.render_queue, ^(void) {
-				dispatch_async(dispatch_get_main_queue(), ^(void) {
-					[terminal signalDisplay];
-				});
-			});
-		break;
-
-		/* Wait for render queue to clear. */
-		case 1:
-			dispatch_sync(terminal.render_queue, ^(void) {
-				;
-			});
-		break;
-	}
+	dispatch_async(terminal.render_queue, ^(void) {
+		dispatch_sync(dispatch_get_main_queue(), ^(void) {
+			[terminal signalDisplay];
+		});
+	});
 }
 
 void
-device_key_status(void *context, uint32_t *keys)
+device_synchronize(void *context)
 {
 	CellMatrix *terminal = context;
 
-	*keys = terminal.event_status.st_keys;
-}
-
-void
-device_cursor_cell_status(void *context, unsigned short *top, unsigned short *left)
-{
-	CellMatrix *terminal = context;
-	struct MatrixParameters *mp = [terminal matrixParameters];
-
-	*top = terminal.event_status.st_top / (mp->y_cell_units * mp->scale_factor);
-	*left = terminal.event_status.st_left / (mp->x_cell_units * mp->scale_factor);
-}
-
-void
-device_cursor_status(void *context, pixel_offset_t *top, pixel_offset_t *left)
-{
-	CellMatrix *terminal = context;
-	struct MatrixParameters *mp = [terminal matrixParameters];
-
-	*top = terminal.event_status.st_top;
-	*left = terminal.event_status.st_left;
+	dispatch_sync(terminal.render_queue, ^(void) {
+		;
+	});
 }
 
 unsigned char *
@@ -1650,13 +1601,6 @@ device_text_insertion(void *context, uint32_t *length)
 	/* AppKit is documented to release the memory used by NSUTF8StringEncoding. */
 	*length = [terminal.event_text lengthOfBytesUsingEncoding: NSUTF8StringEncoding];
 	return([terminal.event_text UTF8String]);
-}
-
-int32_t
-device_quantity(void *context)
-{
-	CellMatrix *terminal = context;
-	return(terminal.event_status.st_quantity);
 }
 
 int32_t
