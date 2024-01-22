@@ -1363,14 +1363,18 @@ create_macos_menu(const char *title)
 	NSMenuItem *mie = MenuItem("Edit", nil, "");
 	NSMenu *sm = Menu();
 	NSMenuItem *mis = MenuItem("Session", nil, "");
+	NSMenu *screen = Menu();
+	NSMenuItem *screenmi = MenuItem("Screen", nil, "");
 
 	[rie setSubmenu: re];
 	[mia setSubmenu: am];
 	[mie setSubmenu: em];
 	[mis setSubmenu: sm];
+	[screenmi setSubmenu: screen];
 	[re setTitle: @"Resource"];
 	[em setTitle: @"Edit"];
 	[sm setTitle: @"Session"];
+	[screen setTitle: @"Screen"];
 
 	/* Menu Bar */
 	root = Menu();
@@ -1378,6 +1382,7 @@ create_macos_menu(const char *title)
 	[root addItem: rie];
 	[root addItem: mie];
 	[root addItem: mis];
+	[root addItem: screenmi];
 
 	/* Application Menu */
 	[am addItemWithTitle: about
@@ -1429,6 +1434,25 @@ create_macos_menu(const char *title)
 	shifted = MenuItem("Next", @selector(nextsession:), "]");
 	[sm addItem: shifted];
 	shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
+
+	/* Screen Menu */
+	NSMenuItem *resize = AddMenuItem(screen, "Resize", @selector(resize:), "u");
+	resize.toolTip = @"Adjust screen size to fit the visible cells.";
+
+	AddSeparator(screen);
+	AddMenuItem(screen, "Font", @selector(setfont:), "");
+	AddMenuItem(screen, "Size", @selector(setsize:), "");
+
+	AddSeparator(screen);
+	AddMenuItem(screen, "Refresh", @selector(refresh:), "r")
+		.toolTip = @"Refresh the Cell and Pixel images.";
+	AddMenuItem(screen, "Refresh Cell Image", @selector(refreshCells:), "R")
+		.toolTip = @"Signal terminal application to refresh the Cell Image.";
+
+	NSMenuItem *rpi = MenuItem("Refresh Pixel Image", @selector(refreshPixels:), "R");
+	rpi.keyEquivalentModifierMask |= NSEventModifierFlagControl;
+	rpi.toolTip = @"Update the Pixel Image from the current Cell Image.";
+	[screen addItem: rpi];
 
 	return(root);
 }
