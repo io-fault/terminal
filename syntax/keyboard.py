@@ -33,17 +33,18 @@ annotations = Mode(('meta', ('transition', 'annotation', 'void'), ()))
 
 if 'controls':
 	mode = control
-	a(('a', km_shift), 'meta', ('transition', 'end-of-line'))
+
 	a(('a'), 'meta', ('transition', 'end-of-field'))
+	a(('a', km_shift), 'meta', ('transition', 'end-of-line'))
 
 	a(('b'), 'delta', ('line', 'break',))
 	a(('b', km_shift), 'delta', ('line', 'join',))
 
+	a(('c'), 'delta', ('horizontal', 'substitute', 'range'))
+	a(('c', km_shift), 'delta', ('horizontal', 'substitute', 'again'))
 	a(('c', km_control), 'navigation', ('session', 'cancel'))
 	a(('c', km_meta), 'delta', ('copy',))
 	a(('c', km_shift|km_meta), 'delta', ('cut',))
-	a(('c'), 'delta', ('horizontal', 'substitute', 'range'))
-	a(('c', km_shift), 'delta', ('horizontal', 'substitute', 'again'))
 
 	a(('d'), 'navigation', ('horizontal', 'backward'))
 	a(('d', km_shift), 'navigation', ('horizontal', 'start'))
@@ -59,48 +60,48 @@ if 'controls':
 	a(('g', km_control), 'navigation', ('session', 'seek', 'element', 'absolute'))
 	a(('g', km_control|km_shift), 'navigation', ('session', 'seek', 'element', 'relative'))
 
-	a(('h', km_shift), 'navigation', ('vertical', 'place', 'center'))
 	a(('h'), 'navigation', ('vertical', 'select', 'line'))
+	a(('h', km_shift), 'navigation', ('vertical', 'place', 'center'))
 
 	a(('i'), 'meta', ('transition',))
 	a(('i', km_shift), 'meta', ('transition', 'start-of-line'))
 
-	a(('j', km_meta), 'navigation', ('view', 'next', 'refraction'))
 	a(('j'), 'navigation', ('vertical', 'forward', 'unit'))
 	a(('j', km_shift), 'navigation', ('vertical', 'stop'))
 	a(('j', km_control), 'navigation', ('vertical', 'void', 'forward'))
+	a(('j', km_meta), 'navigation', ('view', 'next', 'refraction'))
 
-	a(('k', km_meta), 'navigation', ('view', 'previous', 'refraction'))
 	a(('k'), 'navigation', ('vertical', 'backward', 'unit'))
 	a(('k', km_shift), 'navigation', ('vertical', 'start'))
 	a(('k', km_control), 'navigation', ('vertical', 'void', 'backward'))
+	a(('k', km_meta), 'navigation', ('view', 'previous', 'refraction'))
 
-	a(('l', km_shift), 'navigation', ('vertical', 'select', 'indentation', 'level'))
 	a(('l'), 'navigation', ('vertical', 'select', 'indentation'))
+	a(('l', km_shift), 'navigation', ('vertical', 'select', 'indentation', 'level'))
 	a(('l', km_control), 'navigation', ('session', 'load', 'resource'))
 
-	a(('m', km_shift), 'delta', ('move', 'range', 'behind'))
 	a(('m'), 'delta', ('move', 'range', 'ahead'))
+	a(('m', km_shift), 'delta', ('move', 'range', 'behind'))
 
-	a(('n', km_control), 'navigation', ('session', 'search', 'resource'))
-	a(('n', km_control|km_shift), 'navigation', ('find', 'selected'))
 	a(('n'), 'navigation', ('find', 'next'))
 	a(('n', km_shift), 'navigation', ('find', 'previous'))
+	a(('n', km_control), 'navigation', ('session', 'search', 'resource'))
+	a(('n', km_control|km_shift), 'navigation', ('find', 'selected'))
 
-	a(('o', km_shift), 'delta', ('open', 'behind'))
 	a(('o'), 'delta', ('open', 'ahead'))
+	a(('o', km_shift), 'delta', ('open', 'behind'))
 
 	a(('p'), 'delta', ('paste', 'after',))
 	a(('p', km_shift), 'delta', ('paste', 'before',))
 
 	a(('q', km_control), 'meta', ('session', 'exit'))
 
-	a(('r', km_control), 'navigation', ('session', 'rewrite', 'elements'))
 	a(('r'), 'meta', ('transition', 'capture', 'replace'))
+	a(('r', km_control), 'navigation', ('session', 'rewrite', 'elements'))
 
-	a(('s', km_control), 'navigation', ('session', 'store', 'resource'))
 	a(('s'), 'navigation', ('horizontal', 'select', 'series',))
 	a(('s', km_shift), 'navigation', ('horizontal', 'select', 'line'))
+	a(('s', km_control), 'navigation', ('session', 'store', 'resource'))
 
 	a(('v'), 'meta', ('transition', 'annotations', 'select'))
 	a(('v', km_shift), 'meta', ('annotation', 'rotate'))
@@ -109,10 +110,10 @@ if 'controls':
 	a(('u'), 'transaction', ('undo',))
 	a(('u', km_shift), 'transaction', ('redo',))
 
-	a(('x', km_meta), 'delta', ('cut',))
 	a(('x'), 'delta', ('delete', 'unit', 'current'))
 	a(('x', km_shift), 'delta', ('delete', 'unit', 'former'))
 	a(('x', km_control), 'delta', ('delete', 'element', 'current'))
+	a(('x', km_meta), 'delta', ('cut',))
 	a(('x', km_shift|km_control), 'delta', ('delete', 'element', 'former'))
 
 	a(('y'), 'meta', ('select', 'distributed', 'operation'))
@@ -120,17 +121,17 @@ if 'controls':
 	a(('z'), 'navigation', ('vertical', 'place', 'stop',))
 	a(('z', km_shift), 'navigation', ('vertical', 'place', 'start',))
 
-	a((0x21E5, km_meta), 'navigation', ('session', 'view', 'forward'))
-	a((0x21E5, km_shift|km_meta), 'navigation', ('session', 'view', 'backward'))
-	a((0x23CE, km_control), 'meta', ('view', 'refresh'))
-	a((0x23CE, km_shift), 'navigation', ('view', 'return'))
 	a((0x23CE), 'navigation', ('activate',))
 	a((0x2423), 'navigation', ('horizontal', 'forward', 'unit'))
 	a((0x2326), 'navigation', ('horizontal', 'backward', 'unit')) # Delete
 	a((0x232B), 'navigation', ('horizontal', 'backward', 'unit')) # Backsapce
+	a((0x21E5, km_meta), 'navigation', ('session', 'view', 'forward'))
+	a((0x21E5, km_shift|km_meta), 'navigation', ('session', 'view', 'backward'))
+	a((0x23CE, km_control), 'meta', ('view', 'refresh'))
+	a((0x23CE, km_shift), 'navigation', ('view', 'return'))
 
-	a((0x2423, km_control), 'navigation', ('horizontal', 'jump', 'string',), ("\x1f",))
 	a((0x21E5), 'delta', ('indentation', 'increment'))
+	a((0x2423, km_control), 'navigation', ('horizontal', 'jump', 'string',), ("\x1f",))
 	a((0x21E5, km_shift), 'delta', ('indentation', 'decrement'))
 
 	a((-2817), 'navigation', ('select', 'absolute'))
@@ -151,6 +152,7 @@ if 'controls':
 
 if 'annotations':
 	mode = annotations
+
 	a(('8'), 'meta', ('codepoint', 'select', 'utf-8'))
 	a(('b'), 'meta', ('integer', 'select', 'binary'))
 	a(('c'), 'meta', ('integer', 'color', 'swatch'))
@@ -163,6 +165,7 @@ if 'annotations':
 # Cursor range controls.
 if 'inserts':
 	mode = insert
+
 	a(('a', km_control), 'navigation', ('horizontal', 'backward', 'beginning'))
 	a(('c', km_control), 'transaction', ('abort',)) # Default SIGINT.
 	a(('d', km_control), 'transaction', ('commit',)) # Default EOF.
@@ -175,16 +178,21 @@ if 'inserts':
 	a(('v', km_control), 'meta', ('transition', 'capture', 'insert'))
 	a(('w', km_control), 'delta', ('delete', 'backward', 'adjacent', 'class'))
 	a(('x', km_control), 'delta', ('delete', 'unit', 'current'))
-	a((0x23CE), 'navigation', ('activate',))
-	a((0x2191), 'navigation', ('horizontal', 'backward', 'beginning'))
+
 	a((0x232B), 'delta', ('delete', 'unit', 'former'))
 	a((0x2326), 'delta', ('delete', 'unit', 'former'))
+
 	a((0x2190), 'navigation', ('horizontal', 'backward', 'unit'))
+	a((0x2191), 'navigation', ('horizontal', 'backward', 'beginning'))
 	a((0x2192), 'navigation', ('horizontal', 'forward', 'unit'))
 	a((0x2193), 'navigation', ('horizontal', 'forward', 'end'))
+
 	a((0x2423, km_control), 'delta', ('insert', 'string',), ("\x1f",))
-	a((0x21E5, km_shift), 'delta', ('indentation', 'decrement'))
+
 	a((0x21E5), 'delta', ('indentation', 'increment'))
+	a((0x21E5, km_shift), 'delta', ('indentation', 'decrement'))
+
+	a((0x23CE), 'navigation', ('activate',))
 
 del a
 
