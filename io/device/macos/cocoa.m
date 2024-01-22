@@ -293,10 +293,9 @@ captureScreen
 	resize.inputImage = ci;
 	resize.scale = (screen_height / d.height);
 	resize.aspectRatio = d.height / d.width;
+	CIImage *capture = [resize.outputImage imageByApplyingTransform: crelocate];
 
-	CIImage *resized = resize.outputImage;
-	CIImage *capture = [resized imageByApplyingTransform: crelocate];
-
+	/* Combine generated rectangle with capture using source over. */
 	CIFilter<CICompositeOperation> *overlay = [CIFilter sourceOverCompositingFilter];
 	overlay.backgroundImage = rect;
 	overlay.inputImage = capture;
@@ -304,8 +303,8 @@ captureScreen
 
 	NSCIImageRep *ir = [NSCIImageRep imageRepWithCIImage: combined];
 	NSImage *ni = [[NSImage alloc] initWithSize: ir.size];
-
 	[ni addRepresentation: ir];
+
 	return(ni);
 }
 @end
