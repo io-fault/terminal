@@ -484,6 +484,14 @@ struct Cell
 	struct Color c_line;
 };
 
+#define Device_TransferEvent(DS) (DS->transfer_event)(DS->cmd_context)
+#define Device_TransferText(DS, CPTR, IPTR) (DS->transfer_text)(DS->cmd_context, CPTR, IPTR)
+#define Device_ReplicateCells(DS, DST, SRC) (DS->replicate_cells)(DS->cmd_context, DST, SRC)
+#define Device_InvalidateCells(DS, DST) (DS->invalidate_cells)(DS->cmd_context, DST)
+#define Device_RenderPixels(DS) (DS->render_pixels)(DS->cmd_context)
+#define Device_DispatchFrame(DS) (DS->dispatch_frame)(DS->cmd_context)
+#define Device_Synchronize(DS) (DS->synchronize)(DS->cmd_context)
+
 /**
 	// Dimensions, image, and update callback for signalling changes.
 
@@ -508,6 +516,14 @@ struct Device
 	struct CellArea *cmd_view;
 	struct MatrixParameters *cmd_dimensions;
 	struct ControllerStatus *cmd_status;
+
+	uint16_t (*transfer_event)(void *context);
+	void (*transfer_text)(void *context, const char **txt, uint32_t *bytelength);
+	void (*replicate_cells)(void *context, struct CellArea dst, struct CellArea src);
+	void (*invalidate_cells)(void *context, struct CellArea ca);
+	void (*render_pixels)(void *context);
+	void (*dispatch_frame)(void *context);
+	void (*synchronize)(void *context);
 };
 
 #define mforeach(ctx, cv, ca) \

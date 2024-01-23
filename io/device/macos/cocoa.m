@@ -436,6 +436,17 @@ initMatrixCache
 	[self.layer setContents: self.pixelImage];
 }
 
+/*
+	// Device API for CellMatrix views.
+*/
+static uint16_t device_transfer_event(void *);
+static void device_transfer_text(void *, const char **, uint32_t *);
+static void device_replicate_cells(void *, struct CellArea, struct CellArea);
+static void device_invalidate_cells(void *, struct CellArea);
+static void device_render_pixels(void *);
+static void device_dispatch_frame(void *);
+static void device_synchronize(void *);
+
 - (instancetype)
 initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fctx
 {
@@ -450,6 +461,14 @@ initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fc
 		.cmd_dimensions = &_dimensions,
 		.cmd_status = &_event_status,
 		.cmd_view = &_view,
+
+		.transfer_event = device_transfer_event,
+		.transfer_text = device_transfer_text,
+		.replicate_cells = device_replicate_cells,
+		.invalidate_cells = device_invalidate_cells,
+		.render_pixels = device_render_pixels,
+		.dispatch_frame = device_dispatch_frame,
+		.synchronize = device_synchronize
 	};
 
 	[super initWithFrame: r];
@@ -472,7 +491,7 @@ initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fc
 
 		.x_scale = 2,
 		.x_glyph_offset = -0.1,
-		.y_glyph_offset = 0.0,
+		.y_glyph_offset = 2.0,
 		.x_pad = 0.6,
 		.y_pad = -4.75,
 
@@ -1457,7 +1476,7 @@ create_macos_menu(const char *title)
 	return(root);
 }
 
-NSWindow *
+static NSWindow *
 create_matrix_window(NSScreen *screen, NSFontManager *fontctx, NSFont *font)
 {
 	CellMatrix *mv;
@@ -1505,7 +1524,7 @@ create_matrix_window(NSScreen *screen, NSFontManager *fontctx, NSFont *font)
 	return(root);
 }
 
-void
+static void
 device_invalidate_cells(void *context, struct CellArea ca)
 {
 	CellMatrix *terminal = context;
@@ -1516,7 +1535,7 @@ device_invalidate_cells(void *context, struct CellArea ca)
 	});
 }
 
-void
+static void
 device_replicate_cells(void *context, struct CellArea target, struct CellArea source)
 {
 	CellMatrix *terminal = context;
@@ -1553,8 +1572,8 @@ device_replicate_cells(void *context, struct CellArea target, struct CellArea so
 	});
 }
 
-void
-device_render_delta(void *context)
+static void
+device_render_pixels(void *context)
 {
 	CellMatrix *terminal = context;
 
@@ -1565,8 +1584,8 @@ device_render_delta(void *context)
 	});
 }
 
-void
-device_dispatch_frame(void *context, int level)
+static void
+device_dispatch_frame(void *context)
 {
 	CellMatrix *terminal = context;
 
@@ -1577,7 +1596,7 @@ device_dispatch_frame(void *context, int level)
 	});
 }
 
-void
+static void
 device_synchronize(void *context)
 {
 	CellMatrix *terminal = context;
@@ -1587,23 +1606,25 @@ device_synchronize(void *context)
 	});
 }
 
-unsigned char *
-device_text_insertion(void *context, uint32_t *length)
+static void
+device_transfer_text(void *context, const char **text, uint32_t *length)
 {
 	CellMatrix *terminal = context;
 
 	if (terminal.event_text == nil)
 	{
 		*length = 0;
-		return(NULL);
+		*text = NULL;
 	}
-
-	/* AppKit is documented to release the memory used by NSUTF8StringEncoding. */
-	*length = [terminal.event_text lengthOfBytesUsingEncoding: NSUTF8StringEncoding];
-	return([terminal.event_text UTF8String]);
+	else
+	{
+		/* AppKit is documented to release the memory used by NSUTF8StringEncoding. */
+		*length = [terminal.event_text lengthOfBytesUsingEncoding: NSUTF8StringEncoding];
+		*text = [terminal.event_text UTF8String];
+	}
 }
 
-int32_t
+static uint16_t
 device_transfer_event(void *context)
 {
 	CellMatrix *terminal = context;
@@ -1619,7 +1640,7 @@ device_transfer_event(void *context)
 	*/
 	[terminal.event_read_lock lock];
 
-	return(terminal.event_status.st_dispatch);
+	return(0);
 }
 
 static int

@@ -831,6 +831,7 @@ ScreenType = {
 	// pending connections to be accepted.
 */
 #define Device(OB) (((DeviceObject) OB)->dev_terminal)
+#define D(OB) Device(OB)
 #define DeviceController(OB) (((DeviceObject) OB)->dev_terminal->cmd_status)
 #define DeviceMatrixParameters(OB) (((DeviceObject) OB)->dev_terminal->cmd_dimensions)
 #define terminal_context (((DeviceObject) self)->dev_terminal->cmd_context)
@@ -864,18 +865,26 @@ device_get_cursor_cell_status(PyObject *self)
 	return(Py_BuildValue("HH", top, left));
 }
 
-unsigned char *device_text_insertion(void *context, uint32_t *);
 static PyObject *
-device_get_text_insertion(PyObject *self)
+device_transfer_text(PyObject *self)
 {
 	uint32_t bytes = 0;
 	const char *errors = "surrogateescape";
-	unsigned char *txt = device_text_insertion(terminal_context, &bytes);
+	const char *txt = NULL;
 
-	if (txt)
+	/* NULL will be set iff there is no associated insertion text. */
+	Device_TransferText(D(self), &txt, &bytes);
+
+	if (txt != NULL)
 		return(PyUnicode_DecodeUTF8(txt, bytes, errors));
 	else
 		Py_RETURN_NONE;
+}
+
+static PyObject *
+device_get_key(PyObject *self)
+{
+	return(PyLong_FromLong(DeviceController(self)->st_dispatch));
 }
 
 static PyObject *
@@ -884,16 +893,14 @@ device_get_event_quantity(PyObject *self)
 	return(PyLong_FromLong(DeviceController(self)->st_quantity));
 }
 
-int32_t device_transfer_event(void *context);
 static PyObject *
-device_wait_event(PyObject *self)
+device_transfer_event(PyObject *self)
 {
-	return(PyLong_FromLong(device_transfer_event(terminal_context)));
+	return(PyLong_FromLong((long) Device_TransferEvent(D(self))));
 }
 
-void device_replicate_cells(void *context, struct CellArea dst, struct CellArea src);
 static PyObject *
-_device_replicate_cells(PyObject *self, PyObject *args)
+device_replicate_cells(PyObject *self, PyObject *args)
 {
 	struct CellArea sub, rep;
 
@@ -908,62 +915,62 @@ _device_replicate_cells(PyObject *self, PyObject *args)
 			&rep.span))
 		return(NULL);
 
-	device_replicate_cells(terminal_context, sub, rep);
+	Device_ReplicateCells(D(self), sub, rep);
 	Py_RETURN_NONE;
 }
 
-void device_invalidate_cells(void *context, struct CellArea ca);
 static PyObject *
-_device_invalidate_cells(PyObject *self, PyObject *args)
+device_invalidate_cells(PyObject *self, PyObject *args)
 {
 	struct CellArea ca;
 
 	if (!PyArg_ParseTuple(args, "HHHH", &ca.top_offset, &ca.left_offset, &ca.lines, &ca.span))
 		return(NULL);
 
-	device_invalidate_cells(terminal_context, ca);
+	Device_InvalidateCells(D(self), ca);
 	Py_RETURN_NONE;
 }
 
-void device_render_delta(void *context);
 static PyObject *
-_device_render_delta(PyObject *self, PyObject *args)
+device_render_pixels(PyObject *self, PyObject *args)
 {
 	if (!PyArg_ParseTuple(args, ""))
 		return(NULL);
 
-	device_render_delta(terminal_context);
+	Device_RenderPixels(D(self));
 	Py_RETURN_NONE;
 }
 
-void device_dispatch_frame(void *context);
 static PyObject *
-_device_dispatch_frame(PyObject *self)
+device_dispatch_frame(PyObject *self)
 {
-	device_dispatch_frame(terminal_context);
+	Device_DispatchFrame(D(self));
 	Py_RETURN_NONE;
 }
 
-void device_synchronize(void *context);
 static PyObject *
-_device_synchronize(PyObject *self)
+device_synchronize(PyObject *self)
 {
-	device_synchronize(terminal_context);
+	Device_Synchronize(D(self));
 	Py_RETURN_NONE;
 }
 
 static PyMethodDef device_methods[] = {
+	{"get_key", (PyCFunction) device_get_key, METH_NOARGS, NULL},
+	{"get_key_status", (PyCFunction) device_get_key_status, METH_NOARGS, NULL},
 	{"get_quantity", (PyCFunction) device_get_event_quantity, METH_NOARGS, NULL},
-	{"get_text_insertion", (PyCFunction) device_get_text_insertion, METH_NOARGS, NULL},
 	{"get_cursor_status", (PyCFunction) device_get_cursor_status, METH_NOARGS, NULL},
 	{"get_cursor_cell_status", (PyCFunction) device_get_cursor_cell_status, METH_NOARGS, NULL},
-	{"get_key_status", (PyCFunction) device_get_key_status, METH_NOARGS, NULL},
-	{"wait_event", (PyCFunction) device_wait_event, METH_NOARGS, NULL},
-	{"replicate_cells", (PyCFunction) _device_replicate_cells, METH_VARARGS, NULL},
-	{"invalidate_cells", (PyCFunction) _device_invalidate_cells, METH_VARARGS, NULL},
-	{"render_delta", (PyCFunction) _device_render_delta, METH_VARARGS, NULL},
-	{"dispatch_frame", (PyCFunction) _device_dispatch_frame, METH_NOARGS, NULL},
-	{"synchronize", (PyCFunction) _device_synchronize, METH_NOARGS, NULL},
+
+	{"transfer_event", (PyCFunction) device_transfer_event, METH_NOARGS, NULL},
+	{"transfer_text", (PyCFunction) device_transfer_text, METH_NOARGS, NULL},
+
+	{"replicate_cells", (PyCFunction) device_replicate_cells, METH_VARARGS, NULL},
+	{"invalidate_cells", (PyCFunction) device_invalidate_cells, METH_VARARGS, NULL},
+	{"render_pixels", (PyCFunction) device_render_pixels, METH_VARARGS, NULL},
+	{"dispatch_frame", (PyCFunction) device_dispatch_frame, METH_NOARGS, NULL},
+	{"synchronize", (PyCFunction) device_synchronize, METH_NOARGS, NULL},
+
 	{NULL, NULL, 0, NULL}
 };
 

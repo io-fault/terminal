@@ -748,6 +748,7 @@ class Session(object):
 		try:
 			for event in events:
 				ks = self.device.get_key_status()
+				event = self.device.get_key()
 				iev = (ks & 0b1111, event)
 				try:
 					rf, view = self.focus, self.view
@@ -781,12 +782,12 @@ class Session(object):
 		screen = self.device.screen
 
 		self.device.synchronize() # Wait for render queue to clear.
-		events = self.device.wait()
+		self.device.wait()
 		for r in self.device._resets:
 			screen.rewrite(*r)
 			self.device.invalidate(r[0])
 
-		for (rf, view) in self.io(events):
+		for (rf, view) in self.io([None]):
 			current = rf.log.snapshot()
 			voffsets = [view.offset, view.horizontal_offset]
 			if current != view.version or rf.visible != voffsets:
@@ -796,7 +797,9 @@ class Session(object):
 		status = list(self.indicate(self.focus, self.view))
 		self.device._resets[:] = [(area, screen.select(area)) for area, _ in status]
 		self.device.update(status)
-		self.device.commit()
+		self.device.render_pixels()
+		self.device.dispatch_frame()
+
 
 restricted = {}
 restricted.update(
@@ -886,12 +889,14 @@ def initialize(editor, options, sources):
 	editor.fill(rfq) # Fill the views with refractions (documents)
 	editor.refocus() # Update editor.focus and editor.view.
 	editor.refresh() # Initialize the views' images.
+	editor.device.invalidate(editor.device.screen.area)
+	editor.device.render_pixels()
 
 from ..cells.types import Device
 class LocalDevice(Device):
 	def __init__(self, *args):
 		self._resets = []
-		self._text = self.get_text_insertion
+		self._text = self.transfer_text
 		self._cursor = self.get_cursor_cell_status
 
 	def invalidate(self, area):
@@ -911,18 +916,10 @@ class LocalDevice(Device):
 		for a, d in ixn:
 			self.dispatch(a, d)
 
-	def refresh(self):
-		self.invalidate(self.screen.area)
-		self.commit()
-
-	def commit(self):
-		self.render_delta()
-		self.dispatch_frame()
-
 	def wait(self):
-		ev = [self.wait_event()]
+		self.transfer_event()
+		self.event_key = self.get_key()
 		self.event_occurrences = self.get_quantity()
-		return ev
 
 	@property
 	def point(self):
@@ -971,7 +968,7 @@ def main(inv:process.Invocation) -> process.Exit:
 		editor.log("Working Directory: " + str(process.fs_pwd()))
 		editor.log("Path Arguments:", *['\t' + s for s in sources])
 		editor.device.update(editor.renderframe())
-		editor.device.refresh()
+		editor.device.render_pixels()
 
 		while editor.panes:
 			editor.cycle()
