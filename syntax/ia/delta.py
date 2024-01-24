@@ -213,7 +213,7 @@ def insert_character_units(session, rf, event, quantity=1):
 	"""
 
 	v, h = (x.get() for x in rf.focus)
-	string = session.device._text() * quantity
+	string = session.device.transfer_text() * quantity
 
 	insert(rf, v, h, string)
 	rf.focus[1].changed(h, len(string))
@@ -225,16 +225,29 @@ def insert_captured_character_unit(session, rf, event, quantity=1):
 	"""
 
 	v, h = (x.get() for x in rf.focus)
-	string = session.device._text()
-	if event[0] & (1 << 2) and event[1] > 0:
+	string = session.device.transfer_text()
+	if event[0] & (1 << 3) and event[1] > 0:
 		# Check for control character reference.
 		uco = ord(event[1]) - ord('A')
 		if uco >= 0 and uco < ord(' '):
 			string = chr(uco)
-	elif event[0] & (1 << 3) and event[1] > 0:
+	elif event[0] & (1 << 5) and event[1] > 0:
 		# Report key symbol.
 		string = chr(event[1])
 
+	istr = string * quantity
+	insert(rf, v, h, istr)
+	rf.focus[1].changed(h, len(istr))
+	session.keyboard.revert()
+
+@event('insert', 'capture', 'key')
+def insert_captured_key(session, rf, event, quantity=1):
+	"""
+	# Replace the character at the cursor with the event's identity.
+	"""
+
+	v, h = (x.get() for x in rf.focus)
+	string = session.device.key()
 	istr = string * quantity
 	insert(rf, v, h, istr)
 	rf.focus[1].changed(h, len(istr))
@@ -247,7 +260,7 @@ def insert_captured_control_character_unit(session, rf, event, quantity=1):
 	"""
 
 	v, h = (x.get() for x in rf.focus)
-	string = session.device._text()
+	string = session.device.transfer_text()
 	string = string * quantity
 
 	insert(rf, v, h, string)

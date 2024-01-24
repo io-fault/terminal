@@ -837,11 +837,9 @@ ScreenType = {
 #define terminal_context (((DeviceObject) self)->dev_terminal->cmd_context)
 
 static PyObject *
-device_get_key_status(PyObject *self)
+device_get_event_quantity(PyObject *self)
 {
-	struct ControllerStatus *ctl_st = DeviceController(self);
-	uint32_t ks = ctl_st->st_keys;
-	return(PyLong_FromUnsignedLong(ks));
+	return(PyLong_FromLong(DeviceController(self)->st_quantity));
 }
 
 static PyObject *
@@ -850,6 +848,94 @@ device_get_cursor_status(PyObject *self)
 	struct ControllerStatus *ctl_st = DeviceController(self);
 
 	return(Py_BuildValue("ii", ctl_st->st_top, ctl_st->st_left));
+}
+
+static PyObject *
+device_key(PyObject *self)
+{
+	struct ControllerStatus *ctl = DeviceController(self);
+	PyObj modstr, rob;
+	wchar_t m[3 + km_sentinel - km_void]; // 2 Brackets + NULL.
+	uint32_t st_keys = ctl->st_keys;
+	int i, x = 0;
+
+	/* Fill modifier representations in identifier order. */
+	m[x++] = '[';
+	for (i = km_imaginary; i < km_sentinel; ++i)
+	{
+		enum KeyModifiers km = i;
+
+		if (st_keys & (1 << km))
+		{
+			m[x++] = ModifierKey(km);
+		}
+	}
+	m[x++] = ']';
+	m[x] = 0;
+
+	/* Empty string if no modifiers. */
+	if (x <= 2)
+	{
+		m[0] = 0;
+		x = 0;
+	}
+
+	modstr = PyUnicode_FromWideChar(m, x);
+	if (modstr == NULL)
+		return(NULL);
+
+	/* Non-negative directly corresponds to a single codepoint. */
+	if (ctl->st_dispatch >= 0)
+	{
+		wchar_t k[2] = {ctl->st_dispatch, 0};
+		PyObject *ko = PyUnicode_New(1, (uint32_t) ctl->st_dispatch);
+
+		if (ko == NULL)
+		{
+			Py_DECREF(modstr);
+			return(NULL);
+		}
+
+		PyUnicode_WriteChar(ko, 0, (uint32_t) ctl->st_dispatch);
+		rob = PyUnicode_FromFormat("[%U]%U", ko, modstr);
+		Py_XDECREF(ko);
+	}
+	else
+	{
+		switch (InstructionKey_Number(ctl->st_dispatch))
+		{
+			#define AI_DEFINE(CLASS, OPNAME) \
+				case ai_##CLASS##_##OPNAME: \
+					rob = PyUnicode_FromFormat("(%s/%s)%U", #CLASS, #OPNAME, modstr); \
+				break;
+
+				ApplicationInstructions()
+			#undef AI_DEFINE
+
+			default:
+			{
+				int fn = FunctionKey_Number(ctl->st_dispatch);
+				int mbutton = ScreenCursorKey_Number(ctl->st_dispatch);
+
+				if (fn > 0 && fn <= 32)
+				{
+					rob = PyUnicode_FromFormat("[F%d]%U", fn, modstr);
+				}
+				else if (mbutton > 0 && mbutton <= 32)
+				{
+					rob = PyUnicode_FromFormat("[M%d]%U", mbutton, modstr);
+				}
+				else
+				{
+					/* Pass unrecognized negative value through as string. */
+					rob = PyUnicode_FromFormat("[%d]%U", ctl->st_dispatch, modstr);
+				}
+			}
+		}
+	}
+
+	Py_DECREF(modstr);
+	return(rob);
 }
 
 static PyObject *
@@ -879,18 +965,6 @@ device_transfer_text(PyObject *self)
 		return(PyUnicode_DecodeUTF8(txt, bytes, errors));
 	else
 		Py_RETURN_NONE;
-}
-
-static PyObject *
-device_get_key(PyObject *self)
-{
-	return(PyLong_FromLong(DeviceController(self)->st_dispatch));
-}
-
-static PyObject *
-device_get_event_quantity(PyObject *self)
-{
-	return(PyLong_FromLong(DeviceController(self)->st_quantity));
 }
 
 static PyObject *
@@ -956,8 +1030,7 @@ device_synchronize(PyObject *self)
 }
 
 static PyMethodDef device_methods[] = {
-	{"get_key", (PyCFunction) device_get_key, METH_NOARGS, NULL},
-	{"get_key_status", (PyCFunction) device_get_key_status, METH_NOARGS, NULL},
+	{"key", (PyCFunction) device_key, METH_NOARGS, NULL},
 	{"get_quantity", (PyCFunction) device_get_event_quantity, METH_NOARGS, NULL},
 	{"get_cursor_status", (PyCFunction) device_get_cursor_status, METH_NOARGS, NULL},
 	{"get_cursor_cell_status", (PyCFunction) device_get_cursor_cell_status, METH_NOARGS, NULL},

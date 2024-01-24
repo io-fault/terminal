@@ -251,7 +251,7 @@ def select_character(session, rf, event, quantity=1):
 	"""
 	# Horizontally move the cursor to the character in the event.
 	"""
-	return select_unit_string(session, rf, event, session.device._text() or '')
+	return select_unit_string(session, rf, event, session.device.transfer_text() or '')
 
 @event('vertical', 'void', 'forward')
 def move_next_void(session, rf, event, quantity=1):
@@ -550,13 +550,13 @@ def bisect_range(session, rf, event):
 	rf.focus[0].offset = (rf.focus[0].magnitude // 2)
 
 @event('view', 'horizontal', 'forward')
-def pan_forward_cells(session, rf, event, quantity=3, target=None):
+def pan_forward_cells(session, rf, event, quantity=3, target=None, shift=chr(0x21E7)):
 	"""
 	# Adjust the horizontal position of the window forward by the given quantity.
 	"""
 
 	if target is not None:
-		if event[0] & (1 << 1):
+		if shift in event:
 			rf.visible[1] += quantity
 			rf.visibility[1].datum += quantity
 	else:
@@ -565,13 +565,13 @@ def pan_forward_cells(session, rf, event, quantity=3, target=None):
 	target.visibility[1].datum += quantity
 
 @event('view', 'horizontal', 'backward')
-def pan_backward_cells(session, rf, event, quantity=3, target=None):
+def pan_backward_cells(session, rf, event, quantity=3, target=None, shift=chr(0x21E7)):
 	"""
 	# Adjust the horizontal position of the window forward by the given quantity.
 	"""
 
 	if target is not None:
-		if event[0] & (1 << 1):
+		if shift in event:
 			i = max(0, rf.visible[1] - quantity)
 			rf.visible[1] = i
 			rf.visibility[1].datum = i
@@ -582,28 +582,28 @@ def pan_backward_cells(session, rf, event, quantity=3, target=None):
 	target.visibility[1].datum = i
 
 @event('view', 'vertical', 'forward')
-def scroll_forward_unit(session, rf, event, quantity=1, target=None):
+def scroll_forward_unit(session, rf, event, quantity=1, target=None, shift=chr(0x21E7)):
 	"""
 	# Adjust the vertical position of the window forward by the
 	# given quantity.
 	"""
 
 	if target is not None:
-		if event[0] & (1 << 1):
+		if shift in event:
 			rf.scroll((quantity).__add__)
 	else:
 		target = rf
 	target.scroll(quantity.__add__)
 
 @event('view', 'vertical', 'backward')
-def scroll_backward_unit(session, rf, event, quantity=1, target=None):
+def scroll_backward_unit(session, rf, event, quantity=1, target=None, shift=chr(0x21E7)):
 	"""
 	# Adjust the vertical position of the window backward by the
 	# given quantity. (Moves view port).
 	"""
 
 	if target is not None:
-		if event[0] & (1 << 1):
+		if shift in event:
 			rf.scroll((-quantity).__add__)
 	else:
 		target = rf

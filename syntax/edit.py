@@ -747,17 +747,15 @@ class Session(object):
 	def io(self, events):
 		try:
 			for event in events:
-				ks = self.device.get_key_status()
-				event = self.device.get_key()
-				iev = (ks & 0b1111, event)
+				key = self.device.key()
 				try:
 					rf, view = self.focus, self.view
-					mode, xev = self.keyboard.interpret(iev)
+					mode, xev = self.keyboard.interpret(key)
 					ev_category, ev_identifier, ev_args = xev
 
 					ev_op = self.events[ev_category](ev_identifier)
-					self.log(f"{iev!r} -> {ev_op!r}")
-					ev_op(self, rf, iev, *ev_args) # User Event Operation
+					self.log(f"{key!r} -> {ev_category}/{'/'.join(ev_identifier)} -> {ev_op!r}")
+					ev_op(self, rf, key, *ev_args) # User Event Operation
 				except Exception as operror:
 					self.keyboard.reset('control')
 					self.error('Operation Failure', operror)
@@ -896,7 +894,6 @@ from ..cells.types import Device
 class LocalDevice(Device):
 	def __init__(self, *args):
 		self._resets = []
-		self._text = self.transfer_text
 		self._cursor = self.get_cursor_cell_status
 
 	def invalidate(self, area):
@@ -918,7 +915,7 @@ class LocalDevice(Device):
 
 	def wait(self):
 		self.transfer_event()
-		self.event_key = self.get_key()
+		self.event_key = self.key()
 		self.event_occurrences = self.get_quantity()
 
 	@property

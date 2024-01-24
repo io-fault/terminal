@@ -491,7 +491,7 @@ initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fc
 
 		.x_scale = 2,
 		.x_glyph_offset = -0.1,
-		.y_glyph_offset = 2.0,
+		.y_glyph_offset = 1.0,
 		.x_pad = 0.6,
 		.y_pad = -4.75,
 
@@ -1097,7 +1097,7 @@ event_context_interpret(NSEventModifierFlags evmf)
 	// Collect modifiers state and screen cursor position.
 */
 static void
-event_status_snapshot(CellMatrix *self, NSEvent *ev, int32_t key_id, int32_t quantity)
+event_status_snapshot(CellMatrix *self, NSEvent *ev, NSEventModifierFlags fs, int32_t key_id, int32_t quantity)
 {
 	struct MatrixParameters *mp = [self matrixParameters];
 	NSPoint cursor_p = CURSOR(ev);
@@ -1112,16 +1112,18 @@ event_status_snapshot(CellMatrix *self, NSEvent *ev, int32_t key_id, int32_t qua
 	ctl->st_text_length = 0;
 	ctl->st_left = cursor_p.x * mp->scale_factor;
 	ctl->st_top = (mp->y_screen_units - cursor_p.y) * mp->scale_factor;
-	ctl->st_keys = event_context_interpret([ev modifierFlags]);
+	ctl->st_keys = event_context_interpret(fs);
 }
 
 static void
 dispatch_event(CellMatrix *self, NSEvent *ev, int32_t r, int32_t key)
 {
+	NSEventModifierFlags fs = [ev modifierFlags];
+
 	dispatch_async(self.event_queue, ^(void) {
 		[self.event_write_lock lock];
 		{
-			event_status_snapshot(self, ev, key, r);
+			event_status_snapshot(self, ev, fs, key, r);
 		}
 		[self.event_read_lock unlock];
 	});
@@ -1139,13 +1141,13 @@ scrollWheel: (NSEvent *) ev
 	/* View pan (horizontal scroll) event */
 	if (ev.scrollingDeltaX && [ev modifierFlags] & NSEventModifierFlagCommand)
 	{
-		dispatch_event(self, ev, ev.scrollingDeltaX / 2, -ai_resource_pan);
+		dispatch_event(self, ev, ev.scrollingDeltaX / 2, InstructionKey_Identifier(ai_view_pan));
 	}
 
 	/* View (vertical) scroll event */
 	if (ev.scrollingDeltaY)
 	{
-		dispatch_event(self, ev, ev.scrollingDeltaY / 2, -ai_resource_scroll);
+		dispatch_event(self, ev, ev.scrollingDeltaY / 2, InstructionKey_Identifier(ai_view_scroll));
 	}
 }
 
@@ -1193,7 +1195,7 @@ identify_event_key(NSString *unmod)
 	{
 		switch (src)
 		{
-			case 25:
+			case NSBackTabCharacter:
 				// Apple's backtab case.
 			case '\t':
 				return(KTab);
@@ -1206,6 +1208,8 @@ identify_event_key(NSString *unmod)
 			case 0x03:
 				return(KEnter);
 
+			case '\x1b':
+				return(KEscape);
 			case 0x7f:
 				return(KDeleteBackwards);
 			case NSDeleteFunctionKey:
@@ -1249,7 +1253,7 @@ identify_event_key(NSString *unmod)
 			{
 				if (src >= 0xF704 && src <= 0xF726)
 				{
-					return(FunctionKey_Identifier(src - 0xF704));
+					return(FunctionKey_Identifier(src - 0xF704 + 1));
 				}
 			}
 			break;
@@ -1259,17 +1263,42 @@ identify_event_key(NSString *unmod)
 	return(src);
 }
 
+/**
+	// charactersIgnoringModifiers is a lie, so use
+	// charactersByApplyingModifiers when available.
+*/
+static NSString *
+identify_event_stroke(NSEvent *ev)
+{
+	NSString *stroke;
+
+	if (@available(macOS 10.15, *))
+	{
+		unichar first;
+		stroke = [ev charactersByApplyingModifiers: 0];
+
+		first = [stroke characterAtIndex: 0];
+		if (first <= ' ' || first == 0x7F)
+			stroke = ev.charactersIgnoringModifiers;
+	}
+	else
+		stroke = ev.charactersIgnoringModifiers;
+
+	return([stroke uppercaseString]);
+}
+
 - (void)
 keyDown: (NSEvent *) ev
 {
-	NSString *stroke = [ev.charactersIgnoringModifiers uppercaseString];
+	NSEventModifierFlags fs = [ev modifierFlags];
+	NSString *stroke = identify_event_stroke(ev);
 	NSString *literal = ev.characters;
 
 	dispatch_async(self.event_queue, ^(void) {
 		[self.event_write_lock lock];
 		{
 			int32_t key;
-			event_status_snapshot(self, ev, identify_event_key(stroke), +1);
+			event_status_snapshot(self, ev, fs, identify_event_key(stroke), +1);
 			self.event_text = literal;
 			_event_status.st_text_length = [literal length];
 		}
@@ -1290,7 +1319,8 @@ _wantsKeyDownForEvent: (id) ev
 - (void)
 keyUp: (NSEvent *) ev
 {
-	NSString *stroke = [ev.charactersIgnoringModifiers uppercaseString];
+	NSEventModifierFlags fs = [ev modifierFlags];
+	NSString *stroke = identify_event_stroke(ev);
 	NSString *literal = ev.characters;
 
 	return;
@@ -1298,7 +1328,7 @@ keyUp: (NSEvent *) ev
 	dispatch_async(self.event_queue, ^(void) {
 		[self.event_write_lock lock];
 		{
-			event_status_snapshot(self, ev, identify_event_key(stroke), -1);
+			event_status_snapshot(self, ev, fs, identify_event_key(stroke), -1);
 			self.event_text = literal;
 			_event_status.st_text_length = [literal length];
 		}

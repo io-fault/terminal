@@ -116,6 +116,14 @@ def transition_capture_replace(session, rf, event):
 
 	session.keyboard.set('capture-replace')
 
+@event('transition', 'capture', 'key')
+def transition_capture_key(session, rf, event):
+	"""
+	# Prepare to capture the key and modifiers of a stroke.
+	"""
+
+	session.keyboard.set('capture-key')
+
 @event('transition', 'capture', 'insert')
 def transition_capture_insert(session, rf, event):
 	"""

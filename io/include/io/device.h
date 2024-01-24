@@ -13,14 +13,15 @@ typedef int (*TerminalApplication)(void *context);
 
 /**
 	// Key modifiers.
+	// Ordered by their associated codepoint value.
 */
 #define KeyModifiers() \
+	KM_DEFINE(imaginary, Imaginary) \
 	KM_DEFINE(shift, Shift) \
 	KM_DEFINE(control, Control) \
-	KM_DEFINE(meta, Meta) \
-	KM_DEFINE(hyper, Hyper) \
 	KM_DEFINE(system, System) \
-	KM_DEFINE(imaginary, Imaginary)
+	KM_DEFINE(meta, Meta) \
+	KM_DEFINE(hyper, Hyper)
 enum KeyModifiers
 {
 	km_void = 0,
@@ -46,9 +47,9 @@ enum KeyModifiers
 		// Length, in type specific units, of the associated text for insertion.
 		// Internally, the fastest method available is used to
 		// identify the text length. The units could be bytes, codepoints, or
-		// array size. This is primarily used as a flag to recognize
+		// array elements. This is primarily used as a flag to recognize
 		// the availability of the insertion text.
-		// When zero, an empty string is guaranted.
+		// When zero, an empty string is guaranteed.
 
 	// /st_left/
 		// The number of pixels from the left-most cell's outer edge
@@ -69,28 +70,30 @@ struct ControllerStatus
 	pixel_offset_t st_top;
 };
 
+/* Function Keys */
 #define FunctionKey_Offset (-0xF00)
-#define FunctionKey_Number(X) ((X) - FunctionKey_Offset)
+#define FunctionKey_Number(X) ((-X) + FunctionKey_Offset)
 #define FunctionKey_Identifier(X) (FunctionKey_Offset - (X))
 
 /* Mouse buttons */
 #define ScreenCursorKey_Offset (-0xB00)
-#define ScreenCursorKey_Number(X) ((X) - ScreenCursorKey_Offset)
+#define ScreenCursorKey_Number(X) ((-X) + ScreenCursorKey_Offset)
 #define ScreenCursorKey_Identifier(X) (ScreenCursorKey_Offset - (X))
 
 /* Virtual Keys identifying generic application instructions. */
 #define InstructionKey_Offset (-0xA000)
-#define InstructionKey_Number(X) ((X) - InstructionKey_Offset)
+#define InstructionKey_Number(X) ((-X) + InstructionKey_Offset)
 #define InstructionKey_Identifier(X) (InstructionKey_Offset - (X))
 
 #define KeyIdentifiers() \
 	KI_DEFINE(CapsLock, 0x21EA) \
 	KI_DEFINE(NumLock, 0x21ED) \
 	KI_DEFINE(ScrollLock, 0x21F3) \
+	\
 	KI_DEFINE(Imaginary, 0x2148) \
-	KI_DEFINE(System, 0x2318) \
-	KI_DEFINE(Control, 0x2303) \
 	KI_DEFINE(Shift, 0x21E7) \
+	KI_DEFINE(Control, 0x2303) \
+	KI_DEFINE(System, 0x2318) \
 	KI_DEFINE(Meta, 0x2325) \
 	KI_DEFINE(Hyper, 0x2726) \
 	\
@@ -155,19 +158,20 @@ struct ControllerStatus
 #undef KI_DEFINE
 
 #define ApplicationInstructions() \
-	AI_DEFINE(root, interrupt) \
-	AI_DEFINE(root, quit) \
-	AI_DEFINE(root, switch) \
-	AI_DEFINE(session, create) \
-	AI_DEFINE(session, restore) \
-	AI_DEFINE(session, close) \
+	AI_DEFINE(session, interrupt) \
+	AI_DEFINE(session, quit) \
+	AI_DEFINE(session, switch) \
+	AI_DEFINE(field, create) \
+	AI_DEFINE(field, restore) \
+	AI_DEFINE(field, close) \
+	AI_DEFINE(field, select) \
+	AI_DEFINE(field, next) \
+	AI_DEFINE(field, previous) \
 	AI_DEFINE(resource, create) \
 	AI_DEFINE(resource, open) \
 	AI_DEFINE(resource, save) \
 	AI_DEFINE(resource, close) \
 	AI_DEFINE(resource, relocate) \
-	AI_DEFINE(resource, scroll) \
-	AI_DEFINE(resource, pan) \
 	AI_DEFINE(element, hover) \
 	AI_DEFINE(element, find) \
 	AI_DEFINE(element, findnext) \
@@ -178,7 +182,9 @@ struct ControllerStatus
 	AI_DEFINE(element, copy) \
 	AI_DEFINE(element, paste) \
 	AI_DEFINE(element, delete) \
-	AI_DEFINE(element, selectall)
+	AI_DEFINE(element, selectall) \
+	AI_DEFINE(view, scroll) \
+	AI_DEFINE(view, pan)
 enum ApplicationInstruction
 {
 	ai_void = 0,
@@ -187,6 +193,19 @@ enum ApplicationInstruction
 		ApplicationInstructions()
 	#undef AI_DEFINE
 };
+
+static inline wchar_t
+ModifierKey(enum KeyModifiers kmi)
+{
+	switch (kmi)
+	{
+		#define KM_DEFINE(KM, KI) case km_##KM: return(K##KI);
+			KeyModifiers()
+		#undef KM_DEFINE
+	}
+
+	return(0);
+}
 
 #ifndef CM_COLOR_CHANNEL_SIZE
 	#define CM_COLOR_CHANNEL_SIZE 8

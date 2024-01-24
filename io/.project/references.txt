@@ -35,6 +35,20 @@
 /Transparency/
 	&<https://discussions.apple.com/thread/1772438>
 
+[ > charactersIgnoringModifiers ]
+
+macOS' cocoa API lies about its function and will report the modifier applied character
+in certain circumstances(number keys and most punctuation). Apparently, manual translating
+is or was a common workaround.
+
+	- &<https://github.com/panda3d/panda3d/pull/967>
+	- &<https://github.com/OmarEmaraDev/blender/commit/75658109bebade083eb77b3a07718a3eb4d5d095>
+	- &<https://source.chromium.org/chromium/chromium/src/+/HEAD:ui/events/keycodes/keyboard_code_conversion_mac.mm>
+
+However, Apple introduced a new method in 10.15:
+
+	- &<https://developer.apple.com/documentation/appkit/nsevent/3242717-charactersbyapplyingmodifiers?language=objc>
+
 [ > Fonts ]
 
 /Loading from URLs/
