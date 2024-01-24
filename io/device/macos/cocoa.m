@@ -241,11 +241,38 @@ applicationDidResignActive: (NSNotification *) anotify
 	[self updateIcon: app];
 }
 
-/* Menu bar exit or application event */
+/* Application menu actions */
+- (void)
+about: (id) sender
+{
+	NSAlert *aw = [NSAlert new];
+	aw.alertStyle = NSInformationalAlertStyle;
+	[aw setMessageText: @"Terminal Framework"];
+	[aw setInformativeText: @(
+		"Terminal manager providing a single cell image display"
+		" and abstractions for system I/O requirements."
+	)];
+	[aw addButtonWithTitle: @"OK"];
+	[aw setIcon: [NSApp applicationIconImage]];
+	[aw runModal];
+}
+
 - (void)
 quit: (id) sender
 {
 	[NSApp terminate: self];
+}
+
+- (void)
+minimize: (id) sender
+{
+	[NSApp hide: self];
+}
+
+- (void)
+configure: (id) sender
+{
+	;
 }
 
 - (void)
@@ -362,6 +389,12 @@ connectClient
 acceptsFirstResponder
 {
 	return(YES);
+}
+
+- (BOOL)
+acceptsFirstMouse: (NSEvent *) ev
+{
+	return(NO);
 }
 
 - (void)
@@ -1689,7 +1722,7 @@ device_application_manager(const char *title, const char *fontname, float fontsi
 		font = [NSFont fontWithName: @(fontname) size: fontsize];
 
 	app = [NSApplication sharedApplication];
-	app.mainMenu = create_macos_menu(title);
+	app.mainMenu = create_macos_menu("Terminal Framework");
 	[app setActivationPolicy: NSApplicationActivationPolicyRegular];
 
 	dm = [[DisplayManager alloc] init];
