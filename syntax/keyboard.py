@@ -39,7 +39,7 @@ def a(ks, *massign):
 		else:
 			k = str(k)
 
-	if k[0:1] + k[-1:] == '()':
+	if k[0:1] + k[-1:] in {'()', '[]'}:
 		# Application Instruction
 		ki = k
 	else:
