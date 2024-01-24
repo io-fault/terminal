@@ -179,7 +179,7 @@ area_members[] = {
 	{"left_offset", T_AREA_SCALAR, offsetof(struct AreaObject, area.left_offset), READONLY, NULL},
 	{"lines", T_AREA_SCALAR, offsetof(struct AreaObject, area.lines), READONLY, NULL},
 	{"span", T_AREA_SCALAR, offsetof(struct AreaObject, area.span), READONLY, NULL},
-	#define T_AREA_SCALAR T_USHORT
+	#undef T_AREA_SCALAR
 	{NULL,},
 };
 
@@ -976,32 +976,24 @@ device_transfer_event(PyObject *self)
 static PyObject *
 device_replicate_cells(PyObject *self, PyObject *args)
 {
-	struct CellArea sub, rep;
+	AreaObject sub, rep;
 
-	if (!PyArg_ParseTuple(args, "HHHHHHHH",
-			&sub.top_offset,
-			&sub.left_offset,
-			&sub.lines,
-			&sub.span,
-			&rep.top_offset,
-			&rep.left_offset,
-			&rep.lines,
-			&rep.span))
+	if (!PyArg_ParseTuple(args, "O!O!", &AreaType, &sub, &AreaType, &rep))
 		return(NULL);
 
-	Device_ReplicateCells(D(self), sub, rep);
+	Device_ReplicateCells(D(self), sub->area, rep->area);
 	Py_RETURN_NONE;
 }
 
 static PyObject *
 device_invalidate_cells(PyObject *self, PyObject *args)
 {
-	struct CellArea ca;
+	AreaObject ca;
 
-	if (!PyArg_ParseTuple(args, "HHHH", &ca.top_offset, &ca.left_offset, &ca.lines, &ca.span))
+	if (!PyArg_ParseTuple(args, "O!", &AreaType, &ca))
 		return(NULL);
 
-	Device_InvalidateCells(D(self), ca);
+	Device_InvalidateCells(D(self), ca->area);
 	Py_RETURN_NONE;
 }
 

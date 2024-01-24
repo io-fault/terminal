@@ -783,7 +783,7 @@ class Session(object):
 		self.device.wait()
 		for r in self.device._resets:
 			screen.rewrite(*r)
-			self.device.invalidate(r[0])
+			self.device.invalidate_cells(r[0])
 
 		for (rf, view) in self.io([None]):
 			current = rf.log.snapshot()
@@ -887,7 +887,7 @@ def initialize(editor, options, sources):
 	editor.fill(rfq) # Fill the views with refractions (documents)
 	editor.refocus() # Update editor.focus and editor.view.
 	editor.refresh() # Initialize the views' images.
-	editor.device.invalidate(editor.device.screen.area)
+	editor.device.invalidate_cells(editor.device.screen.area)
 	editor.device.render_pixels()
 
 from ..cells.types import Device
@@ -896,18 +896,13 @@ class LocalDevice(Device):
 		self._resets = []
 		self._cursor = self.get_cursor_cell_status
 
-	def invalidate(self, area):
-		return self.invalidate_cells(area.y_offset, area.x_offset, area.lines, area.span)
-
 	def dispatch(self, area, data):
 		if data.__class__ is area.__class__:
 			self.screen.replicate(area, data.y_offset, data.x_offset)
-			self.replicate_cells(
-				area.y_offset, area.x_offset, area.lines, area.span,
-				data.y_offset, data.x_offset, area.lines, area.span)
+			self.replicate_cells(area, data)
 		else:
 			self.screen.rewrite(area, data)
-			self.invalidate(area)
+			self.invalidate_cells(area)
 
 	def update(self, ixn):
 		for a, d in ixn:
