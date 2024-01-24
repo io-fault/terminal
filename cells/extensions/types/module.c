@@ -837,13 +837,13 @@ ScreenType = {
 #define terminal_context (((DeviceObject) self)->dev_terminal->cmd_context)
 
 static PyObject *
-device_get_event_quantity(PyObject *self)
+device_quantity(PyObject *self)
 {
 	return(PyLong_FromLong(DeviceController(self)->st_quantity));
 }
 
 static PyObject *
-device_get_cursor_status(PyObject *self)
+device_cursor_pixel_status(PyObject *self)
 {
 	struct ControllerStatus *ctl_st = DeviceController(self);
 
@@ -939,7 +939,7 @@ device_key(PyObject *self)
 }
 
 static PyObject *
-device_get_cursor_cell_status(PyObject *self)
+device_cursor_cell_status(PyObject *self)
 {
 	struct MatrixParameters *mp = DeviceMatrixParameters(self);
 	struct ControllerStatus *ctl_st = DeviceController(self);
@@ -1023,9 +1023,9 @@ device_synchronize(PyObject *self)
 
 static PyMethodDef device_methods[] = {
 	{"key", (PyCFunction) device_key, METH_NOARGS, NULL},
-	{"get_quantity", (PyCFunction) device_get_event_quantity, METH_NOARGS, NULL},
-	{"get_cursor_status", (PyCFunction) device_get_cursor_status, METH_NOARGS, NULL},
-	{"get_cursor_cell_status", (PyCFunction) device_get_cursor_cell_status, METH_NOARGS, NULL},
+	{"quantity", (PyCFunction) device_quantity, METH_NOARGS, NULL},
+	{"cursor_pixel_status", (PyCFunction) device_cursor_pixel_status, METH_NOARGS, NULL},
+	{"cursor_cell_status", (PyCFunction) device_cursor_cell_status, METH_NOARGS, NULL},
 
 	{"transfer_event", (PyCFunction) device_transfer_event, METH_NOARGS, NULL},
 	{"transfer_text", (PyCFunction) device_transfer_text, METH_NOARGS, NULL},

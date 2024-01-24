@@ -93,6 +93,7 @@ class Session(object):
 		self.views = []
 		self.deltas = []
 		self._reflections = {}
+		self._resets = []
 
 		self.cache = []
 
@@ -311,8 +312,8 @@ class Session(object):
 			refraction.render(ln)
 			for ln in refraction.elements[view.vertical(refraction)]
 		])
-		self.device.update(view.render(slice(0, None)))
-		self.device.update(view.compensate())
+		self.dispatch_delta(view.render(slice(0, None)))
+		self.dispatch_delta(view.compensate())
 
 	def refract(self, path):
 		"""
@@ -359,7 +360,7 @@ class Session(object):
 			tupdate = projection.update(trf, v, changes)
 			#tupdate = projection.refresh(trf, v, 0)
 			v.version = trf.log.snapshot()
-			self.device.update(tupdate)
+			self.dispatch_delta(tupdate)
 
 	def remodel(self):
 		"""
@@ -374,13 +375,13 @@ class Session(object):
 
 		self.views = list(
 			types.View(Area(*ctx), [], [], {'top': 'weak'})
-			for ctx in self.frame.itercontexts(self.device)
+			for ctx in self.frame.itercontexts(self.device.screen.area)
 		)
 
 		# Locations
 		self.headings = list(
 			types.View(Area(*ctx), [], [], {'bottom': 'weak'})
-			for ctx in self.frame.itercontexts(self.device, section=1)
+			for ctx in self.frame.itercontexts(self.device.screen.area, section=1)
 		)
 
 	def resize(self):
@@ -389,7 +390,7 @@ class Session(object):
 		"""
 
 		self.remodel()
-		self.device.update(self.renderframe())
+		self.dispatch_delta(self.renderframe())
 
 	def returnview(self, dpath):
 		"""
@@ -399,7 +400,7 @@ class Session(object):
 		previous = self.returns[self.index[dpath]]
 		if previous is not None:
 			self.attach(dpath, previous)
-			self.device.update(self.chpath(dpath, previous.origin))
+			self.dispatch_delta(self.chpath(dpath, previous.origin))
 
 	def fill(self, refractions):
 		"""
@@ -417,7 +418,7 @@ class Session(object):
 		for ((v, d), rf, view) in zip(self.panes, self.refractions, self.views):
 			rf.configure(view.area)
 			self._reflections[rf.origin.ref_path].add((rf, view))
-			self.device.update(self.chpath((v, d), rf.origin))
+			self.dispatch_delta(self.chpath((v, d), rf.origin))
 
 	def refresh(self):
 		"""
@@ -427,6 +428,10 @@ class Session(object):
 		for rf, view in zip(self.refractions, self.views):
 			projection.refresh(rf, view, rf.visible[0])
 			view.version = rf.log.snapshot()
+
+		self.device.invalidate_cells(self.device.screen.area)
+		self.device.render_pixels()
+		self.device.dispatch_frame()
 
 	def renderframe(self):
 		"""
@@ -452,7 +457,7 @@ class Session(object):
 			yield from v.render(slice(0, None))
 
 		status = list(self.indicate(self.focus, self.view))
-		self.device._resets[:] = [(area, self.device.screen.select(area)) for area, _ in status]
+		self._resets[:] = [(area, self.device.screen.select(area)) for area, _ in status]
 		yield from status
 
 	def select(self, dpath):
@@ -527,7 +532,7 @@ class Session(object):
 		rf.visibility[0].datum = view.offset
 		rf.visibility[1].datum = view.horizontal_offset
 		rf.visible[:] = (view.offset, view.horizontal_offset)
-		self.device.update(self.chpath(dpath, self.focus.origin, snapshot=rf.log.snapshot()))
+		self.dispatch_delta(self.chpath(dpath, self.focus.origin, snapshot=rf.log.snapshot()))
 
 	def prepare(self, type, dpath, *, extension=None):
 		"""
@@ -616,8 +621,8 @@ class Session(object):
 		# Iterable of reset sequences that clears the cursor position.
 		"""
 
+		rx, ry = (0, 0)
 		ctx = view.area
-		rx, ry = self.device.point
 		vx, vy = (ctx.x_offset, ctx.y_offset)
 		hoffset = view.horizontal_offset
 		top, left = focus.visible
@@ -717,7 +722,7 @@ class Session(object):
 		# [ Effects ]
 		# Assigns &alternate on &self to the returned triple.
 		"""
-		top, left = self.device.get_cursor_cell_status()
+		top, left = self.device.cursor_cell_status()
 		v, d, s = self.frame.address(left, top)
 
 		i = self.index[(v, d)]
@@ -743,6 +748,17 @@ class Session(object):
 				)
 			)
 		)
+
+	def dispatch_delta(self, ixn):
+		d = self.device
+		s = d.screen
+		for area, data in ixn:
+			if data.__class__ is area.__class__:
+				s.replicate(area, data.y_offset, data.x_offset)
+				d.replicate_cells(area, data)
+			else:
+				s.rewrite(area, data)
+				d.invalidate_cells(area)
 
 	def io(self, events):
 		try:
@@ -780,8 +796,8 @@ class Session(object):
 		screen = self.device.screen
 
 		self.device.synchronize() # Wait for render queue to clear.
-		self.device.wait()
-		for r in self.device._resets:
+		self.device.transfer_event()
+		for r in self._resets:
 			screen.rewrite(*r)
 			self.device.invalidate_cells(r[0])
 
@@ -789,12 +805,12 @@ class Session(object):
 			current = rf.log.snapshot()
 			voffsets = [view.offset, view.horizontal_offset]
 			if current != view.version or rf.visible != voffsets:
-				self.device.update(Method(rf, view, rf.log.since(view.version)))
+				self.dispatch_delta(Method(rf, view, rf.log.since(view.version)))
 				view.version = current
 
 		status = list(self.indicate(self.focus, self.view))
-		self.device._resets[:] = [(area, screen.select(area)) for area, _ in status]
-		self.device.update(status)
+		self._resets[:] = [(area, screen.select(area)) for area, _ in status]
+		self.dispatch_delta(status)
 		self.device.render_pixels()
 		self.device.dispatch_frame()
 
@@ -887,39 +903,6 @@ def initialize(editor, options, sources):
 	editor.fill(rfq) # Fill the views with refractions (documents)
 	editor.refocus() # Update editor.focus and editor.view.
 	editor.refresh() # Initialize the views' images.
-	editor.device.invalidate_cells(editor.device.screen.area)
-	editor.device.render_pixels()
-
-from ..cells.types import Device
-class LocalDevice(Device):
-	def __init__(self, *args):
-		self._resets = []
-		self._cursor = self.get_cursor_cell_status
-
-	def dispatch(self, area, data):
-		if data.__class__ is area.__class__:
-			self.screen.replicate(area, data.y_offset, data.x_offset)
-			self.replicate_cells(area, data)
-		else:
-			self.screen.rewrite(area, data)
-			self.invalidate_cells(area)
-
-	def update(self, ixn):
-		for a, d in ixn:
-			self.dispatch(a, d)
-
-	def wait(self):
-		self.transfer_event()
-		self.event_key = self.key()
-		self.event_occurrences = self.get_quantity()
-
-	@property
-	def point(self):
-		return (0, 0)
-
-	@property
-	def dimensions(self):
-		return self.screen.area.span, self.screen.area.lines
 
 def main(inv:process.Invocation) -> process.Exit:
 	config = {
@@ -951,15 +934,16 @@ def main(inv:process.Invocation) -> process.Exit:
 	else:
 		path = files.root@exepath
 
-	tdev = LocalDevice()
-	editor = Session(path, tdev)
+	# sys.terminaldevice
+	from ..cells.types import Device
+	editor = Session(path, Device())
 
 	try:
 		initialize(editor, config, sources)
 		editor.log("Device: " + (config.get('interface-device') or "unspecified"))
 		editor.log("Working Directory: " + str(process.fs_pwd()))
 		editor.log("Path Arguments:", *['\t' + s for s in sources])
-		editor.device.update(editor.renderframe())
+		editor.dispatch_delta(editor.renderframe())
 		editor.device.render_pixels()
 
 		while editor.panes:

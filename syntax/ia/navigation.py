@@ -308,7 +308,7 @@ def event_select_absolute(session, rf, event):
 	# perform the &event_select_series operation.
 	"""
 	div, trf, view = session.target(event)
-	ay, ax = session.device._cursor()
+	ay, ax = session.device.cursor_cell_status()
 
 	sy = view.area.y_offset
 	sx = view.area.x_offset
@@ -612,7 +612,7 @@ def scroll_backward_unit(session, rf, event, quantity=1, target=None, shift=chr(
 @event('view', 'horizontal', 'pan')
 def pan(session, rf, event):
 	cursor_target = session.target(event)[1]
-	quantity = session.device.event_occurrences
+	quantity = session.device.quantity()
 
 	if quantity < 0:
 		return pan_forward_cells(session, rf, event, -quantity, target=cursor_target)
@@ -622,7 +622,7 @@ def pan(session, rf, event):
 @event('view', 'vertical', 'scroll')
 def scroll(session, rf, event):
 	cursor_target = session.target(event)[1]
-	quantity = session.device.event_occurrences
+	quantity = session.device.quantity()
 
 	if quantity < 0:
 		return scroll_forward_unit(session, rf, event, -quantity, target=cursor_target)
