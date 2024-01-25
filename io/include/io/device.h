@@ -1,5 +1,5 @@
-#ifndef META_CELLS_MATRIX_H
-#define META_CELLS_MATRIX_H 1
+#ifndef TERMINAL_IO_DEVICE_H
+#define TERMINAL_IO_DEVICE_H 1
 
 /**
 	// Type for describing exact locations on the screen.
@@ -155,6 +155,22 @@ struct ControllerStatus
 		KeyIdentifiers()
 	};
 #undef KI_DEFINE
+
+/**
+	// Retrieve the unqualified key name using its identifier.
+*/
+static inline const char *
+KeyName(enum KeyIdentifier ki)
+{
+	switch (ki)
+	{
+		#define KI_DEFINE(KN, KI) case K##KN: return(#KN);
+			KeyIdentifiers()
+		#undef KI_DEFINE
+	}
+
+	return("");
+}
 
 #define ApplicationInstructions() \
 	AI_DEFINE(session, interrupt) \
@@ -523,12 +539,12 @@ struct Cell
 */
 struct Device
 {
-	void *cmd_context;
 	struct Cell *cmd_image;
 	struct CellArea *cmd_view;
 	struct MatrixParameters *cmd_dimensions;
 	struct ControllerStatus *cmd_status;
 
+	void *cmd_context;
 	uint16_t (*transfer_event)(void *context);
 	void (*transfer_text)(void *context, const char **txt, uint32_t *bytelength);
 	void (*replicate_cells)(void *context, struct CellArea dst, struct CellArea src);
@@ -617,4 +633,4 @@ cellmatrix_calculate_dimensions(struct MatrixParameters *mp,
 	mp->y_screen_units = (mp->y_cells * mp->y_cell_units);
 }
 
-#endif /* META_CELLS_MATRIX_H */
+#endif /* TERMINAL_IO_DEVICE_H */
