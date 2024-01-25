@@ -504,27 +504,20 @@ initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fc
 
 	[self setCanDrawConcurrently: YES];
 
-	/*
-		// Manually write zeros.
-		// The frame may not be the source of our dimensions.
-	*/
-	self.dimensions = (struct MatrixParameters) {
-		.x_cell_units = 0.0,
-		.y_cell_units = 0.0,
-		.v_cell_units = 0.0,
-		.x_screen_units = 0.0,
-		.y_screen_units = 0.0,
+	self.inscription = (struct GlyphInscriptionParameters) {
+		.gi_horizontal_scale = 2,
+		.gi_stroke_width = 0.0,
 
-		.x_scale = 2,
-		.x_glyph_offset = -0.1,
-		.y_glyph_offset = 1.0,
-		.x_pad = 0.6,
-		.y_pad = -4.75,
-
-		.x_cells = 0,
-		.y_cells = 0,
-		.v_cells = 0
+		.gi_horizontal_offset = -0.1,
+		.gi_vertical_offset = 1.0,
+		.gi_horizontal_pad = 0.6,
+		.gi_vertical_pad = -4.75,
 	};
+	[self setFontContext: fctx];
+	[self setFont: font];
+	[self setTileCache: [[NSCache alloc] init]];
+
+	self.dimensions = (struct MatrixParameters) {0,};
 
 	self.pending_updates = [[NSMutableArray alloc] init];
 	self.completed_updates = 0;
@@ -533,10 +526,6 @@ initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fc
 	self.event_write_lock = [[NSLock alloc] init];
 	[self.event_write_lock lock];
 	[self.event_read_lock lock];
-
-	[self setFontContext: fctx];
-	[self setFont: font];
-	[self setTileCache: [[NSCache alloc] init]];
 
 	[self setLayer: [CALayer layer]];
 	[self.layer setName: @"cellmatrix-pixel-buffer"];
@@ -572,9 +561,10 @@ report
 resizeMatrix: (CGSize) size
 {
 	struct MatrixParameters *mp = [self matrixParameters];
+	struct GlyphInscriptionParameters *ip = &_inscription;
 	CGSize fsize = [self.font boundingRectForFont].size;
 
-	cellmatrix_configure_cells(mp, fsize.width, fsize.height);
+	cellmatrix_configure_cells(mp, ip, fsize.width, fsize.height);
 
 	CGFloat sf = self.window.backingScaleFactor;
 	mp->scale_factor = sf;
@@ -674,6 +664,7 @@ createTile: (CGSize) tiled
 renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
 {
 	struct MatrixParameters *mp = [self matrixParameters];
+	struct GlyphInscriptionParameters *ip = &_inscription;
 	int iwindow;
 	CGFloat x_offset = 0.0;
 	NSGraphicsContext *ctx, *stored = [NSGraphicsContext currentContext];
@@ -739,18 +730,18 @@ renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
 		switch (iwindow)
 		{
 			case 0:
-				x_offset += mp->x_glyph_offset;
+				x_offset += ip->gi_horizontal_offset;
 			break;
 
 			default:
 			{
 				CGFloat ptwindow = -(mp->x_cell_units * iwindow);
-				x_offset = ptwindow + mp->x_glyph_offset;
+				x_offset = ptwindow + ip->gi_horizontal_offset;
 			}
 			break;
 		}
 
-		[castr drawAtPoint: CGPointMake(x_offset, mp->y_glyph_offset)];
+		[castr drawAtPoint: CGPointMake(x_offset, ip->gi_vertical_offset)];
 		[ctx flushGraphics];
 	}
 	[NSGraphicsContext setCurrentContext: stored];

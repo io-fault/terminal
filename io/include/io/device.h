@@ -283,15 +283,15 @@ struct CellArea
 
 #define CellArea(TOP, LEFT, LINES, SPAN) \
 	((struct CellArea) {.top_offset = TOP, .left_offset = LEFT, .lines = lines, .span = SPAN})
-#define CellArea_GetTop(A) (A.top_offset)
-#define CellArea_GetLeft(A) (A.left_offset)
-#define CellArea_GetRight(A) (A.left_offset + (A.span < 1 ? 1 : A.span) - 1)
-#define CellArea_GetBottom(A) (A.top_offset + (A.lines < 1 ? 1 : A.lines) - 1)
-#define CellArea_GetLineCount(A) (A.lines)
-#define CellArea_GetCellSpan(A) (A.span)
-#define CellArea_GetHorizontalLimit(A) ((unsigned int)A.left_offset + (unsigned int)A.span)
-#define CellArea_GetVerticalLimit(A) ((unsigned int)A.top_offset + (unsigned int)A.lines)
-#define CellArea_GetVolume(A) ((unsigned int)A.lines * (unsigned int)A.span)
+#define CellArea_GetTop(A) ((A).top_offset)
+#define CellArea_GetLeft(A) ((A).left_offset)
+#define CellArea_GetRight(A) ((A).left_offset + ((A).span < 1 ? 1 : (A).span) - 1)
+#define CellArea_GetBottom(A) ((A).top_offset + ((A).lines < 1 ? 1 : (A).lines) - 1)
+#define CellArea_GetLineCount(A) ((A).lines)
+#define CellArea_GetCellSpan(A) ((A).span)
+#define CellArea_GetHorizontalLimit(A) ((unsigned int)(A).left_offset + (unsigned int)(A).span)
+#define CellArea_GetVerticalLimit(A) ((unsigned int)(A).top_offset + (unsigned int)(A).lines)
+#define CellArea_GetVolume(A) ((unsigned int)(A).lines * (unsigned int)(A).span)
 
 #define _min(f, l) ((f < l) ? f : l)
 #define _max(f, l) ((f > l) ? f : l)
@@ -316,6 +316,9 @@ aintersection(struct CellArea bounds, struct CellArea latter)
 #undef _max
 
 /**
+	// Precision controls over how the cell's image is rendered.
+
+	// [ Elements ]
 	// /gi_horizontal_scale/
 		// The presumed maximum (horizontal) cell count that a font can use.
 		// How many times to divide the font's width in order to get
@@ -347,28 +350,22 @@ struct GlyphInscriptionParameters
 };
 
 /**
-	// Dimensions necessary for translation to and from
-	// system units; oftens pixels, but (abstract) points on macos.
+	// Dimensions necessary for translation to and from system units.
 
 	// [ Elements ]
+	// /scale_factor/
+		// The scaling factor to apply to horizontal or vertical units
+		// in order to identify the pixel units.
+	// /x_screen_units/
+		// The adjusted width of the window in system units.
+	// /y_screen_units/
+		// The adjusted height of the window in system units.
 	// /x_cell_units/
 		// The width of a cell in system units.
 	// /y_cell_units/
 		// The height of a cell in system units.
 	// /v_cell_units/
 		// The volume of cell units.
-	// /x_screen_units/
-		// The adjusted width of the window in system units.
-	// /y_screen_units/
-		// The adjusted height of the window in system units.
-	// /x_pad/
-		// The extra width given to all cells; negative in the case where
-		// width should be removed.
-	// /y_pad/
-		// The extra height given to all cells; negative in the case where
-		// height should be removed.
-	// /x_scale/
-		// The presumed maximum (horizontal) cell count that a font can use.
 	// /x_cells/
 		// The number of cells across the matrix.
 	// /y_cells/
@@ -379,14 +376,10 @@ struct GlyphInscriptionParameters
 struct MatrixParameters
 {
 	system_units_t scale_factor;
-	system_units_t x_cell_units, y_cell_units, v_cell_units;
 	system_units_t x_screen_units, y_screen_units;
-	system_units_t x_glyph_offset, y_glyph_offset;
-
-	system_units_t x_pad, y_pad;
-
-	int x_scale;
-	int x_cells, y_cells, v_cells;
+	system_units_t x_cell_units, y_cell_units, v_cell_units;
+	unsigned short x_cells, y_cells;
+	unsigned long v_cells;
 };
 
 /**
@@ -587,10 +580,11 @@ struct Device
 */
 static void
 cellmatrix_configure_cells(struct MatrixParameters *mp,
+	struct GlyphInscriptionParameters *ip,
 	system_units_t cell_width, system_units_t cell_height)
 {
-	mp->x_cell_units = ((cell_width / mp->x_scale) + mp->x_pad);
-	mp->y_cell_units = ((cell_height / 1.0) + mp->y_pad);
+	mp->x_cell_units = ((cell_width / ip->gi_horizontal_scale) + ip->gi_horizontal_pad);
+	mp->y_cell_units = ((cell_height / 1.0) + ip->gi_vertical_pad);
 }
 
 /**

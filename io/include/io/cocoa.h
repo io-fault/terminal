@@ -22,6 +22,7 @@
 	@property (nonatomic) struct Device device;
 
 	/* Screen */
+	@property (nonatomic) struct GlyphInscriptionParameters inscription;
 	@property (nonatomic) struct MatrixParameters dimensions;
 	@property (nonatomic) struct CellArea view;
 	@property (nonatomic) struct Cell *cellImage;
