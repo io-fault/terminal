@@ -209,13 +209,14 @@ applicationDidFinishLaunching: (NSNotification *) anotify
 	[self.root makeKeyAndOrderFront: self];
 
 	mv = self.root.contentView;
-	[mv initMatrixCache];
-	[mv connectClient];
+	[mv configurePixelImage];
+	[mv connectApplication];
 
 	self.iconUpdated = 0;
 	[self staleIcon];
 
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1000000000),
+	dispatch_after(
+		dispatch_time(DISPATCH_TIME_NOW, 2 * 1000000000),
 		dispatch_get_main_queue(), ^(void) {
 		app.applicationIconImage = [self captureScreen];
 	});
@@ -387,7 +388,7 @@ clientDisconnect
 }
 
 - (void)
-connectClient
+connectApplication
 {
 	[self.application start];
 }
@@ -422,34 +423,19 @@ isOpaque
 	return(YES);
 }
 
-- (CGContextRef)
-createMatrixContext: (CGColorSpaceRef) colors
-{
-	return CGBitmapContextCreate(
-		IOSurfaceGetBaseAddress(self.pixelImage),
-		IOSurfaceGetWidth(self.pixelImage),
-		IOSurfaceGetHeight(self.pixelImage),
-		8,
-		IOSurfaceGetBytesPerRow(self.pixelImage),
-		colors,
-		kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host
-		//kCGImageAlphaFirst | kCGBitmapByteOrder32Little
-	);
-}
-
 /**
 	// Construct an image and context for representing the matrix.
 */
 - (void)
-initMatrixCache
+configurePixelImage
 {
 	struct MatrixParameters *mp = [self matrixParameters];
-	unsigned bytesPerElement = 4;
-	unsigned bytesPerPixel = 4;
+	const unsigned bpp = 4;
+
 	size_t width = mp->x_screen_units * mp->scale_factor;
 	size_t height = mp->y_screen_units * mp->scale_factor;
 
-	size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, width * bytesPerPixel);
+	size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, width * bpp);
 	size_t tb = IOSurfaceAlignProperty(kIOSurfaceAllocSize, height * bpr);
 
 	self.pixelImage = IOSurfaceCreate(
@@ -457,7 +443,7 @@ initMatrixCache
 		@{
 			(id) kIOSurfaceWidth: @(width),
 			(id) kIOSurfaceHeight: @(height),
-			(id) kIOSurfaceBytesPerElement: @(bytesPerElement),
+			(id) kIOSurfaceBytesPerElement: @(bpp),
 			(id) kIOSurfaceElementHeight: @(1),
 			(id) kIOSurfaceElementWidth: @(1),
 			(id) kIOSurfaceBytesPerRow: @(bpr),
