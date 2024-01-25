@@ -82,7 +82,7 @@ recolor(struct Color *c)
 		// A -> A
 
 		// The swapping of of R and B is performed as the NSBitmapImageRep does
-		// not allow the exact order . To avoid wasteful processing time,
+		// not provide enough format control. To avoid wasteful processing time,
 		// the tile bitmaps need to be in a format acceptable for display.
 
 		// Inverted alpha so that when the leading byte is unspecified,
@@ -365,6 +365,7 @@ main
 {
 	self.co_status = self.co_function(self.co_device);
 
+	/* Communicate exit to CellMatrix */
 	dispatch_async(dispatch_get_main_queue(), ^(void) {
 		CellMatrix *terminal = self.co_device->cmd_context;
 		[terminal clientDisconnect];
@@ -376,7 +377,13 @@ main
 - (void)
 clientDisconnect
 {
-	self.application = [self.application clone];
+	if (self.application.co_status == 0)
+	{
+		self.application = [self.application clone];
+		[self.application start];
+	}
+	else
+		self.application = nil;
 }
 
 - (void)
