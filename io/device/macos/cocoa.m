@@ -1513,15 +1513,20 @@ device_replicate_cells(void *context, struct CellArea target, struct CellArea so
 	CellMatrix *terminal = context;
 	struct MatrixParameters *mp = [terminal matrixParameters];
 
+	unsigned short y = target.top_offset;
+	unsigned short x = target.left_offset;
+
+	if (y < source.top_offset)
+		y = source.top_offset;
+	if (x < source.left_offset)
+		x = source.left_offset;
+
 	dispatch_async(terminal.render_queue, ^(void) {
 		/*
 			// Constrain the area size to avoid reaching
 			// outside the allocation in &CellMatrix.copyPixels.
 		*/
-		#define RMAX(a,b) (a > b ? a : b)
-		const unsigned short maxy = MAX(target.top_offset, source.top_offset);
-		const unsigned short maxx = MAX(target.left_offset, source.left_offset);
-		#undef RMAX
+		const unsigned short maxy = y, maxx = x;
 		struct CellArea constrained = target;
 
 		if (maxy + constrained.lines > mp->y_cells)
