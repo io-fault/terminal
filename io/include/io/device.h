@@ -161,12 +161,12 @@ struct ControllerStatus
 	AI_DEFINE(session, interrupt) \
 	AI_DEFINE(session, quit) \
 	AI_DEFINE(session, switch) \
-	AI_DEFINE(field, create) \
-	AI_DEFINE(field, restore) \
-	AI_DEFINE(field, close) \
-	AI_DEFINE(field, select) \
-	AI_DEFINE(field, next) \
-	AI_DEFINE(field, previous) \
+	AI_DEFINE(session, restore) \
+	AI_DEFINE(partition, create) \
+	AI_DEFINE(partition, close) \
+	AI_DEFINE(partition, select) \
+	AI_DEFINE(partition, next) \
+	AI_DEFINE(partition, previous) \
 	AI_DEFINE(resource, create) \
 	AI_DEFINE(resource, open) \
 	AI_DEFINE(resource, save) \
