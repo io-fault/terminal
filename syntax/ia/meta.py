@@ -146,7 +146,7 @@ def refresh_view_image(session, rf, event):
 		f"Refraction: {rf.visibility[0].snapshot()!r}",
 		f"Lines: {len(rf.elements)}, {rf.log.snapshot()}",
 	)
-	session.device.update(projection.refresh(rf, view, rf.visible[0]))
+	session.dispatch_delta(projection.refresh(rf, view, rf.visible[0]))
 
 @event('select', 'distributed', 'operation')
 def set_distributing(session, rf, event):
