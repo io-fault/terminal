@@ -112,7 +112,6 @@ struct ControllerStatus
 	KI_DEFINE(Sleep, 0x23FE) \
 	KI_DEFINE(BrightnessIncrease, 0x1F506) \
 	KI_DEFINE(BrightnessDecrease, 0x1F505) \
-	KI_DEFINE(Timer, 0x23F2) \
 	\
 	KI_DEFINE(PreviousPage, 0x2397) \
 	KI_DEFINE(NextPage, 0x2398) \
@@ -148,7 +147,7 @@ struct ControllerStatus
 	KI_DEFINE(MediaRepeatContinuous, 0x1F501) \
 	KI_DEFINE(MediaRepeatOnce, 0x1F502) \
 	\
-	KI_DEFINE(ScreenCursorMotion, 0x1F401)
+	KI_DEFINE(ScreenCursorMotion, 0x1F5B1)
 
 #define KI_DEFINE(N, IV) K##N = IV,
 	enum KeyIdentifier
@@ -184,7 +183,8 @@ struct ControllerStatus
 	AI_DEFINE(element, delete) \
 	AI_DEFINE(element, selectall) \
 	AI_DEFINE(view, scroll) \
-	AI_DEFINE(view, pan)
+	AI_DEFINE(view, pan) \
+	AI_DEFINE(time, elapsed)
 enum ApplicationInstruction
 {
 	ai_void = 0,
