@@ -384,12 +384,18 @@ class Session(object):
 			for ctx in self.frame.itercontexts(self.device.screen.area, section=1)
 		)
 
-	def resize(self):
+	def resize(self, quantity=None):
 		"""
 		# Window size changed; remodel and render the new frame.
 		"""
 
+		current = list(self.refractions)
+		self.device.reconnect()
+		self.frame.reconfigure(self.device.screen.area)
 		self.remodel()
+		self.refocus()
+		self.refresh(-1)
+		self.fill(current)
 		self.dispatch_delta(self.renderframe())
 
 	def returnview(self, dpath):
@@ -420,7 +426,7 @@ class Session(object):
 			self._reflections[rf.origin.ref_path].add((rf, view))
 			self.dispatch_delta(self.chpath((v, d), rf.origin))
 
-	def refresh(self):
+	def refresh(self, synchronize=1):
 		"""
 		# Update the images of all the views.
 		"""
@@ -429,9 +435,10 @@ class Session(object):
 			projection.refresh(rf, view, rf.visible[0])
 			view.version = rf.log.snapshot()
 
-		self.device.invalidate_cells(self.device.screen.area)
-		self.device.render_pixels()
-		self.device.dispatch_frame()
+		if synchronize > 0:
+			self.device.invalidate_cells(self.device.screen.area)
+			self.device.render_pixels()
+			self.device.dispatch_frame()
 
 	def renderframe(self):
 		"""
@@ -760,32 +767,46 @@ class Session(object):
 				s.rewrite(area, data)
 				d.invalidate_cells(area)
 
-	def io(self, events):
+	intercepts = {
+		'(screen/refresh)': refresh,
+		'(screen/resize)': resize,
+	}
+	def dispatch(self):
+		"""
+		# Execute the action associated with the event currently
+		# described by the device's controller status.
+		"""
 		try:
-			for event in events:
-				key = self.device.key()
-				try:
-					rf, view = self.focus, self.view
-					mode, xev = self.keyboard.interpret(key)
-					ev_category, ev_identifier, ev_args = xev
+			key = self.device.key()
 
-					ev_op = self.events[ev_category](ev_identifier)
-					self.log(f"{key!r} -> {ev_category}/{'/'.join(ev_identifier)} -> {ev_op!r}")
-					ev_op(self, rf, key, *ev_args) # User Event Operation
-				except Exception as operror:
-					self.keyboard.reset('control')
-					self.error('Operation Failure', operror)
-					del operror
+			# Application Instructions
+			if key in self.intercepts:
+				self.intercepts[key](self, self.device.quantity())
+				self.log(key)
+				return
 
-				yield from self.reflections(rf.origin, (rf, view))
-				if self.deltas:
-					for drf, dview in self.deltas:
-						yield from self.reflections(drf.origin, (drf, dview))
-					del self.deltas[:]
+			try:
+				rf, view = self.focus, self.view
+				mode, xev = self.keyboard.interpret(key)
+				ev_category, ev_identifier, ev_args = xev
+
+				ev_op = self.events[ev_category](ev_identifier)
+				self.log(f"{key!r} -> {ev_category}/{'/'.join(ev_identifier)} -> {ev_op!r}")
+				ev_op(self, rf, key, *ev_args) # User Event Operation
+			except Exception as operror:
+				self.keyboard.reset('control')
+				self.error('Operation Failure', operror)
+				del operror
+
+			yield from self.reflections(rf.origin, (rf, view))
+			if self.deltas:
+				for drf, dview in self.deltas:
+					yield from self.reflections(drf.origin, (drf, dview))
+				del self.deltas[:]
 		except Exception as derror:
 			self.error("Rendering Failure", derror)
 			# Try to eliminate the state that caused exception.
-			self.renderframe()
+			yield from self.renderframe()
 			del derror
 
 	def cycle(self, *, Method=projection.update):
@@ -801,7 +822,7 @@ class Session(object):
 			screen.rewrite(*r)
 			self.device.invalidate_cells(r[0])
 
-		for (rf, view) in self.io([None]):
+		for (rf, view) in self.dispatch():
 			current = rf.log.snapshot()
 			voffsets = [view.offset, view.horizontal_offset]
 			if current != view.version or rf.visible != voffsets:

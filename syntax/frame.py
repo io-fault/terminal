@@ -222,6 +222,14 @@ class Model(object):
 			self.divide(i, vd)
 		return self
 
+	def reconfigure(self, area):
+		"""
+		# Update the model with the new screen dimensions.
+		"""
+
+		self.fm_context = area
+		self.configure(*map(len, self.fm_divisions.values()))
+
 	def iterpanes(self):
 		"""
 		# Identify the paths used to reach a given pane.

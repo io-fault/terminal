@@ -1,6 +1,8 @@
 #ifndef TERMINAL_IO_DEVICE_H
 #define TERMINAL_IO_DEVICE_H 1
 
+#define DEFAULT_CELL_SAMPLE "dbqpgyTWWWWMXY|[]{}()@$\\/-?_,."
+
 /**
 	// Type for describing exact locations on the screen.
 */
@@ -173,10 +175,13 @@ KeyName(enum KeyIdentifier ki)
 }
 
 #define ApplicationInstructions() \
+	AI_DEFINE(session, synchronize) \
 	AI_DEFINE(session, interrupt) \
 	AI_DEFINE(session, quit) \
 	AI_DEFINE(session, switch) \
 	AI_DEFINE(session, restore) \
+	AI_DEFINE(screen, refresh) \
+	AI_DEFINE(screen, resize) \
 	AI_DEFINE(partition, create) \
 	AI_DEFINE(partition, close) \
 	AI_DEFINE(partition, select) \
@@ -208,6 +213,8 @@ enum ApplicationInstruction
 	#define AI_DEFINE(CLASS, N) ai_##CLASS##_##N,
 		ApplicationInstructions()
 	#undef AI_DEFINE
+
+	ai_sentinel
 };
 
 static inline wchar_t
@@ -298,7 +305,7 @@ struct CellArea
 };
 
 #define CellArea(TOP, LEFT, LINES, SPAN) \
-	((struct CellArea) {.top_offset = TOP, .left_offset = LEFT, .lines = lines, .span = SPAN})
+	((struct CellArea) {.top_offset = TOP, .left_offset = LEFT, .lines = LINES, .span = SPAN})
 #define CellArea_GetTop(A) ((A).top_offset)
 #define CellArea_GetLeft(A) ((A).left_offset)
 #define CellArea_GetRight(A) ((A).left_offset + ((A).span < 1 ? 1 : (A).span) - 1)
@@ -335,15 +342,14 @@ aintersection(struct CellArea bounds, struct CellArea latter)
 	// Precision controls over how the cell's image is rendered.
 
 	// [ Elements ]
-	// /gi_horizontal_scale/
-		// The presumed maximum (horizontal) cell count that a font can use.
-		// How many times to divide the font's width in order to get
-		// a correct approximate cell width. Normally `2`; `1` if the font
-		// does not support double width characters.
-
 	// /gi_stroke_width/
 		// A real number adjusting the stroke width used by the font when
 		// the feature is available by the text rendering engine.
+
+	// /gi_cell_width/
+		// The cell width to use when addressing the tile.
+	// /gi_cell_height/
+		// The cell height to use when addressing the tile.
 
 	// /gi_horizontal_pad/
 		// The extra width given to all cells; negative in the case where
@@ -359,8 +365,8 @@ aintersection(struct CellArea bounds, struct CellArea latter)
 */
 struct GlyphInscriptionParameters
 {
-	short gi_horizontal_scale;
 	float gi_stroke_width;
+	system_units_t gi_cell_width, gi_cell_height;
 	system_units_t gi_horizontal_pad, gi_vertical_pad;
 	system_units_t gi_horizontal_offset, gi_vertical_offset;
 };
@@ -399,7 +405,7 @@ struct MatrixParameters
 };
 
 /**
-	// A common set of line styles.
+	// A set of common line styles.
 */
 #define LINE_PATTERN_BITS 4
 
@@ -441,6 +447,9 @@ line_pattern_string(enum LinePattern lp)
 	// the usual Red, Green, Blue format.
 	// The leading alpha byte may be inverted to
 	// allow a zero alpha value to represent an opaque color.
+
+	// This complication is merely for the convenience of
+	// being able to cast &Color as a &uint32_t.
 */
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	#define mkcolor(a, r, g, b) (struct Color) {a, b, g, r}
@@ -554,10 +563,10 @@ struct Device
 	void (*synchronize)(void *context);
 };
 
-#define mforeach(ctx, cv, ca) \
+#define mforeach(SPAN, cv, ca) \
 	do { \
 		struct CellArea * const CA = ca; \
-		const size_t _mfe_lnsz = (ctx->x_cells); \
+		const size_t _mfe_lnsz = (SPAN); \
 		const size_t _mfe_spansz = (CA->span); \
 		const size_t _mfe_spanoffset = (CA->left_offset); \
 		struct Cell *_mfe_lcur = cv + ((CA->top_offset) * _mfe_lnsz); \
@@ -571,8 +580,8 @@ struct Device
 			{ \
 				struct Cell *Cell = _mfe_ccur;
 
-#define mforall(ctx, cv) \
-	mforeach(ctx, cv, &((struct CellArea){0, 0, ctx->y_cells, ctx->x_cells}))
+#define mforall(LINES, SPAN, cv) \
+	mforeach(SPAN, cv, &((struct CellArea){0, 0, LINES, SPAN}))
 
 #define mbreak(exit) goto _mfe_##exit
 #define mend(exit) \
@@ -597,10 +606,18 @@ struct Device
 static void
 cellmatrix_configure_cells(struct MatrixParameters *mp,
 	struct GlyphInscriptionParameters *ip,
-	system_units_t cell_width, system_units_t cell_height)
+	system_units_t scale_factor)
 {
-	mp->x_cell_units = ((cell_width / ip->gi_horizontal_scale) + ip->gi_horizontal_pad);
-	mp->y_cell_units = ((cell_height / 1.0) + ip->gi_vertical_pad);
+	mp->scale_factor = scale_factor;
+
+	/* Apply padding to retrieve screen dimensions. */
+	mp->x_cell_units = ((ip->gi_cell_width / 1.0) + ip->gi_horizontal_pad);
+	mp->y_cell_units = ((ip->gi_cell_height / 1.0) + ip->gi_vertical_pad);
+
+	/* Align on whole pixels. */
+	mp->x_cell_units = ceil(mp->x_cell_units * scale_factor) / scale_factor;
+	mp->y_cell_units = ceil(mp->y_cell_units * scale_factor) / scale_factor;
+	mp->v_cell_units = mp->x_cell_units * mp->y_cell_units;
 }
 
 /**
@@ -620,8 +637,6 @@ cellmatrix_calculate_dimensions(struct MatrixParameters *mp,
 	system_units_t screen_width, system_units_t screen_height)
 {
 	system_units_t xr, yr;
-
-	mp->v_cell_units = mp->x_cell_units * mp->y_cell_units;
 
 	/* available horizontal and vertical cells */
 	mp->x_cells = floor(screen_width / mp->x_cell_units);

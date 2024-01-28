@@ -45,6 +45,15 @@ is or was a common workaround.
 	- &<https://github.com/OmarEmaraDev/blender/commit/75658109bebade083eb77b3a07718a3eb4d5d095>
 	- &<https://source.chromium.org/chromium/chromium/src/+/HEAD:ui/events/keycodes/keyboard_code_conversion_mac.mm>
 
+[ > mainMenu ]
+
+For some time, starting the application would yield an unclickable menubar where switching
+away and back would allow screen cursor events to be recognized. Apparently common
+when constructing the menu bar from code, this quirk disappeared after minor
+restructuring of the initialization procedures.
+
+	- &<https://stackoverflow.com/questions/33345686/cocoa-application-menu-bar-not-clickable>
+
 However, Apple introduced a new method in 10.15:
 
 	- &<https://developer.apple.com/documentation/appkit/nsevent/3242717-charactersbyapplyingmodifiers?language=objc>
@@ -53,6 +62,14 @@ However, Apple introduced a new method in 10.15:
 
 /Loading from URLs/
 	- &<https://stackoverflow.com/questions/2703085/how-can-you-load-a-font-ttf-from-a-file-using-core-text>
+/Sizing/
+	- &<https://developer.apple.com/documentation/foundation/nsattributedstring/1529154-boundingrectwithsize>
+
+	Unfortunately, there does not appear to be a direct method for extracting a
+	useful bounding box for a monospaced cell. &NS.Font.boundingRectForFont may
+	be accurate, but is often unusable without modification. Using an attributed
+	string consisting of characters known, expected, to be cell units provides
+	fairly accurate starting measurements.
 
 [ > Caching ]
 

@@ -562,19 +562,9 @@ screen_select(PyObj self, PyObj area)
 		return(NULL);
 	else
 	{
-		// Currently, the macro takes MatrixParameters, but only the
-		// dimensions are needed so adapt for the MP structure.
-		const struct {
-			unsigned short y_cells;
-			unsigned short x_cells;
-		} mcontext = {
-			so->dimensions.lines,
-			so->dimensions.span,
-		};
-
 		int i = 0;
 
-		mforeach((&mcontext), so->image, &selection)
+		mforeach(so->dimensions.span, so->image, &selection)
 		{
 			CellObject co = (CellObject) PyAllocate(&CellType);
 
@@ -648,21 +638,12 @@ screen_replicate(PyObj self, PyObj args, PyObj kw)
 	{
 		struct Cell *cursor;
 
-		const struct {
-			unsigned short y_cells;
-			unsigned short x_cells;
-		} mcontext = {
-			so->dimensions.lines,
-			so->dimensions.span,
-		};
-
 		/*
 			// A regular memcpy is not usually possible here.
 			// Only a full-width rectangle would allow for it.
 		*/
-
 		cursor = tmpbuf;
-		mforeach((&mcontext), so->image, &src)
+		mforeach(so->dimensions.span, so->image, &src)
 		{
 			*cursor = *Cell;
 			++cursor;
@@ -670,7 +651,7 @@ screen_replicate(PyObj self, PyObj args, PyObj kw)
 		mend(source)
 
 		cursor = tmpbuf;
-		mforeach((&mcontext), so->image, &dst)
+		mforeach(so->dimensions.span, so->image, &dst)
 		{
 			*Cell = *cursor;
 			++cursor;
@@ -1021,6 +1002,33 @@ device_synchronize(PyObject *self)
 	Py_RETURN_NONE;
 }
 
+static PyObject *
+device_reconnect(PyObject *self)
+{
+	ScreenObject screen;
+	DeviceObject devob = (DeviceObject) self;
+	struct Device *dev = devob->dev_terminal;
+	Py_ssize_t ssize = dev->cmd_dimensions->v_cells * sizeof(struct Cell);
+
+	Py_XDECREF(devob->dev_image);
+	devob->dev_image = PyMemoryView_FromMemory(dev->cmd_image, ssize, PyBUF_WRITE);
+	if (devob->dev_image == NULL)
+		return(NULL);
+
+	screen = devob->dev_screen;
+	free(screen->image);
+	screen->image = dev->cmd_image;
+	screen->dimensions = *dev->cmd_view;
+
+	PyBuffer_Release(&(screen->memory));
+	if (PyObject_GetBuffer(devob->dev_image, &(screen->memory), PyBUF_WRITABLE) < 0)
+	{
+		return(NULL);
+	}
+
+	Py_RETURN_NONE;
+}
+
 static PyMethodDef device_methods[] = {
 	{"key", (PyCFunction) device_key, METH_NOARGS, NULL},
 	{"quantity", (PyCFunction) device_quantity, METH_NOARGS, NULL},
@@ -1030,6 +1038,7 @@ static PyMethodDef device_methods[] = {
 	{"transfer_event", (PyCFunction) device_transfer_event, METH_NOARGS, NULL},
 	{"transfer_text", (PyCFunction) device_transfer_text, METH_NOARGS, NULL},
 
+	{"reconnect", (PyCFunction) device_reconnect, METH_NOARGS, NULL},
 	{"replicate_cells", (PyCFunction) device_replicate_cells, METH_VARARGS, NULL},
 	{"invalidate_cells", (PyCFunction) device_invalidate_cells, METH_VARARGS, NULL},
 	{"render_pixels", (PyCFunction) device_render_pixels, METH_VARARGS, NULL},

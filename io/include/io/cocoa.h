@@ -17,7 +17,7 @@
 	// large screens.
 */
 @interface CellMatrix : NSView
-	/* Client Application and API support. */
+	/* Terminal Application and API support. */
 	@property (retain,nonatomic) Coprocess *application;
 	@property (nonatomic) struct Device device;
 
@@ -39,17 +39,22 @@
 	@property (retain,nonatomic) NSMutableArray <NSValue *> *pending_updates;
 	@property (nonatomic) int completed_updates;
 	@property (nonatomic) IOSurfaceRef pixelImage;
+	@property (retain,nonatomic) CALayer *pixelImageLayer;
 
 	/* Tile rendering */
 	@property (retain,nonatomic) NSCache <NSData *, NSBitmapImageRep *> *tileCache;
-	@property (retain,nonatomic) NSFontManager *fontContext;
 	@property (retain,nonatomic) NSFont *font;
+	@property (retain,nonatomic) NSFont *bold;
+	@property (retain,nonatomic) NSFont *italic;
+	@property (retain,nonatomic) NSFont *boldItalic;
+	@property (retain,nonatomic) NSFont *caps;
 @end
 
 /**
 	// Application delegate managing connections to applications.
 */
 @interface DisplayManager : NSObject<NSApplicationDelegate>
+	@property (retain,nonatomic) NSFontManager *fonts;
 	@property (retain,nonatomic) NSWindow *root;
 	@property (nonatomic) time_t iconUpdated;
 @end

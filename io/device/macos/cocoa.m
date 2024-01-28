@@ -18,6 +18,18 @@
 #include <io/device.h>
 #include <io/cocoa.h>
 
+/*
+	// Device API for CellMatrix views.
+*/
+static uint16_t device_transfer_event(void *);
+static void device_transfer_text(void *, const char **, uint32_t *);
+static void device_replicate_cells(void *, struct CellArea, struct CellArea);
+static void device_invalidate_cells(void *, struct CellArea);
+static void device_render_pixels(void *);
+static void device_dispatch_frame(void *);
+static void device_synchronize(void *);
+static void dispatch_application_instruction(CellMatrix *, int32_t , enum ApplicationInstruction);
+
 #pragma mark CALayer SPI
 @interface CALayer ()
 - (void) reloadValueForKeyPath: (NSString *) keyPath;
@@ -27,6 +39,34 @@
 @interface NSView ()
 - (BOOL) _wantsKeyDownForEvent: (id) event;
 @end
+
+/**
+	// Temporary safety in order to handle inconsistent
+	// image sizes during font changes and window resizing.
+*/
+static inline void
+constrain_area(struct MatrixParameters *mp, struct CellArea *ca)
+{
+	if (ca->top_offset + ca->lines > mp->y_cells)
+	{
+		int dy = (ca->top_offset + ca->lines) - mp->y_cells;
+
+		if (dy > ca->lines)
+			ca->lines = 0;
+		else
+			ca->lines -= dy;
+	}
+
+	if (ca->left_offset + ca->span > mp->x_cells)
+	{
+		int dx = (ca->left_offset + ca->span) - mp->x_cells;
+
+		if (dx > ca->span)
+			ca->span = 0;
+		else
+			ca->span -= dx;
+	}
+}
 
 static NSColor *
 rgb(uint32_t color)
@@ -99,18 +139,23 @@ recolor(struct Color *c)
 }
 
 static NSFont *
-refont(NSFontManager *fc, NSFont *font, struct Cell *cell)
+refont(CellMatrix *cm, struct Cell *cell)
 {
-	NSFontTraitMask ftm = 0;
-
 	if (cell->c_traits.bold)
-		ftm |= NSBoldFontMask;
-	if (cell->c_traits.italic)
-		ftm |= NSItalicFontMask;
-	if (cell->c_traits.caps)
-		ftm |= NSSmallCapsFontMask;
+	{
+		if (cell->c_traits.italic)
+			return(cm.boldItalic);
+		else
+			return(cm.bold);
+	}
 
-	return [fc convertFont:font toHaveTrait:ftm];
+	if (cell->c_traits.italic)
+		return(cm.italic);
+
+	if (cell->c_traits.caps)
+		return(cm.caps);
+
+	return(cm.font);
 }
 
 static unsigned int
@@ -196,10 +241,10 @@ string_codepoint(NSString *str)
 
 @implementation DisplayManager
 - (void)
-applicationDidFinishLaunching: (NSNotification *) anotify
+applicationWillFinishLaunching: (NSNotification *) anotify
 {
-	Coprocess *co;
 	NSApplication *app = [anotify object];
+	Coprocess *co;
 	CellMatrix *mv;
 
 	if (!(self.root.styleMask & NSWindowStyleMaskFullScreen))
@@ -220,6 +265,13 @@ applicationDidFinishLaunching: (NSNotification *) anotify
 		dispatch_get_main_queue(), ^(void) {
 		app.applicationIconImage = [self captureScreen];
 	});
+}
+
+- (void)
+applicationDidFinishLaunching: (NSNotification *) anotify
+{
+	NSApplication *app = [anotify object];
+	[app setActivationPolicy: NSApplicationActivationPolicyRegular];
 }
 
 - (void)
@@ -247,7 +299,7 @@ applicationDidResignActive: (NSNotification *) anotify
 about: (id) sender
 {
 	NSAlert *aw = [NSAlert new];
-	aw.alertStyle = NSInformationalAlertStyle;
+	aw.alertStyle = NSAlertStyleInformational;
 	[aw setMessageText: @"Terminal Framework"];
 	[aw setInformativeText: @(
 		"Terminal manager providing a single cell image display"
@@ -268,6 +320,98 @@ quit: (id) sender
 minimize: (id) sender
 {
 	[NSApp hide: self];
+}
+
+- (void)
+resizeCellImage: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	struct MatrixParameters *mp = [cm matrixParameters];
+
+	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
+	{
+		[cm configureCellImage];
+		dispatch_application_instruction(cm, 0, ai_screen_resize);
+	}
+}
+
+- (void)
+refreshAll: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	/* +1 quantity signals display flush */
+	dispatch_application_instruction(cm, +1, ai_screen_refresh);
+}
+
+- (void)
+refreshCells: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	/* +1 quantity signals withheld flush */
+	dispatch_application_instruction(cm, -1, ai_screen_refresh);
+}
+
+- (void)
+refreshPixels: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	struct MatrixParameters *mp = [cm matrixParameters];
+
+	/* Rewrite pixels without application I/O */
+	device_invalidate_cells(cm, CellArea(0, 0, mp->y_cells, mp->x_cells));
+	device_render_pixels(cm);
+	device_dispatch_frame(cm);
+}
+
+- (void)
+toggleFontSelector: (id) sender
+{
+	NSFontPanel *fp = [self.fonts fontPanel: YES];
+
+	if (fp.visible == YES)
+		[fp close];
+	else
+		[self.fonts orderFrontFontPanel: sender];
+}
+
+- (void)
+changeFont: (NSFontManager *) fontctx
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	NSFont *dfont = [fontctx convertFont: cm.font];
+	[cm configureFont: dfont withContext: fontctx];
+	[self refreshPixels: nil];
+}
+
+- (void)
+increaseFontSize: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+
+	[cm configureFont: [self.fonts convertFont: cm.font toSize: cm.font.pointSize + 1.0]
+		withContext: self.fonts
+	];
+	[self.fonts setSelectedFont: cm.font isMultiple: NO];
+	[self refreshPixels: nil];
+}
+
+- (void)
+decreaseFontSize: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+
+	[cm configureFont: [self.fonts convertFont: cm.font toSize: cm.font.pointSize - 1.0]
+		withContext: self.fonts
+	];
+	[self.fonts setSelectedFont: cm.font isMultiple: NO];
+	[self refreshPixels: nil];
 }
 
 - (void)
@@ -408,10 +552,17 @@ acceptsFirstMouse: (NSEvent *) ev
 - (void)
 dealloc
 {
-	if (self.cellImage != NULL)
+	if (self.cellImage != NULL && self.application == nil)
 	{
 		free(self.cellImage);
 		self.cellImage = NULL;
+	}
+
+	if (self.pixelImage != NULL)
+	{
+		self.pixelImageLayer.contents = nil;
+		IOSurfaceDecrementUseCount(self.pixelImage);
+		self.pixelImage = NULL;
 	}
 
 	return([super dealloc]);
@@ -421,6 +572,66 @@ dealloc
 isOpaque
 {
 	return(YES);
+}
+
+- (void)
+updateFont: (NSFont *) dfont withContext: (NSFontManager *) fontctx
+{
+	self.font = dfont;
+	self.bold = [fontctx convertFont: dfont toHaveTrait: NSBoldFontMask];
+	self.italic = [fontctx convertFont: dfont toHaveTrait: NSItalicFontMask];
+	self.boldItalic = [fontctx convertFont: dfont toHaveTrait: NSBoldFontMask|NSItalicFontMask];
+	self.caps = [fontctx convertFont: dfont toHaveTrait: NSSmallCapsFontMask];
+}
+
+- (void)
+configureFont: (NSFont *) dfont withContext: (NSFontManager *) fontctx
+{
+	struct MatrixParameters *mp = [self matrixParameters];
+	struct GlyphInscriptionParameters *ip = &_inscription;
+	CGSize fsize;
+
+	if ([self.font isEqual: dfont])
+		return;
+	[self updateFont: dfont withContext: fontctx];
+
+	fsize = size_monospace_font(DEFAULT_CELL_SAMPLE, self.font);
+	dispatch_async(self.render_queue, ^(void) {
+		ip->gi_cell_width = fsize.width;
+		ip->gi_cell_height = fsize.height;
+
+		cellmatrix_configure_cells(mp, ip, self.window.backingScaleFactor);
+		cellmatrix_calculate_dimensions(mp, self.frame.size.width, self.frame.size.height);
+		[self centerBounds: self.frame.size];
+		[self configurePixelImage];
+		[self setTileCache: [[NSCache alloc] init]];
+	});
+}
+
+/**
+	// Allocate a new cell image ignoring any present.
+
+	// The application is expected to have a copy of this reference
+	// and it will need to release the memory at its convenience.
+*/
+- (void)
+configureCellImage
+{
+	struct MatrixParameters *mp = [self matrixParameters];
+
+	/*
+		// Never free cellImage here as it belongs to the terminal application.
+		// Release by a device manager should only occur when the application
+		// is set to nil as a signal that it never received the allocation.
+	*/
+	self.cellImage = malloc(sizeof(struct Cell) * mp->v_cells);
+	self.view = (struct CellArea) {
+		.top_offset = 0,
+		.left_offset = 0,
+		.lines = mp->y_cells,
+		.span = mp->x_cells,
+	};
+	_device.cmd_image = self.cellImage;
 }
 
 /**
@@ -437,6 +648,9 @@ configurePixelImage
 
 	size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, width * bpp);
 	size_t tb = IOSurfaceAlignProperty(kIOSurfaceAllocSize, height * bpr);
+
+	if (self.pixelImage != NULL)
+		IOSurfaceDecrementUseCount(self.pixelImage);
 
 	self.pixelImage = IOSurfaceCreate(
 		(CFDictionaryRef)
@@ -459,22 +673,13 @@ configurePixelImage
 	}
 	IOSurfaceUnlock(self.pixelImage, 0, NULL);
 
-	[self.layer setContents: self.pixelImage];
+	[self.pixelImageLayer setContents: self.pixelImage];
 }
 
-/*
-	// Device API for CellMatrix views.
-*/
-static uint16_t device_transfer_event(void *);
-static void device_transfer_text(void *, const char **, uint32_t *);
-static void device_replicate_cells(void *, struct CellArea, struct CellArea);
-static void device_invalidate_cells(void *, struct CellArea);
-static void device_render_pixels(void *);
-static void device_dispatch_frame(void *);
-static void device_synchronize(void *);
-
 - (instancetype)
-initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fctx
+initWithFrame: (CGRect) r
+	andFont: (NSFont *) font
+	context: (NSFontManager *) fontctx
 {
 	struct MatrixParameters *mp;
 	NSScreen *screen;
@@ -483,11 +688,11 @@ initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fc
 		// API support structure.
 	*/
 	self.device = (struct Device) {
-		.cmd_context = (void *) self,
 		.cmd_dimensions = &_dimensions,
 		.cmd_status = &_event_status,
 		.cmd_view = &_view,
 
+		.cmd_context = (void *) self,
 		.transfer_event = device_transfer_event,
 		.transfer_text = device_transfer_text,
 		.replicate_cells = device_replicate_cells,
@@ -504,17 +709,18 @@ initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fc
 
 	[self setCanDrawConcurrently: YES];
 
+	CGSize fsize = size_monospace_font(DEFAULT_CELL_SAMPLE, font);
 	self.inscription = (struct GlyphInscriptionParameters) {
-		.gi_horizontal_scale = 2,
 		.gi_stroke_width = 0.0,
-
-		.gi_horizontal_offset = -0.1,
-		.gi_vertical_offset = 1.0,
-		.gi_horizontal_pad = 0.6,
-		.gi_vertical_pad = -4.75,
+		.gi_cell_width = fsize.width,
+		.gi_cell_height = fsize.height,
+		.gi_horizontal_offset = -0.5,
+		.gi_vertical_offset = 0.5,
+		.gi_horizontal_pad = -0.5,
+		.gi_vertical_pad = -1.5,
 	};
-	[self setFontContext: fctx];
-	[self setFont: font];
+	self.font = nil;
+	[self updateFont: font withContext: fontctx];
 	[self setTileCache: [[NSCache alloc] init]];
 
 	self.dimensions = (struct MatrixParameters) {0,};
@@ -527,13 +733,17 @@ initWithFrame: (CGRect) r andFont: (NSFont *) font context: (NSFontManager *) fc
 	[self.event_write_lock lock];
 	[self.event_read_lock lock];
 
-	[self setLayer: [CALayer layer]];
-	[self.layer setName: @"cellmatrix-pixel-buffer"];
-	[self setWantsLayer: YES];
-	[self.layer setDrawsAsynchronously: YES];
-	[self.layer setMasksToBounds: NO];
-	[self setLayerContentsRedrawPolicy: NSViewLayerContentsRedrawNever];
+	self.pixelImageLayer = [CALayer layer];
+	[self setLayer: self.pixelImageLayer];
 
+	[self.pixelImageLayer setName: @"cellmatrix-pixel-buffer"];
+	[self.layer setBackgroundColor: CGColorCreateSRGB(1.0, 0, 0, 0.2)];
+	[self.pixelImageLayer setDrawsAsynchronously: YES];
+	[self.pixelImageLayer setMasksToBounds: NO];
+	[self.pixelImageLayer setBackgroundColor: CGColorCreateSRGB(0, 0, 0, 0)];
+
+	[self setWantsLayer: YES];
+	[self setLayerContentsRedrawPolicy: NSViewLayerContentsRedrawNever];
 	return(self);
 }
 
@@ -557,27 +767,41 @@ report
 	NSLog(@"Pixel Image %g MiB", IOSurfaceGetAllocSize(self.pixelImage) / (1024.0 * 1024.0));
 }
 
+/**
+	// Identify the real bounding rectangle of a monospaced cell
+	// using a small, constant, sample text.
+*/
+static CGSize
+size_monospace_font(const char *sample, NSFont *font)
+{
+	NSString *str = [NSString stringWithUTF8String: sample];
+	size_t units = [str length];
+	CGSize fsize = [font boundingRectForFont].size;
+
+	NSAttributedString *castr = [
+		[NSAttributedString alloc]
+		initWithString: str
+
+		attributes: @{
+			NSFontAttributeName: font,
+		}
+	];
+
+	NSRect r = [castr boundingRectWithSize: CGSizeMake(units * fsize.width, fsize.height)
+		options: 0 context: nil
+	];
+
+	return(CGSizeMake(r.size.width / units, r.size.height));
+}
+
 - (void)
 resizeMatrix: (CGSize) size
 {
 	struct MatrixParameters *mp = [self matrixParameters];
 	struct GlyphInscriptionParameters *ip = &_inscription;
-	CGSize fsize = [self.font boundingRectForFont].size;
 
-	cellmatrix_configure_cells(mp, ip, fsize.width, fsize.height);
-
-	CGFloat sf = self.window.backingScaleFactor;
-	mp->scale_factor = sf;
-	mp->x_cell_units = ceil(mp->x_cell_units * sf) / sf;
-	mp->y_cell_units = ceil(mp->y_cell_units * sf) / sf;
-
+	cellmatrix_configure_cells(mp, ip, self.window.backingScaleFactor);
 	cellmatrix_calculate_dimensions(mp, size.width, size.height);
-
-	if (self.cellImage != NULL)
-		free(self.cellImage);
-
-	self.cellImage = malloc(sizeof(struct Cell) * mp->v_cells);
-	_device.cmd_image = self.cellImage;
 }
 
 - (void)
@@ -687,19 +911,19 @@ renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
 	{
 		case '\t':
 		case ' ':
-			cellglyph = @"| |";
-			iwindow = 1;
+			cellglyph = @"{   }";
+			iwindow = 2;
 		break;
 
 		default:
-			cellglyph = [NSString stringWithFormat: @"|%@|", codepoint_string(cell->c_codepoint)];
-			iwindow = cell->c_window + 1;
+			cellglyph = [NSString stringWithFormat: @"{ %@ }", codepoint_string(cell->c_codepoint)];
+			iwindow = cell->c_window + 2;
 		break;
 	}
 
 	[NSGraphicsContext setCurrentContext: ctx];
 	{
-		NSFont *sfont = refont(self.fontContext, cfont, cell);
+		NSFont *sfont = refont(self, cell);
 
 		// Create attributed string translating Cell parameters.
 		NSAttributedString *castr = [
@@ -784,8 +1008,10 @@ updatePixels
 		struct CellArea ca;
 		[self.pending_updates[i] getValue: &ca size: sizeof(ca)];
 
+		constrain_area(mp, &ca);
 		if (ca.lines * ca.span < 16)
 		{
+			/* Don't bother with dispatch when the volume is small. */
 			[self drawPixels: ca];
 		}
 		else
@@ -823,6 +1049,7 @@ signalDisplayUpdates
 	{
 		struct CellArea ca;
 		[self.pending_updates[i] getValue: &ca size: sizeof(ca)];
+		constrain_area(mp, &ca);
 		[self setNeedsDisplayInRect: atranslate(mp, ca)];
 	}
 }
@@ -839,11 +1066,11 @@ signalDisplay
 			forKey: kCATransactionDisableActions];
 
 		if (true)
-			[self.layer reloadValueForKeyPath: @"contents"];
+			[self.pixelImageLayer reloadValueForKeyPath: @"contents"];
 		else
 		{
-			[self.layer setContents: nil];
-			[self.layer setContents: self.pixelImage];
+			[self.pixelImageLayer setContents: nil];
+			[self.pixelImageLayer setContents: self.pixelImage];
 		}
 	}
 	[CATransaction commit];
@@ -855,7 +1082,7 @@ signalDisplay
 - (void)
 updateCellsAt: (struct CellArea *) ca withVector: (struct Cell *) cv
 {
-	mforeach([self matrixParameters], self.cellImage, ca)
+	mforeach(self.view.span, self.cellImage, ca)
 	{
 		*Cell = *cv;
 		++cv;
@@ -869,7 +1096,7 @@ drawArea: (struct CellArea *) ca
 	struct MatrixParameters *mp = [self matrixParameters];
 	struct Cell *image = self.cellImage;
 
-	mforeach(mp, image, ca)
+	mforeach(self.view.span, image, ca)
 	{
 		/*
 			// Get the cell's image and target rectangle.
@@ -893,22 +1120,28 @@ drawArea: (struct CellArea *) ca
 - (void)
 copyPixels: (struct CellArea) da fromSource: (struct CellArea) sa
 {
-	const int pixelsize = 4;
 	struct MatrixParameters *mp = [self matrixParameters];
 	CGFloat sf = mp->scale_factor;
 
 	unsigned char *buffer = IOSurfaceGetBaseAddress(self.pixelImage);
+	int maxcol = IOSurfaceGetWidth(self.pixelImage);
 	int maxrow = IOSurfaceGetHeight(self.pixelImage);
+	int bpp = IOSurfaceGetBytesPerElement(self.pixelImage);
 	int bpr = IOSurfaceGetBytesPerRow(self.pixelImage);
 
 	int width = da.span * mp->x_cell_units * sf;
 	int height = da.lines * mp->y_cell_units * sf;
-	int span = width * pixelsize;
+	int span = width * bpp;
+
+	if (height >= maxrow)
+		height = maxrow;
+	if (width >= maxcol)
+		width = maxcol;
 
 	int dsty = da.top_offset * mp->y_cell_units * sf;
 	int srcy = sa.top_offset * mp->y_cell_units * sf;
-	int dstoffset = (da.left_offset * mp->x_cell_units * sf) * pixelsize;
-	int srcoffset = (sa.left_offset * mp->x_cell_units * sf) * pixelsize;
+	int dstoffset = da.left_offset * mp->x_cell_units * sf * bpp;
+	int srcoffset = sa.left_offset * mp->x_cell_units * sf * bpp;
 
 	int dir = 1;
 	if (dsty > srcy)
@@ -916,6 +1149,10 @@ copyPixels: (struct CellArea) da fromSource: (struct CellArea) sa
 		dsty = dsty + height;
 		srcy = srcy + height;
 		dir = -1;
+		if (dsty >= maxrow)
+			dsty = maxrow - 1;
+		if (srcy >= maxrow)
+			srcy = maxrow - 1;
 	}
 
 	int i;
@@ -935,7 +1172,6 @@ copyPixels: (struct CellArea) da fromSource: (struct CellArea) sa
 - (void)
 drawPixels: (struct CellArea) ca
 {
-	const int pixelsize = 4;
 	struct MatrixParameters *mp = [self matrixParameters];
 	struct Cell *image = self.cellImage;
 	CGFloat sf = mp->scale_factor;
@@ -943,20 +1179,24 @@ drawPixels: (struct CellArea) ca
 	unsigned char *dst = IOSurfaceGetBaseAddress(self.pixelImage);
 	int maxrow = IOSurfaceGetHeight(self.pixelImage);
 	int bpr = IOSurfaceGetBytesPerRow(self.pixelImage);
+	int bpp = IOSurfaceGetBytesPerElement(self.pixelImage);
 
 	int width = mp->x_cell_units * sf;
 	int height = mp->y_cell_units * sf;
-	int cellpixels = pixelsize * width;
+	int cellpixels = bpp * width;
 
-	mforeach(mp, image, (&ca))
+	mforeach(self.view.span, image, (&ca))
 	{
 		NSBitmapImageRep *ci = [self cellBitmap: Cell];
 		CGRect ar = ptranslate(mp, Offset, Line);
 		int i;
 		int left = ar.origin.x * sf;
-		int dsty = maxrow - ((ar.origin.y * sf) + height);
-		int dstoffset = left * pixelsize;
+		int dsty = maxrow - (((0.0 + ar.origin.y) * sf) + height);
+		int dstoffset = left * bpp;
 		unsigned char *src = ci.bitmapData;
+
+		assert(dsty >= 0);
+		assert(dsty < maxrow);
 
 		for (i = 0; i < height; ++i)
 		{
@@ -1033,6 +1273,23 @@ event_context_interpret(NSEventModifierFlags evmf)
 	}
 
 	return(keys);
+}
+
+static void
+dispatch_application_instruction(CellMatrix *self, int32_t quantity, enum ApplicationInstruction ai)
+{
+	dispatch_async(self.event_queue, ^(void) {
+		[self.event_write_lock lock];
+		{
+			struct ControllerStatus *ctl = &(self->_event_status);
+			self.event_text = nil;
+			ctl->st_dispatch = InstructionKey_Identifier(ai);
+			ctl->st_quantity = quantity;
+			ctl->st_text_length = 0;
+			ctl->st_keys = 0;
+		}
+		[self.event_read_lock unlock];
+	});
 }
 
 /**
@@ -1340,7 +1597,7 @@ customWindowsToEnterFullScreenForWindow: (NSWindow *) window
 #define AddSeparator(M) [M addItem: [NSMenuItem separatorItem]]
 
 NSMenu *
-create_macos_menu(const char *title)
+create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 {
 	NSMenu *root;
 	NSString *about = [NSString stringWithFormat: @"About %s", title];
@@ -1427,18 +1684,22 @@ create_macos_menu(const char *title)
 	shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
 
 	/* Screen Menu */
-	NSMenuItem *resize = AddMenuItem(screen, "Resize", @selector(resize:), "u");
-	resize.toolTip = @"Adjust screen size to fit the visible cells.";
+	NSMenuItem *resize = AddMenuItem(screen, "Resize Cell Image", @selector(resizeCellImage:), "U");
+	resize.toolTip = @"Adjust the cell image so that it fits the capacity of the screen.";
 
 	AddSeparator(screen);
-	AddMenuItem(screen, "Font", @selector(setfont:), "");
-	AddMenuItem(screen, "Size", @selector(setsize:), "");
+	NSMenuItem *fontitems = AddMenuItem(screen, "Font", @selector(toggleFontSelector:), "t");
+	fontitems.target = dm;
+	fontitems = AddMenuItem(screen, "Increase Size", @selector(increaseFontSize:), "+");
+	fontitems.target = dm;
+	fontitems = AddMenuItem(screen, "Decrease Size", @selector(decreaseFontSize:), "-");
+	fontitems.target = dm;
 
 	AddSeparator(screen);
-	AddMenuItem(screen, "Refresh", @selector(refresh:), "r")
+	AddMenuItem(screen, "Refresh", @selector(refreshAll:), "r")
 		.toolTip = @"Refresh the Cell and Pixel images.";
 	AddMenuItem(screen, "Refresh Cell Image", @selector(refreshCells:), "R")
-		.toolTip = @"Signal terminal application to refresh the Cell Image.";
+		.toolTip = @"Signal terminal application to refresh the Cell image.";
 
 	NSMenuItem *rpi = MenuItem("Refresh Pixel Image", @selector(refreshPixels:), "R");
 	rpi.keyEquivalentModifierMask |= NSEventModifierFlagControl;
@@ -1492,6 +1753,7 @@ create_matrix_window(NSScreen *screen, NSFontManager *fontctx, NSFont *font)
 
 	[mv resizeMatrix: screen_size];
 	[mv centerBounds: screen_size];
+	[mv configureCellImage];
 
 	return(root);
 }
@@ -1528,6 +1790,7 @@ device_replicate_cells(void *context, struct CellArea target, struct CellArea so
 		*/
 		const unsigned short maxy = y, maxx = x;
 		struct CellArea constrained = target;
+		struct CellArea src = source;
 
 		if (maxy + constrained.lines > mp->y_cells)
 			constrained.lines = mp->y_cells - maxy;
@@ -1544,7 +1807,9 @@ device_replicate_cells(void *context, struct CellArea target, struct CellArea so
 		*/
 		IOSurfaceLock(terminal.pixelImage, 0, NULL);
 		[terminal updatePixels];
-		[terminal copyPixels: constrained fromSource: source];
+		constrain_area(mp, &constrained);
+		constrain_area(mp, &src);
+		[terminal copyPixels: constrained fromSource: src];
 		IOSurfaceUnlock(terminal.pixelImage, 0, NULL);
 	});
 }
@@ -1628,24 +1893,27 @@ device_application_manager(const char *title, const char *fontname, float fontsi
 	DisplayManager *dm; /* Application delegate. */
 	CellMatrix *terminal;
 	struct MatrixParameters *mp;
+	NSFontManager *fontctx;
 	NSFont *font;
 
+	fontctx = [NSFontManager sharedFontManager];
 	if (fontname == NULL)
 		font = [NSFont monospacedSystemFontOfSize: fontsize weight: NSFontWeightLight];
 	else
 		font = [NSFont fontWithName: @(fontname) size: fontsize];
-
-	app = [NSApplication sharedApplication];
-	app.mainMenu = create_macos_menu("Terminal Framework");
-	[app setActivationPolicy: NSApplicationActivationPolicyRegular];
+	[fontctx setSelectedFont: font isMultiple: NO];
 
 	dm = [[DisplayManager alloc] init];
+	dm.fonts = fontctx;
 	dm.root = create_matrix_window(
 		[NSScreen mainScreen],
-		[NSFontManager sharedFontManager],
-		font
+		fontctx, font
 	);
 	[dm.root setTitle: [NSString stringWithUTF8String: title]];
+
+	app = [NSApplication sharedApplication];
+	app.delegate = dm;
+	app.mainMenu = create_macos_menu("Terminal Framework", dm, fontctx);
 
 	terminal = (CellMatrix *) dm.root.contentView;
 	terminal.application = [[Coprocess alloc]
@@ -1653,11 +1921,8 @@ device_application_manager(const char *title, const char *fontname, float fontsi
 		andProgram: fp
 	];
 
-	/* Execute; coprocess launched by applicationDidFinishLaunching */
-	[app setDelegate: dm];
 	[app run];
-
-	return(250);
+	return(200);
 }
 
 int
