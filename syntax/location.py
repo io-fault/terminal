@@ -169,7 +169,7 @@ def open(session, rf, event):
 
 	del rf.elements[:]
 	rf.visible[0] = 0
-	session.device.update(session.chpath(dpath, new.origin, snapshot=rf.log.snapshot()))
+	session.dispatch_delta(session.chpath(dpath, new.origin, snapshot=rf.log.snapshot()))
 
 def save(session, rf, event):
 	"""
@@ -192,7 +192,7 @@ def save(session, rf, event):
 	# Location heading.
 	del rf.elements[:]
 	rf.visible[0] = 0
-	session.device.update(session.chpath(dpath, target.origin, snapshot=rf.log.snapshot()))
+	session.dispatch_delta(session.chpath(dpath, target.origin, snapshot=rf.log.snapshot()))
 
 def refract(theme, view, pathcontext, path, action):
 	"""

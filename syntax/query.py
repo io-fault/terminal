@@ -37,7 +37,7 @@ def refract(session, view, qtype, state, action):
 	lrf.focus[0].restore((0, 1, 2))
 	last = lrf.elements[-1]
 	lrf.focus[1].restore((0, 0, len(state)))
-	session.device.update(projection.refresh(lrf, view, 0))
+	session.dispatch_delta(projection.refresh(lrf, view, 0))
 
 	if not state:
 		session.keyboard.set('insert')
