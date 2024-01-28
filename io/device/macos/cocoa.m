@@ -415,6 +415,15 @@ decreaseFontSize: (id) sender
 }
 
 - (void)
+saveUserFixedPitchFont: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+
+	[NSFont setUserFixedPitchFont: cm.font];
+}
+
+- (void)
 configure: (id) sender
 {
 	;
@@ -1639,6 +1648,11 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 	AddSeparator(am);
 	AddMenuItem(am, "Minimize", @selector(minimize:), "m");
 	AddMenuItem(am, "Preferences", @selector(configure:), ",");
+	{
+		NSMenuItem *savefont = AddMenuItem(am, "Save User Fixed Pitch Font",
+			@selector(saveUserFixedPitchFont:), "U");
+		savefont.keyEquivalentModifierMask |= NSEventModifierFlagControl;
+	}
 	AddSeparator(am);
 	AddMenuItem(am, "Quit", @selector(quit:), "q");
 
@@ -1886,7 +1900,7 @@ device_transfer_event(void *context)
 }
 
 static int
-device_application_manager(const char *title, const char *fontname, float fontsize, TerminalApplication fp)
+device_application_manager(const char *title, TerminalApplication fp)
 {
 	NSApplication *app;
 	Coprocess *application_thread;
@@ -1897,10 +1911,9 @@ device_application_manager(const char *title, const char *fontname, float fontsi
 	NSFont *font;
 
 	fontctx = [NSFontManager sharedFontManager];
-	if (fontname == NULL)
-		font = [NSFont monospacedSystemFontOfSize: fontsize weight: NSFontWeightLight];
-	else
-		font = [NSFont fontWithName: @(fontname) size: fontsize];
+	font = [NSFont userFixedPitchFontOfSize: 0.0];
+	if (font == nil)
+		font = [NSFont monospacedSystemFontOfSize: 0.0 weight: NSFontWeightRegular];
 	[fontctx setSelectedFont: font isMultiple: NO];
 
 	dm = [[DisplayManager alloc] init];
@@ -1932,7 +1945,7 @@ device_manage_terminal(const char *title, TerminalApplication ca)
 
 	@autoreleasepool
 	{
-		status = device_application_manager(title, "InputMono Light", 9.0, ca);
+		status = device_application_manager(title, ca);
 	}
 
 	return(status);
