@@ -424,6 +424,24 @@ saveUserFixedPitchFont: (id) sender
 }
 
 - (void)
+revertScreen: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	struct MatrixParameters *mp = [cm matrixParameters];
+
+	NSFont *font = [NSFont userFixedPitchFontOfSize: 0.0];
+	[cm configureFont: font withContext: self.fonts];
+	[self.fonts setSelectedFont: cm.font isMultiple: NO];
+
+	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
+	{
+		[cm configureCellImage];
+		dispatch_application_instruction(cm, 0, ai_screen_resize);
+	}
+}
+
+- (void)
 configure: (id) sender
 {
 	;
@@ -1719,6 +1737,10 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 	rpi.keyEquivalentModifierMask |= NSEventModifierFlagControl;
 	rpi.toolTip = @"Update the Pixel Image from the current Cell Image.";
 	[screen addItem: rpi];
+
+	AddSeparator(screen);
+	AddMenuItem(screen, "Revert", @selector(revertScreen:), "")
+		.toolTip = @"Revert the screen configuration to the saved user fixed pitch setting.";
 
 	return(root);
 }
