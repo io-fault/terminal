@@ -62,7 +62,7 @@ main(int argc, const char *argv[])
 		// The terminal application's exit code is the responsibility of
 		// the component that creates it.
 	*/
-	return(device_manage_terminal(("syntax"), coprocess_invocation));
+	return(device_manage_terminal(FACTOR_CONTEXT(".", "syntax.edit"), coprocess_invocation));
 }
 
 #include <fault/python/bind.h>
