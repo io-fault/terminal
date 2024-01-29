@@ -182,11 +182,11 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(session, restore) \
 	AI_DEFINE(screen, refresh) \
 	AI_DEFINE(screen, resize) \
-	AI_DEFINE(partition, create) \
-	AI_DEFINE(partition, close) \
-	AI_DEFINE(partition, select) \
-	AI_DEFINE(partition, next) \
-	AI_DEFINE(partition, previous) \
+	AI_DEFINE(frame, create) \
+	AI_DEFINE(frame, close) \
+	AI_DEFINE(frame, select) \
+	AI_DEFINE(frame, next) \
+	AI_DEFINE(frame, previous) \
 	AI_DEFINE(resource, create) \
 	AI_DEFINE(resource, open) \
 	AI_DEFINE(resource, save) \

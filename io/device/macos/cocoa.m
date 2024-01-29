@@ -1636,28 +1636,28 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 	NSMenuItem *rie = MenuItem("Resource", nil, "");
 	NSMenu *em = Menu();
 	NSMenuItem *mie = MenuItem("Edit", nil, "");
+	NSMenu *fm = Menu();
+	NSMenuItem *fie = MenuItem("Frames", nil, "");
 	NSMenu *sm = Menu();
-	NSMenuItem *mis = MenuItem("Session", nil, "");
-	NSMenu *screen = Menu();
-	NSMenuItem *screenmi = MenuItem("Screen", nil, "");
+	NSMenuItem *sie = MenuItem("Screen", nil, "");
 
 	[rie setSubmenu: re];
 	[mia setSubmenu: am];
 	[mie setSubmenu: em];
-	[mis setSubmenu: sm];
-	[screenmi setSubmenu: screen];
+	[fie setSubmenu: fm];
+	[sie setSubmenu: sm];
 	[re setTitle: @"Resource"];
 	[em setTitle: @"Edit"];
-	[sm setTitle: @"Session"];
-	[screen setTitle: @"Screen"];
+	[fm setTitle: @"Frames"];
+	[sm setTitle: @"Screen"];
 
 	/* Menu Bar */
 	root = Menu();
 	[root addItem: mia];
 	[root addItem: rie];
 	[root addItem: mie];
-	[root addItem: mis];
-	[root addItem: screenmi];
+	[root addItem: fie];
+	[root addItem: sie];
 
 	/* Application Menu */
 	[am addItemWithTitle: about
@@ -1675,71 +1675,83 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 	AddMenuItem(am, "Quit", @selector(quit:), "q");
 
 	/* Resource Menu */
-	AddMenuItem(re, "New", @selector(new:), "n");
-	AddMenuItem(re, "Open", @selector(open:), "o");
-	AddMenuItem(re, "Cycle", @selector(cycle:), "`");
+	AddMenuItem(re, "New", @selector(relayInstruction:), "n")
+		.tag = ai_resource_create;
+	AddMenuItem(re, "Open", @selector(openResources:), "o");
+	AddMenuItem(re, "Cycle", @selector(relayInstruction:), "`")
+		.tag = 0;
 	AddSeparator(re);
-	AddMenuItem(re, "Close", @selector(close:), "w");
-	AddMenuItem(re, "Save", @selector(save:), "s");
-	AddMenuItem(re, "Duplicate", @selector(duplicate:), "S");
+	AddMenuItem(re, "Close", @selector(relayInstruction:), "w")
+		.tag = ai_resource_close;
+	AddMenuItem(re, "Save", @selector(relayInstruction:), "s")
+		.tag = ai_resource_save;
+	AddMenuItem(re, "Duplicate", @selector(cloneResource:), "S")
+		.tag = ai_resource_save;
 	AddSeparator(re);
-	AddMenuItem(re, "Copy Location", @selector(copyreference:), "C");
-	AddMenuItem(re, "Relocate", @selector(select:), "l")
-		.toolTip = @"Change the frame's focus resource.";
+	AddMenuItem(re, "Copy Location", @selector(relayInstruction:), "C");
+	{
+		NSMenuItem *rmi = AddMenuItem(re, "Relocate", @selector(relayInstruction:), "l");
+		rmi.toolTip = @"Change the frame's focus resource.";
+		rmi.tag = ai_resource_relocate;
+	}
 
 	/* Edit Menu */
-	AddMenuItem(em, "Undo", @selector(undo:), "z");
-	AddMenuItem(em, "Redo", @selector(redo:), "Z");
+	AddMenuItem(em, "Undo", @selector(relayInstruction:), "z");
+	AddMenuItem(em, "Redo", @selector(relayInstruction:), "Z");
 	AddSeparator(em);
 	AddMenuItem(em, "Cut", @selector(cut:), "x");
 	AddMenuItem(em, "Copy", @selector(copy:), "c");
 	AddMenuItem(em, "Paste", @selector(paste:), "v");
-	AddMenuItem(em, "Delete", @selector(delete:), "");
-	AddMenuItem(em, "Select All", @selector(all:), "a");
+	AddMenuItem(em, "Delete", @selector(relayInstruction:), "");
+	AddMenuItem(em, "Select All", @selector(relayInstruction:), "a");
 	AddSeparator(em);
-	AddMenuItem(em, "Find", @selector(find:), "f");
-	AddMenuItem(em, "Find Next", @selector(findnext:), "g");
-	AddMenuItem(em, "Find Previous", @selector(findprevious:), "G");
+	AddMenuItem(em, "Find", @selector(relayInstruction:), "f");
+	AddMenuItem(em, "Find Next", @selector(relayInstruction:), "g");
+	AddMenuItem(em, "Find Previous", @selector(relayInstruction:), "G");
 
-	/* Session Menu */
-	AddMenuItem(sm, "New", @selector(newsession:), "N");
-	AddMenuItem(sm, "Close", @selector(closesession:), "W");
-	AddSeparator(sm);
+	/* Frames Menu */
+	AddMenuItem(fm, "New", @selector(relayInstruction:), "N")
+		.tag = ai_frame_create;
+	AddMenuItem(fm, "Close", @selector(relayInstruction:), "W")
+		.tag = ai_frame_close;
+	AddSeparator(fm);
 
 	NSMenuItem *shifted;
 	shifted = MenuItem("Previous", @selector(previoussession:), "[");
 	shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
-	[sm addItem: shifted];
+	shifted.tag = ai_frame_previous;
+	[fm addItem: shifted];
 
 	shifted = MenuItem("Next", @selector(nextsession:), "]");
-	[sm addItem: shifted];
+	[fm addItem: shifted];
 	shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
+	shifted.tag = ai_frame_next;
 
 	/* Screen Menu */
-	NSMenuItem *resize = AddMenuItem(screen, "Resize Cell Image", @selector(resizeCellImage:), "U");
+	NSMenuItem *resize = AddMenuItem(sm, "Resize Cell Image", @selector(resizeCellImage:), "U");
 	resize.toolTip = @"Adjust the cell image so that it fits the capacity of the screen.";
 
-	AddSeparator(screen);
-	NSMenuItem *fontitems = AddMenuItem(screen, "Font", @selector(toggleFontSelector:), "t");
+	AddSeparator(sm);
+	NSMenuItem *fontitems = AddMenuItem(sm, "Font", @selector(toggleFontSelector:), "t");
 	fontitems.target = dm;
-	fontitems = AddMenuItem(screen, "Increase Size", @selector(increaseFontSize:), "+");
+	fontitems = AddMenuItem(sm, "Increase Size", @selector(increaseFontSize:), "+");
 	fontitems.target = dm;
-	fontitems = AddMenuItem(screen, "Decrease Size", @selector(decreaseFontSize:), "-");
+	fontitems = AddMenuItem(sm, "Decrease Size", @selector(decreaseFontSize:), "-");
 	fontitems.target = dm;
 
-	AddSeparator(screen);
-	AddMenuItem(screen, "Refresh", @selector(refreshAll:), "r")
+	AddSeparator(sm);
+	AddMenuItem(sm, "Refresh", @selector(refreshAll:), "r")
 		.toolTip = @"Refresh the Cell and Pixel images.";
-	AddMenuItem(screen, "Refresh Cell Image", @selector(refreshCells:), "R")
+	AddMenuItem(sm, "Refresh Cell Image", @selector(refreshCells:), "R")
 		.toolTip = @"Signal terminal application to refresh the Cell image.";
 
 	NSMenuItem *rpi = MenuItem("Refresh Pixel Image", @selector(refreshPixels:), "R");
 	rpi.keyEquivalentModifierMask |= NSEventModifierFlagControl;
 	rpi.toolTip = @"Update the Pixel Image from the current Cell Image.";
-	[screen addItem: rpi];
+	[sm addItem: rpi];
 
-	AddSeparator(screen);
-	AddMenuItem(screen, "Revert", @selector(revertScreen:), "")
+	AddSeparator(sm);
+	AddMenuItem(sm, "Revert", @selector(revertScreen:), "")
 		.toolTip = @"Revert the screen configuration to the saved user fixed pitch setting.";
 
 	return(root);
