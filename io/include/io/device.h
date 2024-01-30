@@ -1,7 +1,7 @@
 #ifndef TERMINAL_IO_DEVICE_H
 #define TERMINAL_IO_DEVICE_H 1
 
-#define DEFAULT_CELL_SAMPLE "dbqpgyTWWWWMXY|[]{}()@$\\/-?_,."
+#define DEFAULT_CELL_SAMPLE "dbqpgyTWWWWMMMXY|[]{}()@$\\/-?_,.│─"
 
 /**
 	// Type for describing exact locations on the screen.
@@ -38,7 +38,7 @@ enum KeyModifiers
 	// The primary event data; an event is an instance of this structure
 	// being dispatched into a coprocess for handling.
 
-	// [ Fields ]
+	// [ Elements ]
 	// /st_dispatch/
 		// The key signal (event) being dispatched.
 	// /st_quantity/
@@ -292,7 +292,7 @@ su_max(system_units_t former, system_units_t latter)
 /**
 	// A two dimensional area for identifying a region of cells.
 
-	// [ Properties ]
+	// [ Elements ]
 	// /top_offset/
 		// The number of cells from the top context identifying
 		// the first horizontal row in the region.
