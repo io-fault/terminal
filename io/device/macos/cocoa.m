@@ -1745,6 +1745,8 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 		.tag = ai_resource_save;
 	AddMenuItem(re, "Duplicate", @selector(cloneResource:), "S")
 		.tag = ai_resource_save;
+	AddMenuItem(re, "Reload", @selector(relayInstruction:), "")
+		.tag = ai_resource_reload;
 
 	AddSeparator(re);
 	AddMenuItem(re, "Copy Location", @selector(copyLocation:), "C");

@@ -195,6 +195,7 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(resource, open) \
 	AI_DEFINE(resource, close) \
 	AI_DEFINE(resource, save) \
+	AI_DEFINE(resource, reload) \
 	AI_DEFINE(resource, clone) \
 	AI_DEFINE(element, status) \
 	AI_DEFINE(element, seek) \
