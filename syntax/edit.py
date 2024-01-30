@@ -334,6 +334,17 @@ class Session(object):
 
 		return types.Refraction(ref, *ftyp, rsrc, rlog)
 
+	def chresource(self, vertical, division, path):
+		"""
+		# Change the resource associated with the &division and &vertical
+		# to the one identified by &path.
+		"""
+
+		dpath = (vertical, division)
+		new = self.refract(path)
+		self.attach(dpath, new)
+		self.dispatch_delta(self.chpath(dpath, new.origin))
+
 	def log(self, *lines):
 		"""
 		# Append the given &lines to the transcript.
@@ -384,7 +395,7 @@ class Session(object):
 			for ctx in self.frame.itercontexts(self.device.screen.area, section=1)
 		)
 
-	def resize(self, quantity=None):
+	def resize(self):
 		"""
 		# Window size changed; remodel and render the new frame.
 		"""
@@ -768,9 +779,17 @@ class Session(object):
 				d.invalidate_cells(area)
 
 	intercepts = {
-		'(screen/refresh)': refresh,
-		'(screen/resize)': resize,
+		'(screen/refresh)': 'session/screen/refresh',
+		'(screen/resize)': 'session/screen/resize',
+
+		'(resource/relocate)': 'session/resource/relocate',
+		'(resource/open)': 'session/resource/open',
+		'(resource/reload)': 'session/resource/reload',
+		'(resource/save)': 'session/resource/write',
+		'(resource/clone)': 'session/resource/clone',
+		'(resource/close)': 'session/resource/close',
 	}
+
 	def dispatch(self):
 		"""
 		# Execute the action associated with the event currently
@@ -779,16 +798,19 @@ class Session(object):
 		try:
 			key = self.device.key()
 
-			# Application Instructions
-			if key in self.intercepts:
-				self.intercepts[key](self, self.device.quantity())
-				self.log(key)
-				return
-
 			try:
 				rf, view = self.focus, self.view
-				mode, xev = self.keyboard.interpret(key)
-				ev_category, ev_identifier, ev_args = xev
+
+				if key in self.intercepts:
+					# Mode independent application Instructions
+					op_int = self.intercepts[key]
+					ev_category, *ev_identifier = op_int.split('/')
+					ev_identifier = tuple(ev_identifier)
+					ev_args = ()
+				else:
+					# Key Translation
+					mode, xev = self.keyboard.interpret(key)
+					ev_category, ev_identifier, ev_args = xev
 
 				ev_op = self.events[ev_category](ev_identifier)
 				self.log(f"{key!r} -> {ev_category}/{'/'.join(ev_identifier)} -> {ev_op!r}")

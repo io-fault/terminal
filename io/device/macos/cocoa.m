@@ -294,6 +294,9 @@ applicationDidResignActive: (NSNotification *) anotify
 	[self updateIcon: app];
 }
 
+/**
+	// Open an open panel and signal the application to load the selected resources.
+*/
 - (void)
 openResources: (id) sender
 {
@@ -318,6 +321,10 @@ openResources: (id) sender
 	}];
 }
 
+/**
+	// Open a save panel and signal the application to write the focused resource
+	// to the location selected by the user.
+*/
 - (void)
 cloneResource: (id) sender
 {
@@ -336,7 +343,10 @@ cloneResource: (id) sender
 			if (result != NSModalResponseOK)
 				return;
 
-			dispatch_application_instruction(cm, op.URL, 0, ai_resource_clone);
+			if (op.URL.fileURL == YES)
+				dispatch_application_instruction(cm, op.URL.path, -1, ai_resource_clone);
+			else
+				dispatch_application_instruction(cm, op.URL.absoluteString, -1, ai_resource_clone);
 		}
 	];
 }
@@ -357,6 +367,7 @@ about: (id) sender
 {
 	NSAlert *aw = [NSAlert new];
 	aw.alertStyle = NSAlertStyleInformational;
+
 	[aw setMessageText: @"Terminal Framework"];
 	[aw setInformativeText: @(
 		"Terminal manager providing a single cell image display"

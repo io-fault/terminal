@@ -105,7 +105,7 @@ if 'controls':
 
 	a(('l'), 'navigation', ('vertical', 'select', 'indentation'))
 	a(('l', km_shift), 'navigation', ('vertical', 'select', 'indentation', 'level'))
-	a(('l', km_control), 'navigation', ('session', 'load', 'resource'))
+	a(('l', km_control), 'session', ('resource', 'relocate'))
 
 	a(('m'), 'delta', ('move', 'range', 'ahead'))
 	a(('m', km_shift), 'delta', ('move', 'range', 'behind'))
@@ -128,7 +128,7 @@ if 'controls':
 
 	a(('s'), 'navigation', ('horizontal', 'select', 'series',))
 	a(('s', km_shift), 'navigation', ('horizontal', 'select', 'line'))
-	a(('s', km_control), 'navigation', ('session', 'store', 'resource'))
+	a(('s', km_control), 'session', ('resource', 'save'))
 
 	a(('v'), 'meta', ('transition', 'annotations', 'select'))
 	a(('v', km_shift), 'meta', ('annotation', 'rotate'))

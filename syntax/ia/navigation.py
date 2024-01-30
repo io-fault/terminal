@@ -66,22 +66,6 @@ def s_rq_rseek(session, rf, event):
 
 	session.prepare("seek", (session.vertical, session.division), extension='relative')
 
-@event('session', 'load', 'resource')
-def s_open_resource(session, rf, event):
-	"""
-	# Navigate to the resource location.
-	"""
-
-	session.relocate((session.vertical, session.division))
-
-@event('session', 'store', 'resource')
-def s_update_resource(session, rf, event):
-	"""
-	# Update the resource to reflect the refraction's element state.
-	"""
-
-	session.rewrite((session.vertical, session.division))
-
 @event('session', 'cancel')
 def s_cancel(session, rf, event):
 	"""

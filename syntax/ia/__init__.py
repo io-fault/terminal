@@ -9,9 +9,11 @@ def sections():
 	from . import navigation
 	from . import transaction
 	from . import meta
+	from . import session
 	return [
 		delta.Index,
 		navigation.Index,
 		transaction.Index,
 		meta.Index,
+		session.Index,
 	]
