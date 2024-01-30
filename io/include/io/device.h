@@ -175,34 +175,40 @@ KeyName(enum KeyIdentifier ki)
 }
 
 #define ApplicationInstructions() \
+	AI_DEFINE(session, status) \
 	AI_DEFINE(session, synchronize) \
 	AI_DEFINE(session, interrupt) \
 	AI_DEFINE(session, quit) \
 	AI_DEFINE(session, switch) \
 	AI_DEFINE(session, restore) \
-	AI_DEFINE(screen, refresh) \
-	AI_DEFINE(screen, resize) \
+	AI_DEFINE(frame, status) \
 	AI_DEFINE(frame, create) \
 	AI_DEFINE(frame, close) \
 	AI_DEFINE(frame, select) \
 	AI_DEFINE(frame, next) \
 	AI_DEFINE(frame, previous) \
+	AI_DEFINE(frame, transpose) \
+	AI_DEFINE(resource, status) \
+	AI_DEFINE(resource, relocate) \
+	AI_DEFINE(resource, cycle) \
 	AI_DEFINE(resource, create) \
 	AI_DEFINE(resource, open) \
-	AI_DEFINE(resource, save) \
 	AI_DEFINE(resource, close) \
-	AI_DEFINE(resource, relocate) \
-	AI_DEFINE(element, hover) \
+	AI_DEFINE(resource, save) \
+	AI_DEFINE(resource, clone) \
+	AI_DEFINE(element, status) \
+	AI_DEFINE(element, seek) \
 	AI_DEFINE(element, find) \
-	AI_DEFINE(element, findnext) \
-	AI_DEFINE(element, findprevious) \
+	AI_DEFINE(element, next) \
+	AI_DEFINE(element, previous) \
 	AI_DEFINE(element, undo) \
 	AI_DEFINE(element, redo) \
-	AI_DEFINE(element, cut) \
-	AI_DEFINE(element, copy) \
-	AI_DEFINE(element, paste) \
+	AI_DEFINE(element, insert) \
 	AI_DEFINE(element, delete) \
 	AI_DEFINE(element, selectall) \
+	AI_DEFINE(element, hover) \
+	AI_DEFINE(screen, refresh) \
+	AI_DEFINE(screen, resize) \
 	AI_DEFINE(view, scroll) \
 	AI_DEFINE(view, pan) \
 	AI_DEFINE(time, elapsed)

@@ -28,7 +28,7 @@ static void device_invalidate_cells(void *, struct CellArea);
 static void device_render_pixels(void *);
 static void device_dispatch_frame(void *);
 static void device_synchronize(void *);
-static void dispatch_application_instruction(CellMatrix *, int32_t , enum ApplicationInstruction);
+static void dispatch_application_instruction(CellMatrix *, NSString *, int32_t , enum ApplicationInstruction);
 
 #pragma mark CALayer SPI
 @interface CALayer ()
@@ -294,6 +294,63 @@ applicationDidResignActive: (NSNotification *) anotify
 	[self updateIcon: app];
 }
 
+- (void)
+openResources: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	NSOpenPanel *op = [NSOpenPanel openPanel];
+
+	op.canChooseFiles = YES;
+	op.canChooseDirectories = YES;
+	op.resolvesAliases = NO;
+	op.allowsMultipleSelection = YES;
+	op.treatsFilePackagesAsDirectories = YES;
+	op.allowsOtherFileTypes = YES;
+
+	[op beginSheetModalForWindow: dm.root completionHandler: ^(NSModalResponse result) {
+		NSString *files;
+		if (result != NSModalResponseOK)
+			return;
+
+		files = [op.URLs componentsJoinedByString: @"\n"];
+		dispatch_application_instruction(cm, files, op.URLs.count, ai_resource_open);
+	}];
+}
+
+- (void)
+cloneResource: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	NSSavePanel *op = [NSSavePanel savePanel];
+
+	op.treatsFilePackagesAsDirectories = YES;
+	op.showsHiddenFiles = YES;
+	op.allowsOtherFileTypes = YES;
+	op.extensionHidden = NO;
+	op.message = @"Save a copy of the current version.";
+
+	[op beginSheetModalForWindow: dm.root
+		completionHandler: ^(NSModalResponse result) {
+			if (result != NSModalResponseOK)
+				return;
+
+			dispatch_application_instruction(cm, op.URL, 0, ai_resource_clone);
+		}
+	];
+}
+
+- (void)
+relayInstruction: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	NSMenuItem *mi = (NSMenuItem *) sender;
+
+	dispatch_application_instruction(cm, nil, 0, (enum ApplicationInstruction) mi.tag);
+}
+
 /* Application menu actions */
 - (void)
 about: (id) sender
@@ -332,7 +389,7 @@ resizeCellImage: (id) sender
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
 	{
 		[cm configureCellImage];
-		dispatch_application_instruction(cm, 0, ai_screen_resize);
+		dispatch_application_instruction(cm, nil, 0, ai_screen_resize);
 	}
 }
 
@@ -342,7 +399,7 @@ refreshAll: (id) sender
 	DisplayManager *dm = NSApp.delegate;
 	CellMatrix *cm = dm.root.contentView;
 	/* +1 quantity signals display flush */
-	dispatch_application_instruction(cm, +1, ai_screen_refresh);
+	dispatch_application_instruction(cm, nil, +1, ai_screen_refresh);
 }
 
 - (void)
@@ -351,7 +408,7 @@ refreshCells: (id) sender
 	DisplayManager *dm = NSApp.delegate;
 	CellMatrix *cm = dm.root.contentView;
 	/* +1 quantity signals withheld flush */
-	dispatch_application_instruction(cm, -1, ai_screen_refresh);
+	dispatch_application_instruction(cm, nil, -1, ai_screen_refresh);
 }
 
 - (void)
@@ -437,7 +494,7 @@ revertScreen: (id) sender
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
 	{
 		[cm configureCellImage];
-		dispatch_application_instruction(cm, 0, ai_screen_resize);
+		dispatch_application_instruction(cm, nil, 0, ai_screen_resize);
 	}
 }
 
@@ -1303,13 +1360,13 @@ event_context_interpret(NSEventModifierFlags evmf)
 }
 
 static void
-dispatch_application_instruction(CellMatrix *self, int32_t quantity, enum ApplicationInstruction ai)
+dispatch_application_instruction(CellMatrix *self, NSString *txt, int32_t quantity, enum ApplicationInstruction ai)
 {
 	dispatch_async(self.event_queue, ^(void) {
 		[self.event_write_lock lock];
 		{
 			struct ControllerStatus *ctl = &(self->_event_status);
-			self.event_text = nil;
+			self.event_text = txt;
 			ctl->st_dispatch = InstructionKey_Identifier(ai);
 			ctl->st_quantity = quantity;
 			ctl->st_text_length = 0;
@@ -1679,7 +1736,8 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 		.tag = ai_resource_create;
 	AddMenuItem(re, "Open", @selector(openResources:), "o");
 	AddMenuItem(re, "Cycle", @selector(relayInstruction:), "`")
-		.tag = 0;
+		.tag = ai_resource_cycle;
+
 	AddSeparator(re);
 	AddMenuItem(re, "Close", @selector(relayInstruction:), "w")
 		.tag = ai_resource_close;
@@ -1687,8 +1745,9 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 		.tag = ai_resource_save;
 	AddMenuItem(re, "Duplicate", @selector(cloneResource:), "S")
 		.tag = ai_resource_save;
+
 	AddSeparator(re);
-	AddMenuItem(re, "Copy Location", @selector(relayInstruction:), "C");
+	AddMenuItem(re, "Copy Location", @selector(copyLocation:), "C");
 	{
 		NSMenuItem *rmi = AddMenuItem(re, "Relocate", @selector(relayInstruction:), "l");
 		rmi.toolTip = @"Change the frame's focus resource.";
@@ -1696,18 +1755,27 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 	}
 
 	/* Edit Menu */
-	AddMenuItem(em, "Undo", @selector(relayInstruction:), "z");
-	AddMenuItem(em, "Redo", @selector(relayInstruction:), "Z");
+	AddMenuItem(em, "Undo", @selector(relayInstruction:), "z")
+		.tag = ai_element_undo;
+	AddMenuItem(em, "Redo", @selector(relayInstruction:), "Z")
+		.tag = ai_element_redo;
+
 	AddSeparator(em);
 	AddMenuItem(em, "Cut", @selector(cut:), "x");
 	AddMenuItem(em, "Copy", @selector(copy:), "c");
 	AddMenuItem(em, "Paste", @selector(paste:), "v");
-	AddMenuItem(em, "Delete", @selector(relayInstruction:), "");
-	AddMenuItem(em, "Select All", @selector(relayInstruction:), "a");
+	AddMenuItem(em, "Delete", @selector(relayInstruction:), "")
+		.tag = ai_element_delete;
+	AddMenuItem(em, "Select All", @selector(relayInstruction:), "a")
+		.tag = ai_element_selectall;
+
 	AddSeparator(em);
-	AddMenuItem(em, "Find", @selector(relayInstruction:), "f");
-	AddMenuItem(em, "Find Next", @selector(relayInstruction:), "g");
-	AddMenuItem(em, "Find Previous", @selector(relayInstruction:), "G");
+	AddMenuItem(em, "Find", @selector(relayInstruction:), "f")
+		.tag = ai_element_find;
+	AddMenuItem(em, "Find Next", @selector(relayInstruction:), "g")
+		.tag = ai_element_next;
+	AddMenuItem(em, "Find Previous", @selector(relayInstruction:), "G")
+		.tag = ai_element_previous;
 
 	/* Frames Menu */
 	AddMenuItem(fm, "New", @selector(relayInstruction:), "N")
@@ -1716,16 +1784,21 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 		.tag = ai_frame_close;
 	AddSeparator(fm);
 
-	NSMenuItem *shifted;
-	shifted = MenuItem("Previous", @selector(previoussession:), "[");
-	shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
-	shifted.tag = ai_frame_previous;
-	[fm addItem: shifted];
+	{
+		NSMenuItem *shifted;
+		shifted = MenuItem("Previous", @selector(relayInstruction:), "[");
+		shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
+		shifted.tag = ai_frame_previous;
+		[fm addItem: shifted];
 
-	shifted = MenuItem("Next", @selector(nextsession:), "]");
-	[fm addItem: shifted];
-	shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
-	shifted.tag = ai_frame_next;
+		shifted = MenuItem("Next", @selector(relayInstruction:), "]");
+		[fm addItem: shifted];
+		shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
+		shifted.tag = ai_frame_next;
+	}
+
+	/* Create frame list separator as one always exists. */
+	AddSeparator(fm);
 
 	/* Screen Menu */
 	NSMenuItem *resize = AddMenuItem(sm, "Resize Cell Image", @selector(resizeCellImage:), "U");
