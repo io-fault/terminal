@@ -118,8 +118,8 @@ if 'controls':
 	a(('o'), 'delta', ('open', 'ahead'))
 	a(('o', km_shift), 'delta', ('open', 'behind'))
 
-	a(('p'), 'delta', ('paste', 'after',))
-	a(('p', km_shift), 'delta', ('paste', 'before',))
+	a(('p'), 'delta', ('take',))
+	a(('p', km_shift), 'delta', ('place',))
 
 	a(('q', km_control), 'meta', ('session', 'exit'))
 
