@@ -789,9 +789,14 @@ class Session(object):
 		'(resource/clone)': 'session/resource/clone',
 		'(resource/close)': 'session/resource/close',
 
+		'(elements/undo)': 'transaction/undo',
+		'(elements/redo)': 'transaction/redo',
 		'(elements/select)': 'session/elements/transmit',
 		'(elements/insert)': 'delta/insert/text',
 		'(elements/delete)': 'delta/delete',
+		'(elements/find)': 'navigation/session/search/resource',
+		'(elements/next)': 'navigation/find/next',
+		'(elements/previous)': 'navigation/find/previous',
 	}
 
 	def dispatch(self):
