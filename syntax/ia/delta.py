@@ -687,6 +687,18 @@ def delete_unit_range(session, rf, event):
 	commit(rf)
 	rf.focus[1].changed(0, -(stop - start))
 
+@event('delete')
+def delete_selection(session, rf, event):
+	"""
+	# Remove the vertical range if the number of lines in the range is greater than zero.
+	# Otherwise, remove the horizontal range.
+	"""
+
+	if rf.focus[0].magnitude > 0:
+		delete_element_v(session, rf, event)
+	else:
+		delete_unit_range(session, rf, event)
+
 @event('horizontal', 'substitute', 'range')
 def subrange(session, rf, event):
 	"""
@@ -777,14 +789,15 @@ def paste_before_line(session, rf, event):
 	ln = rf.focus[0].get()
 	insert_lines(rf, ln, session.cache)
 
-@event('insert', 'data')
-def insert_segments(session, rf, event, segments):
+@event('insert', 'text')
+def insert_segments(session, rf, event):
 	"""
 	# Break the string instances in &segments into individual lines
 	# and insert them into the document at the cursor's position and
 	# advance the cursor to the end of the insertion.
 	"""
 
+	segments = [session.device.transfer_text()]
 	lines = ['']
 	for lineseq in segments:
 		new = lineseq.splitlines(keepends=False)

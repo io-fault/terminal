@@ -949,6 +949,19 @@ device_transfer_text(PyObject *self)
 }
 
 static PyObject *
+device_transmit(PyObject *self, PyObject *args)
+{
+	const char *data;
+	Py_ssize_t size;
+
+	if (!PyArg_ParseTuple(args, "y#", &data, &size))
+		return(NULL);
+
+	Device_Transmit(D(self), data, (size_t) size);
+	Py_RETURN_NONE;
+}
+
+static PyObject *
 device_transfer_event(PyObject *self)
 {
 	return(PyLong_FromLong((long) Device_TransferEvent(D(self))));
@@ -1037,6 +1050,7 @@ static PyMethodDef device_methods[] = {
 
 	{"transfer_event", (PyCFunction) device_transfer_event, METH_NOARGS, NULL},
 	{"transfer_text", (PyCFunction) device_transfer_text, METH_NOARGS, NULL},
+	{"transmit", (PyCFunction) device_transmit, METH_VARARGS, NULL},
 
 	{"reconnect", (PyCFunction) device_reconnect, METH_NOARGS, NULL},
 	{"replicate_cells", (PyCFunction) device_replicate_cells, METH_VARARGS, NULL},

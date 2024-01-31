@@ -12,6 +12,7 @@ typedef int32_t pixel_offset_t;
 	// Function pointer type for a target client application.
 */
 typedef int (*TerminalApplication)(void *context);
+typedef void (*DeviceReceiver)(void *context, const char *data, size_t length);
 
 /**
 	// Key modifiers.
@@ -70,6 +71,8 @@ struct ControllerStatus
 
 	pixel_offset_t st_left;
 	pixel_offset_t st_top;
+
+	DeviceReceiver st_receiver;
 };
 
 /* Function Keys */
@@ -197,17 +200,18 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(resource, save) \
 	AI_DEFINE(resource, reload) \
 	AI_DEFINE(resource, clone) \
-	AI_DEFINE(element, status) \
-	AI_DEFINE(element, seek) \
-	AI_DEFINE(element, find) \
-	AI_DEFINE(element, next) \
-	AI_DEFINE(element, previous) \
-	AI_DEFINE(element, undo) \
-	AI_DEFINE(element, redo) \
-	AI_DEFINE(element, insert) \
-	AI_DEFINE(element, delete) \
-	AI_DEFINE(element, selectall) \
-	AI_DEFINE(element, hover) \
+	AI_DEFINE(elements, status) \
+	AI_DEFINE(elements, seek) \
+	AI_DEFINE(elements, find) \
+	AI_DEFINE(elements, next) \
+	AI_DEFINE(elements, previous) \
+	AI_DEFINE(elements, undo) \
+	AI_DEFINE(elements, redo) \
+	AI_DEFINE(elements, select) \
+	AI_DEFINE(elements, insert) \
+	AI_DEFINE(elements, delete) \
+	AI_DEFINE(elements, selectall) \
+	AI_DEFINE(elements, hover) \
 	AI_DEFINE(screen, refresh) \
 	AI_DEFINE(screen, resize) \
 	AI_DEFINE(view, scroll) \
@@ -530,6 +534,7 @@ struct Cell
 
 #define Device_TransferEvent(DS) (DS->transfer_event)(DS->cmd_context)
 #define Device_TransferText(DS, CPTR, IPTR) (DS->transfer_text)(DS->cmd_context, CPTR, IPTR)
+#define Device_Transmit(DS, PTR, SIZE) (DS->cmd_status->st_receiver)(DS->cmd_context, PTR, SIZE)
 #define Device_ReplicateCells(DS, DST, SRC) (DS->replicate_cells)(DS->cmd_context, DST, SRC)
 #define Device_InvalidateCells(DS, DST) (DS->invalidate_cells)(DS->cmd_context, DST)
 #define Device_RenderPixels(DS) (DS->render_pixels)(DS->cmd_context)

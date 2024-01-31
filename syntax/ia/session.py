@@ -85,3 +85,20 @@ def s_open_resource(session, rf, event):
 	session.chresource(session.vertical, session.division, rf.origin.ref_path@(path.strip()))
 	session.keyboard.set('control')
 	session.refocus()
+
+@event('elements', 'transmit')
+def transmit_selected_elements(session, rf, event):
+	"""
+	# Send the selected elements to the device manager.
+	"""
+
+	if rf.focus[0].magnitude > 0:
+		# Vertical Range
+		start, position, stop = rf.focus[0].snapshot()
+		selection = '\n'.join(rf.elements[start:stop])
+	else:
+		# Horizontal Range
+		ln = rf.focus[0].get()
+		start, position, stop = rf.focus[1].snapshot()
+		selection = rf.elements[ln][start:stop]
+	session.device.transmit(selection.encode('utf-8'))

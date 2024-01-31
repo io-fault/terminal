@@ -294,6 +294,57 @@ applicationDidResignActive: (NSNotification *) anotify
 	[self updateIcon: app];
 }
 
+static void
+copy_string(void *terminal, const char *data, size_t length)
+{
+	CellMatrix *cm = (CellMatrix *) terminal;
+	NSPasteboard *pb = NSPasteboard.generalPasteboard;
+	NSData *nss = [[NSString alloc] initWithBytes: data length: length encoding: NSUTF8StringEncoding];
+
+	[pb clearContents];
+	[pb setString: nss forType: NSPasteboardTypeString];
+	cm.device.cmd_status->st_receiver = NULL;
+}
+
+- (void)
+copy: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+
+	cm.device.cmd_status->st_receiver = copy_string;
+	dispatch_application_instruction(cm, nil, 0, ai_elements_select);
+}
+
+static void
+cut_string(void *terminal, const char *data, size_t length)
+{
+	copy_string(terminal, data, length);
+	dispatch_application_instruction(terminal, nil, 0, ai_elements_delete);
+}
+
+- (void)
+cut: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+
+	cm.device.cmd_status->st_receiver = cut_string;
+	dispatch_application_instruction(cm, nil, 0, ai_elements_select);
+}
+
+- (void)
+paste: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+
+	NSPasteboard *pb = NSPasteboard.generalPasteboard;
+	NSString *text = [pb stringForType: NSPasteboardTypeString];
+
+	dispatch_application_instruction(cm, text, 0, ai_elements_insert);
+}
+
 /**
 	// Open an open panel and signal the application to load the selected resources.
 */
@@ -1769,26 +1820,26 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 
 	/* Edit Menu */
 	AddMenuItem(em, "Undo", @selector(relayInstruction:), "z")
-		.tag = ai_element_undo;
+		.tag = ai_elements_undo;
 	AddMenuItem(em, "Redo", @selector(relayInstruction:), "Z")
-		.tag = ai_element_redo;
+		.tag = ai_elements_redo;
 
 	AddSeparator(em);
 	AddMenuItem(em, "Cut", @selector(cut:), "x");
 	AddMenuItem(em, "Copy", @selector(copy:), "c");
 	AddMenuItem(em, "Paste", @selector(paste:), "v");
 	AddMenuItem(em, "Delete", @selector(relayInstruction:), "")
-		.tag = ai_element_delete;
+		.tag = ai_elements_delete;
 	AddMenuItem(em, "Select All", @selector(relayInstruction:), "a")
-		.tag = ai_element_selectall;
+		.tag = ai_elements_selectall;
 
 	AddSeparator(em);
 	AddMenuItem(em, "Find", @selector(relayInstruction:), "f")
-		.tag = ai_element_find;
+		.tag = ai_elements_find;
 	AddMenuItem(em, "Find Next", @selector(relayInstruction:), "g")
-		.tag = ai_element_next;
+		.tag = ai_elements_next;
 	AddMenuItem(em, "Find Previous", @selector(relayInstruction:), "G")
-		.tag = ai_element_previous;
+		.tag = ai_elements_previous;
 
 	/* Frames Menu */
 	AddMenuItem(fm, "New", @selector(relayInstruction:), "N")

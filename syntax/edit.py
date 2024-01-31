@@ -788,6 +788,10 @@ class Session(object):
 		'(resource/save)': 'session/resource/write',
 		'(resource/clone)': 'session/resource/clone',
 		'(resource/close)': 'session/resource/close',
+
+		'(elements/select)': 'session/elements/transmit',
+		'(elements/insert)': 'delta/insert/text',
+		'(elements/delete)': 'delta/delete',
 	}
 
 	def dispatch(self):
