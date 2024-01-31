@@ -133,6 +133,7 @@ if 'controls':
 	a(('v'), 'meta', ('transition', 'annotations', 'select'))
 	a(('v', km_shift), 'meta', ('annotation', 'rotate'))
 	a(('v', km_control), 'delta', ('indentation', 'zero'))
+	a(('v', km_meta), 'delta', ('paste', 'before'))
 
 	a(('u'), 'transaction', ('undo',))
 	a(('u', km_shift), 'transaction', ('redo',))

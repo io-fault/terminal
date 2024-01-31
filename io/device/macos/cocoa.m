@@ -316,21 +316,15 @@ copy: (id) sender
 	dispatch_application_instruction(cm, nil, 0, ai_elements_select);
 }
 
-static void
-cut_string(void *terminal, const char *data, size_t length)
-{
-	copy_string(terminal, data, length);
-	dispatch_application_instruction(terminal, nil, 0, ai_elements_delete);
-}
-
 - (void)
 cut: (id) sender
 {
 	DisplayManager *dm = NSApp.delegate;
 	CellMatrix *cm = dm.root.contentView;
 
-	cm.device.cmd_status->st_receiver = cut_string;
+	cm.device.cmd_status->st_receiver = copy_string;
 	dispatch_application_instruction(cm, nil, 0, ai_elements_select);
+	dispatch_application_instruction(cm, nil, 0, ai_elements_delete);
 }
 
 - (void)
@@ -973,9 +967,6 @@ centerBounds: (CGSize) size
 	[self setBoundsOrigin: CGPointMake(xpad, ypad)];
 	[self setBoundsSize: CGSizeMake(mp->x_screen_units, mp->y_screen_units)];
 }
-
-// Create from UTF-8 string.
-// [NSString stringWithUTF8String: cstr]
 
 /**
 	// Get the cached image for the cell or render one and place into the cache.
