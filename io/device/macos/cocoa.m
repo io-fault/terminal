@@ -2095,6 +2095,7 @@ device_application_manager(const char *title, TerminalApplication fp)
 		initWithContext: [terminal deviceReference]
 		andProgram: fp
 	];
+	dispatch_application_instruction(terminal, nil, 0, ai_session_synchronize);
 
 	[app run];
 	return(200);

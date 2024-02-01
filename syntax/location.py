@@ -151,7 +151,7 @@ def compose(pathlines, *, default='/dev/null'):
 
 	return path
 
-def open(session, rf, event):
+def open(session, frame, rf, event):
 	"""
 	# Respond to an activation event while focused on a location refraction.
 
@@ -160,18 +160,18 @@ def open(session, rf, event):
 	"""
 
 	# Construct reference and load dependencies.
-	dpath = (session.vertical, session.division)
+	dpath = (frame.vertical, frame.division)
 	new = session.refract(compose(rf.elements))
 
-	session.attach(dpath, new)
+	session.dispatch_delta(frame.attach(dpath, new).refresh())
 	session.keyboard.set('control')
-	session.refocus()
+	frame.refocus()
 
 	del rf.elements[:]
 	rf.visible[0] = 0
-	session.dispatch_delta(session.chpath(dpath, new.origin, snapshot=rf.log.snapshot()))
+	session.dispatch_delta(frame.chpath(dpath, new.origin, snapshot=rf.log.snapshot()))
 
-def save(session, rf, event):
+def save(session, frame, rf, event):
 	"""
 	# Respond to an activation event while focused on a location refraction
 	# configured to save the elements to the identified location.
@@ -181,18 +181,18 @@ def save(session, rf, event):
 	"""
 
 	# Construct reference and load dependencies.
-	dpath = (session.vertical, session.division)
+	dpath = (frame.vertical, frame.division)
 	path = compose(rf.elements)
 
-	session.refocus()
-	target = session.focus
+	frame.refocus()
+	target = frame.focus
 	session.save_resource(path, target.elements)
 	session.keyboard.set('control')
 
 	# Location heading.
 	del rf.elements[:]
 	rf.visible[0] = 0
-	session.dispatch_delta(session.chpath(dpath, target.origin, snapshot=rf.log.snapshot()))
+	session.dispatch_delta(frame.chpath(dpath, target.origin, snapshot=rf.log.snapshot()))
 
 def refract(theme, view, pathcontext, path, action):
 	"""

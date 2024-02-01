@@ -1,14 +1,480 @@
 """
-# Application frame initialization and status updates.
+# Application element implementations.
+
+# # &Session
+# # &Frame
+# # &Refraction
 """
+from collections.abc import Sequence
 import collections
 import itertools
-
-from fault.context.tools import struct
+import weakref
 
 from . import palette
 from . import symbols
-from .types import Refraction
+from . import location
+from . import projection
+from . import cursor
+from . import annotations
+
+from ..cells.types import Cell, Area
+from .types import Refraction, View, Reference
+
+class Frame(object):
+	"""
+	# Frame implementation for laying out and interacting with a set of refactions.
+
+	# [ Elements ]
+	# /area/
+		# The location and size of the frame on the screen.
+	# /index/
+		# The position of the frame in the session's frame set.
+	# /title/
+		# User assigned identifier for a frame.
+	"""
+
+	area: Area
+	title: str
+	structure: object
+	vertical: int
+	division: int
+	focus: Refraction
+	view: View
+
+	refractions: Sequence[Refraction]
+	returns: Sequence[Refraction|None]
+
+	def __init__(self, theme, keyboard, area, index=None, title=None):
+		self.theme = theme
+		self.keyboard = keyboard
+		self.area = area
+		self.index = index
+		self.title = title
+		self.structure = Model()
+
+		self.vertical = 0
+		self.division = 0
+		self.focus = None
+		self.view = None
+
+		self.paths = {} # (vertical, division) -> element-index
+		self.headings = []
+		self.panes = []
+		self.views = []
+		self.refractions = []
+		self.returns = []
+		self.reflections = {}
+		self._resets = []
+
+	def reflect(self, ref:Reference, *sole):
+		"""
+		# Iterate through all the Refractions representing &ref and
+		# its associated view. &sole, as an iterable, is returned if
+		# no refractions are associated with &ref.
+		"""
+
+		return self.reflections.get(ref.ref_path, sole)
+
+	def attach(self, dpath, refraction):
+		"""
+		# Assign the &refraction to the view associated with
+		# the &division of the &vertical.
+
+		# [ Returns ]
+		# A view instance whose refresh method should be dispatched
+		# to the display in order to update the screen.
+		"""
+
+		vi = self.paths[dpath]
+		current = self.refractions[vi]
+		self.returns[vi] = current
+		view = self.views[vi]
+		self.reflections[current.origin.ref_path].discard((current, view))
+
+		self.refractions[vi] = refraction
+		mirrors = self.reflections[refraction.origin.ref_path]
+		mirrors.add((refraction, view))
+		refraction.parallels = weakref.proxy(mirrors)
+
+		if (self.vertical, self.division) == dpath:
+			self.refocus()
+
+		# Configure and refresh.
+		refraction.configure(view.area)
+		view.offset = refraction.visible[0]
+		view.horizontal_offset = refraction.visible[1]
+		view.version = refraction.log.snapshot()
+		view.update(slice(0, None), [
+			refraction.render(ln)
+			for ln in refraction.elements[view.vertical(refraction)]
+		])
+
+		return view
+
+	def chpath(self, dpath, reference, *, snapshot=(0, 0, None)):
+		"""
+		# Update the refraction's location.
+		"""
+
+		header = self.headings[self.paths[dpath]]
+
+		lrender = location.type(self.theme, reference.ref_context, header.area)[-1]
+		header.truncate()
+		header.offset = 0
+		header.version = snapshot
+
+		header.update(slice(0, 2), list(
+			map(lrender, location.determine(reference.ref_context, reference.ref_path))
+		))
+
+		return header.render(slice(0, 2))
+
+	def chresource(self, path, refraction):
+		"""
+		# Change the resource associated with the &division and &vertical
+		# to the one identified by &path.
+		"""
+
+		yield from self.attach(path, refraction).refresh()
+		yield from self.chpath(path, refraction.origin)
+
+	def fill(self, refractions):
+		"""
+		# Fill the views with the given &refractions overwriting any.
+		"""
+
+		self.refractions[:] = refractions
+		self.reflections.clear()
+
+		# Align returns size.
+		n = len(self.refractions)
+		self.returns[:] = self.returns[:n]
+		if len(self.returns) < n:
+			self.returns.extend([None] * (n - len(self.returns)))
+
+		for ((v, d), rf, view) in zip(self.panes, self.refractions, self.views):
+			rf.configure(view.area)
+			self.reflections[rf.origin.ref_path].add((rf, view))
+
+	def remodel(self, area=None, divisions=None):
+		"""
+		# Update the model in response to changes in the size or layout of the frame.
+		"""
+
+		da, dd = self.structure.configuration
+		if area is None:
+			area = da
+		if divisions is None:
+			divisions = dd
+
+		self.structure.configure(area, divisions)
+
+		self.reflections = collections.defaultdict(set)
+		self.panes = list(self.structure.iterpanes())
+		self.paths = {p: i for i, p in enumerate(self.panes)}
+
+		self.views = list(
+			View(Area(*ctx), [], [], {'top': 'weak'})
+			for ctx in self.structure.itercontexts(area)
+		)
+
+		# Locations
+		self.headings = list(
+			View(Area(*ctx), [], [], {'bottom': 'weak'})
+			for ctx in self.structure.itercontexts(area, section=1)
+		)
+
+	def refresh(self):
+		"""
+		# Refresh the view images.
+		"""
+
+		for rf, view in zip(self.refractions, self.views):
+			projection.refresh(rf, view, rf.visible[0])
+			view.version = rf.log.snapshot()
+
+	def resize(self, area):
+		"""
+		# Window size changed; remodel and render the new frame.
+		"""
+
+		rfcopy = list(self.refractions)
+		self.area = area
+		self.remodel(area)
+
+		self.fill(rfcopy)
+		self.refocus()
+		self.refresh()
+
+	def returnview(self, dpath):
+		"""
+		# Switch the Refraction selected at &dpath with the one stored in &returns.
+		"""
+
+		previous = self.returns[self.paths[dpath]]
+		if previous is not None:
+			yield from self.attach(dpath, previous).refresh()
+			yield from self.chpath(dpath, previous.origin)
+
+	def render(self, screen):
+		"""
+		# Render a complete frame using the current view image state.
+		"""
+
+		border = Cell(textcolor=0x666666)
+		def rborder(i, BCell=border, ord=ord):
+			for ar, ch in i:
+				a = Area(*ar)
+				yield a, [BCell.inscribe(ord(ch))] * a.volume
+
+		aw = self.area.span
+		ah = self.area.lines
+		yield from rborder(self.structure.r_enclose(aw, ah))
+		yield from rborder(self.structure.r_divide(aw, ah))
+
+		for p, rf, v in zip(self.panes, self.refractions, self.views):
+			yield from self.chpath(p, rf.origin)
+			yield from v.render(slice(0, None))
+
+		status = list(self.indicate(self.focus, self.view))
+		self._resets[:] = [(area, screen.select(area)) for area, _ in status]
+		yield from status
+
+	def select(self, dpath):
+		"""
+		# Get the &Refraction and &View pair at the given
+		# vertical-divsion &dpath.
+		"""
+
+		i = self.paths[dpath]
+		return (self.refractions[i], self.views[i])
+
+	def refocus(self):
+		"""
+		# Adjust for a focus change in the root refraction.
+		"""
+
+		path = (self.vertical, self.division)
+		if path not in self.paths:
+			if path[1] < 0:
+				v = path[0] - 1
+				if v < 0:
+					v += self.structure.verticals()
+				path = (v, self.structure.divisions(v)-1)
+			else:
+				path = (path[0]+1, 0)
+				if path not in self.paths:
+					path = (0, 0)
+
+			self.vertical, self.division = path
+
+		self.focus, self.view = self.select(path)
+
+	def prepare(self, session, type, dpath, *, extension=None):
+		"""
+		# Prepare the heading for performing a query.
+		# Supports find, seek, and rewrite queries.
+		"""
+
+		from .query import refract, find, seek, rewrite
+		vi = self.paths[dpath]
+		ref = self.refractions[vi].origin
+		state = self.focus.query.get(type, None) or ''
+
+		# Update session state.
+		view = self.headings[vi]
+		if extension is not None:
+			context = type + ' ' + extension
+		else:
+			context = type
+
+		self.focus, self.view = (
+			refract(session, self, view, context, state,
+				{
+					'search': find,
+					'seek': seek,
+					'rewrite': rewrite,
+				}[type]
+			),
+			view,
+		)
+
+	def relocate(self, dpath):
+		"""
+		# Adjust the location of the division identified by &dpath and
+		# load the data into a session resource for editing in the view.
+		"""
+
+		vi = self.paths[dpath]
+		ref = self.refractions[vi].origin
+
+		# Update session state.
+		view = self.headings[vi]
+		self.focus, self.view = (
+			location.refract(self.theme, view, ref.ref_context, ref.ref_path, location.open),
+			view,
+		)
+
+		self.focus.annotation = annotations.Filesystem('open',
+			self.focus.structure,
+			self.focus.elements,
+			*self.focus.focus
+		)
+
+	def rewrite(self, dpath):
+		"""
+		# Adjust the location of the division identified by &dpath and
+		# write the subject's elements to the location upon activation.
+		"""
+
+		vi = self.paths[dpath]
+		ref = self.refractions[vi].origin
+
+		# Update session state.
+		view = self.headings[vi]
+		self.focus, self.view = (
+			location.refract(self.theme, view, ref.ref_context, ref.ref_path, location.save),
+			view,
+		)
+
+		self.focus.annotation = annotations.Filesystem('save',
+			self.focus.structure,
+			self.focus.elements,
+			*self.focus.focus
+		)
+
+	def cancel(self):
+		"""
+		# Refocus the subject refraction and discard any state changes
+		# performed to the location heading.
+		"""
+
+		rf = self.focus
+		view = self.view
+		dpath = (self.vertical, self.division)
+
+		self.refocus()
+		if rf is self.focus:
+			# Not a location or command; check annotation.
+			if rf.annotation is not None:
+				rf.annotation.close()
+				rf.annotation = None
+			return
+
+		# Restore location.
+		del rf.elements[:]
+		rf.visibility[0].datum = view.offset
+		rf.visibility[1].datum = view.horizontal_offset
+		rf.visible[:] = (view.offset, view.horizontal_offset)
+		yield from self.chpath(dpath, self.focus.origin, snapshot=rf.log.snapshot())
+
+	def target(self, top, left):
+		"""
+		# Identify the target refraction from the given cell coordinates.
+
+		# [ Returns ]
+		# # Triple identifying the vertical, division, and section.
+		# # &Refraction
+		# # &View
+		"""
+
+		v, d, s = self.structure.address(left, top)
+		i = self.paths[(v, d)]
+		return ((v, d, s), self.refractions[i], self.views[i])
+
+	def indicate(self, focus, view):
+		"""
+		# Render the (cursor) status indicators.
+
+		# [ Parameters ]
+		# /focus/
+			# The &types.Refraction whose position indicators are being drawn.
+		# /view/
+			# The &types.View connected to the refraction.
+
+		# [ Returns ]
+		# Iterable of reset sequences that clears the cursor position.
+		"""
+
+		rx, ry = (0, 0)
+		ctx = view.area
+		vx, vy = (ctx.x_offset, ctx.y_offset)
+		hoffset = view.horizontal_offset
+		top, left = focus.visible
+		hedge, edge = (ctx.span, ctx.lines)
+
+		# Get the cursor line.
+		v, h = focus.focus
+		ln = focus.focus[0].get()
+		try:
+			line = focus.elements[ln]
+		except IndexError:
+			line = ""
+
+		# Render cursor line.
+		erase = 0
+		rln = ln - top
+		sln = vy + rln
+		fai = focus.annotation
+		real = None
+		if rln >= 0 and rln < edge:
+			# Focus line is visible.
+			# Use cached version in image if available.
+			whole = view.image[rln]
+			w = view.whence[rln]
+			if fai is not None:
+				# Overwrite, but get the cell count of the un-annotated form first.
+				real = whole.cellcount()
+				lfields = focus.structure(line)
+				fai.update(line, lfields)
+				afields = list(annotations.extend(fai, lfields))
+				whole = focus.format(afields)
+				w = whole.seek((0, 0), hoffset, *whole.m_cell)
+		else:
+			# Still need translations for scale_ipositions,
+			# render off screen line as well.
+			fai = None
+			whole = focus.render(line)
+			w = whole.seek((0, 0), hoffset, *whole.m_cell)
+
+		m_cell = whole.m_cell
+		m_cp = whole.m_codepoint
+		hs = h.snapshot()
+
+		hcp = whole.tell(w[0], *m_cp)
+
+		cline = view.rendercells(rln, whole.render())
+		if fai is not None:
+			# Update annotation.
+			yield cline
+
+		if rln >= 0 and rln < edge:
+			c = list(cursor.prepare_line_updates(self.keyboard.mapping, whole, hs))
+			for (cellslice, celldelta) in c:
+				ccursor = [celldelta(x) for x in cline[1][cellslice]]
+				if ccursor:
+					cline[1][cellslice] = ccursor
+					yield ctx.__class__(sln, vx + cellslice.start, 1, len(ccursor)), ccursor
+
+		# Translate codepoint offsets to cell offsets.
+		hc = [
+			whole.tell(whole.seek((0, 0), x, *m_cp)[0], *m_cell)
+			for x in hs
+		]
+		si = list(self.structure.scale_ipositions(
+			self.structure.indicate,
+			(vx - rx, vy - ry),
+			(hedge, edge),
+			hc,
+			v.snapshot(),
+			focus.visible[1],
+			focus.visible[0],
+		))
+
+		for pi in self.structure.r_indicators(si, rtypes=view.edges):
+			(x, y), color, ic, bc = pi
+			picell = cline[1][0].__class__(textcolor=color, codepoint=ord(ic))
+			yield ctx.__class__(y, x, 1, 1), (picell,)
 
 class Model(object):
 	"""
@@ -72,8 +538,8 @@ class Model(object):
 
 		return len(self.fm_divisions[vertical])
 
-	def __init__(self, area, *, border=1, header=2, footer=0):
-		self.fm_context = area
+	def __init__(self, *, border=1, header=2, footer=0):
+		self.fm_context = None
 		self.fm_header_size = header
 		self.fm_footer_size = footer
 		self.fm_border_width = border
@@ -210,25 +676,26 @@ class Model(object):
 		]
 		self.update_inner_intersections(page)
 
-	def configure(self, *divisions):
+	def configure(self, area, divisions):
 		"""
 		# Configure the frame to have `len(divisions)` verticals where
 		# each element describes the number of divisions within the vertical.
 		"""
 
+		self.fm_context = area
 		alloc = max(0, (self.fm_context.span // len(divisions)) - 1)
 		self.redistribute(alloc)
 		for i, vd in enumerate(divisions):
 			self.divide(i, vd)
 		return self
 
-	def reconfigure(self, area):
+	@property
+	def configuration(self):
 		"""
-		# Update the model with the new screen dimensions.
+		# The configured area and divisions.
 		"""
 
-		self.fm_context = area
-		self.configure(*map(len, self.fm_divisions.values()))
+		return self.fm_context, tuple(map(len, self.fm_divisions.values()))
 
 	def iterpanes(self):
 		"""

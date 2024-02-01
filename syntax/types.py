@@ -903,7 +903,7 @@ class View(object):
 
 		return AType(offset + ry, 0 + rx, 1, width), cview
 
-	def render(self, area):
+	def render(self, area, *, min=min, max=max, len=len, list=list, zip=zip):
 		"""
 		# Sequence the necessary display instructions for rendering
 		# the &area reflecting the current &image state.
@@ -930,6 +930,14 @@ class View(object):
 				assert visible == limit
 			voffset += 1
 		yield AType(ry + area.start, rx, (voffset - (area.start or 0)), limit), cv
+
+	def refresh(self):
+		"""
+		# Emit display instructions for redrawing the view's entire image.
+		"""
+
+		yield from self.render(slice(0, None))
+		yield from self.compensate()
 
 	def vertical(self, rf):
 		v = rf.visible[0]

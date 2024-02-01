@@ -69,7 +69,7 @@ if 'controls':
 
 	a(('c'), 'delta', ('horizontal', 'substitute', 'range'))
 	a(('c', km_shift), 'delta', ('horizontal', 'substitute', 'again'))
-	a(('c', km_control), 'navigation', ('session', 'cancel'))
+	a(('c', km_control), 'session', ('cancel',))
 	a(('c', km_meta), 'delta', ('copy',))
 	a(('c', km_shift, km_meta), 'delta', ('cut',))
 

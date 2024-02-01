@@ -207,7 +207,7 @@ def move(rf, lo, start, stop):
 		insert_lines(rf, lo, lines)
 
 @event('insert', 'character')
-def insert_character_units(session, rf, event, quantity=1):
+def insert_character_units(session, frame, rf, event, quantity=1):
 	"""
 	# Insert a character at the current cursor position.
 	"""
@@ -219,7 +219,7 @@ def insert_character_units(session, rf, event, quantity=1):
 	rf.focus[1].changed(h, len(string))
 
 @event('insert', 'capture')
-def insert_captured_control(session, rf, event, quantity=1):
+def insert_captured_control(session, frame, rf, event, quantity=1):
 	"""
 	# Replace the character at the cursor with the event's identity.
 	"""
@@ -247,7 +247,7 @@ def insert_captured_control(session, rf, event, quantity=1):
 	session.keyboard.revert()
 
 @event('insert', 'capture', 'key')
-def insert_captured_key(session, rf, event, quantity=1):
+def insert_captured_key(session, frame, rf, event, quantity=1):
 	"""
 	# Replace the character at the cursor with the event's identity.
 	"""
@@ -260,7 +260,7 @@ def insert_captured_key(session, rf, event, quantity=1):
 	session.keyboard.revert()
 
 @event('insert', 'capture', 'control')
-def insert_captured_control_character_unit(session, rf, event, quantity=1):
+def insert_captured_control_character_unit(session, frame, rf, event, quantity=1):
 	"""
 	# Replace the character at the cursor with the event's identity.
 	"""
@@ -274,16 +274,16 @@ def insert_captured_control_character_unit(session, rf, event, quantity=1):
 	session.keyboard.revert()
 
 @event('replace', 'capture')
-def replace_captured_character_unit(session, rf, event, quantity=1):
+def replace_captured_character_unit(session, frame, rf, event, quantity=1):
 	"""
 	# Replace the character at the cursor with the event's identity.
 	"""
 
-	delete_characters_ahead(session, rf, event, quantity)
-	insert_captured_character_unit(session, rf, event, quantity)
+	delete_characters_ahead(session, frame, rf, event, quantity)
+	insert_captured_character_unit(session, frame, rf, event, quantity)
 
 @event('insert', 'string')
-def insert_string_argument(session, rf, event, string, *, quantity=1):
+def insert_string_argument(session, frame, rf, event, string, *, quantity=1):
 	"""
 	# Insert a string at the current cursor position disregarding &event.
 	"""
@@ -294,7 +294,7 @@ def insert_string_argument(session, rf, event, string, *, quantity=1):
 	rf.focus[1].changed(h, len(string))
 
 @event('delete', 'unit', 'former')
-def delete_characters_behind(session, rf, event, quantity=1):
+def delete_characters_behind(session, frame, rf, event, quantity=1):
 	"""
 	# Remove the codepoints representing the Character Unit
 	# immediately before the cursor.
@@ -319,7 +319,7 @@ def delete_characters_behind(session, rf, event, quantity=1):
 	rf.focus[1].changed(h, -len(removed))
 
 @event('delete', 'unit', 'current')
-def delete_characters_ahead(session, rf, event, quantity=1):
+def delete_characters_ahead(session, frame, rf, event, quantity=1):
 	"""
 	# Remove the codepoints representing the Character Unit
 	# that the cursor is current positioned at.
@@ -345,7 +345,7 @@ def delete_characters_ahead(session, rf, event, quantity=1):
 	rf.focus[1].update(len(removed))
 
 @event('delete', 'element', 'former')
-def delete_current_line(session, rf, event, quantity=1):
+def delete_current_line(session, frame, rf, event, quantity=1):
 	vp = rf.focus[0]
 	ln = vp.get() - 1
 	delete_lines(rf, ln, quantity)
@@ -353,7 +353,7 @@ def delete_current_line(session, rf, event, quantity=1):
 	vp.set(min(ln, len(rf.elements)))
 
 @event('delete', 'element', 'current')
-def delete_current_line(session, rf, event, quantity=1):
+def delete_current_line(session, frame, rf, event, quantity=1):
 	vp = rf.focus[0]
 	ln = vp.get()
 	delete_lines(rf, ln, quantity)
@@ -361,7 +361,7 @@ def delete_current_line(session, rf, event, quantity=1):
 	vp.set(min(ln, len(rf.elements)))
 
 @event('delete', 'backward', 'adjacent', 'class')
-def delete_previous_field(session, rf, event):
+def delete_previous_field(session, frame, rf, event):
 	"""
 	# Remove the field before the cursor's position including any
 	"""
@@ -383,7 +383,7 @@ def delete_previous_field(session, rf, event):
 	rf.focus[1].changed(word.start, -len(removed))
 
 @event('horizontal', 'replace', 'unit')
-def replace_character_unit(session, rf, event):
+def replace_character_unit(session, frame, rf, event):
 	"""
 	# Replace the character underneath the cursor and progress its position.
 	"""
@@ -391,7 +391,7 @@ def replace_character_unit(session, rf, event):
 	session.keyboard.transition('capture')
 
 @event('indentation', 'increment')
-def insert_indentation_level(session, rf, event, quantity=1):
+def insert_indentation_level(session, frame, rf, event, quantity=1):
 	"""
 	# Increment the indentation of the current line.
 	"""
@@ -400,7 +400,7 @@ def insert_indentation_level(session, rf, event, quantity=1):
 	rf.focus[1].datum += 1
 
 @event('indentation', 'decrement')
-def delete_indentation_level(session, rf, event, quantity=1):
+def delete_indentation_level(session, frame, rf, event, quantity=1):
 	"""
 	# Decrement the indentation of the current line.
 	"""
@@ -412,7 +412,7 @@ def delete_indentation_level(session, rf, event, quantity=1):
 		rf.focus[1].datum -= 1
 
 @event('indentation', 'zero')
-def delete_indentation(session, rf, event):
+def delete_indentation(session, frame, rf, event):
 	"""
 	# Remove all indentation from the line.
 	"""
@@ -428,7 +428,7 @@ def delete_indentation(session, rf, event):
 	rf.focus[1].datum -= il
 
 @event('indentation', 'increment', 'range')
-def insert_indentation_levels_v(session, rf, event, quantity=1):
+def insert_indentation_levels_v(session, frame, rf, event, quantity=1):
 	"""
 	# Increment the indentation of the vertical range.
 	"""
@@ -445,7 +445,7 @@ def insert_indentation_levels_v(session, rf, event, quantity=1):
 		rf.focus[1].datum += quantity
 
 @event('indentation', 'decrement', 'range')
-def delete_indentation_levels_v(session, rf, event, quantity=1):
+def delete_indentation_levels_v(session, frame, rf, event, quantity=1):
 	"""
 	# Decrement the indentation of the current line.
 	"""
@@ -462,7 +462,7 @@ def delete_indentation_levels_v(session, rf, event, quantity=1):
 		rf.focus[1].datum -= quantity
 
 @event('indentation', 'zero', 'range')
-def delete_indentation_v(session, rf, event, *, offset=None, quantity=1):
+def delete_indentation_v(session, frame, rf, event, *, offset=None, quantity=1):
 	"""
 	# Remove all indentations from the vertical range.
 	"""
@@ -479,7 +479,7 @@ def delete_indentation_v(session, rf, event, *, offset=None, quantity=1):
 	rf.log.apply(rf.elements).commit().checkpoint()
 
 @event('delete', 'leading')
-def delete_to_beginning_of_line(session, rf, event):
+def delete_to_beginning_of_line(session, frame, rf, event):
 	"""
 	# Delete all characters between the current position and the begining of the line.
 	"""
@@ -489,7 +489,7 @@ def delete_to_beginning_of_line(session, rf, event):
 	rf.focus[1].changed(0, -h)
 
 @event('delete', 'following')
-def delete_to_end_of_line(session, rf, event):
+def delete_to_end_of_line(session, frame, rf, event):
 	"""
 	# Delete all characters between the current position and the end of the line.
 	"""
@@ -498,7 +498,7 @@ def delete_to_end_of_line(session, rf, event):
 	commit(rf)
 
 @event('open', 'behind')
-def open_newline_behind(session, rf, event, quantity=1):
+def open_newline_behind(session, frame, rf, event, quantity=1):
 	"""
 	# Open a new vertical behind the current vertical position.
 	"""
@@ -518,7 +518,7 @@ def open_newline_behind(session, rf, event, quantity=1):
 	session.keyboard.set('insert')
 
 @event('open', 'ahead')
-def open_newline_ahead(session, rf, event, quantity=1):
+def open_newline_ahead(session, frame, rf, event, quantity=1):
 	"""
 	# Open a new vertical ahead of the current vertical position.
 	"""
@@ -537,7 +537,7 @@ def open_newline_ahead(session, rf, event, quantity=1):
 	session.keyboard.set('insert')
 
 @event('transition')
-def atposition_insert_mode_switch(session, rf, event):
+def atposition_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode.
 	"""
@@ -546,7 +546,7 @@ def atposition_insert_mode_switch(session, rf, event):
 	rf.whence = 0
 
 @event('transition', 'start-of-field')
-def fieldend_insert_mode_switch(session, rf, event):
+def fieldend_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the start
 	# of the horizontal range.
@@ -557,7 +557,7 @@ def fieldend_insert_mode_switch(session, rf, event):
 	rf.whence = -1
 
 @event('transition', 'end-of-field')
-def fieldend_insert_mode_switch(session, rf, event):
+def fieldend_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the end
 	# of the horizontal range.
@@ -568,7 +568,7 @@ def fieldend_insert_mode_switch(session, rf, event):
 	rf.whence = +1
 
 @event('transition', 'start-of-line')
-def startofline_insert_mode_switch(session, rf, event):
+def startofline_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the beginning of the line.
 	"""
@@ -583,7 +583,7 @@ def startofline_insert_mode_switch(session, rf, event):
 	rf.whence = -2
 
 @event('transition', 'end-of-line')
-def endofline_insert_mode_switch(session, rf, event):
+def endofline_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the end of the line.
 	"""
@@ -594,7 +594,7 @@ def endofline_insert_mode_switch(session, rf, event):
 	rf.whence = +2
 
 @event('move', 'range', 'ahead')
-def move_vertical_range_ahead(session, rf, event):
+def move_vertical_range_ahead(session, frame, rf, event):
 	"""
 	# Relocate the range after the current vertical position.
 	"""
@@ -619,7 +619,7 @@ def move_vertical_range_ahead(session, rf, event):
 	rf.vertical_changed(position-1)
 
 @event('move', 'range', 'behind')
-def move_vertical_range_behind(session, rf, event):
+def move_vertical_range_behind(session, frame, rf, event):
 	"""
 	# Relocate the range after the current vertical position.
 	"""
@@ -644,7 +644,7 @@ def move_vertical_range_behind(session, rf, event):
 
 
 @event('delete', 'vertical', 'column')
-def delete_element_v(session, rf, event):
+def delete_element_v(session, frame, rf, event):
 	"""
 	# Remove the vertical range.
 	"""
@@ -658,7 +658,7 @@ def delete_element_v(session, rf, event):
 	rf.log.apply(rf.elements).commit().checkpoint()
 
 @event('delete', 'vertical', 'range')
-def delete_element_v(session, rf, event):
+def delete_element_v(session, frame, rf, event):
 	"""
 	# Remove the vertical range.
 	"""
@@ -676,7 +676,7 @@ def delete_element_v(session, rf, event):
 	rf.vertical_changed(v.get())
 
 @event('delete', 'horizontal', 'range')
-def delete_unit_range(session, rf, event):
+def delete_unit_range(session, frame, rf, event):
 	"""
 	# Remove the horizontal range of the current line.
 	"""
@@ -688,19 +688,19 @@ def delete_unit_range(session, rf, event):
 	rf.focus[1].changed(0, -(stop - start))
 
 @event('delete')
-def delete_selection(session, rf, event):
+def delete_selection(session, frame, rf, event):
 	"""
 	# Remove the vertical range if the number of lines in the range is greater than zero.
 	# Otherwise, remove the horizontal range.
 	"""
 
 	if rf.focus[0].magnitude > 0:
-		delete_element_v(session, rf, event)
+		delete_element_v(session, frame, rf, event)
 	else:
-		delete_unit_range(session, rf, event)
+		delete_unit_range(session, frame, rf, event)
 
 @event('horizontal', 'substitute', 'range')
-def subrange(session, rf, event):
+def subrange(session, frame, rf, event):
 	"""
 	# Substitute the contents of the cursor's horizontal range.
 	"""
@@ -714,7 +714,7 @@ def subrange(session, rf, event):
 	session.keyboard.set('insert')
 
 @event('horizontal', 'substitute', 'again')
-def subagain(session, rf, event, *, islice=itertools.islice):
+def subagain(session, frame, rf, event, *, islice=itertools.islice):
 	"""
 	# Substitute the horizontal selection with previous substitution later.
 	"""
@@ -735,7 +735,7 @@ def subagain(session, rf, event, *, islice=itertools.islice):
 	rf.focus[1].restore((start, start, start+len(last)))
 
 @event('line', 'break')
-def split_line_at_cursor(session, rf, event):
+def split_line_at_cursor(session, frame, rf, event):
 	"""
 	# Create a new line splitting the current line at the horizontal position.
 	"""
@@ -745,7 +745,7 @@ def split_line_at_cursor(session, rf, event):
 	split(rf, ln, offset)
 
 @event('line', 'join')
-def join_line_with_following(session, rf, event, quantity=1):
+def join_line_with_following(session, frame, rf, event, quantity=1):
 	"""
 	# Join the current line with the following.
 	"""
@@ -754,7 +754,7 @@ def join_line_with_following(session, rf, event, quantity=1):
 	join(rf, ln, quantity)
 
 @event('copy')
-def copy(session, rf, event):
+def copy(session, frame, rf, event):
 	"""
 	# Copy the vertical range to the session cache entry.
 	"""
@@ -763,16 +763,16 @@ def copy(session, rf, event):
 	session.cache = rf.elements[start:stop]
 
 @event('cut')
-def cut(session, rf, event):
+def cut(session, frame, rf, event):
 	"""
 	# Copy and truncate the focus range.
 	"""
 
-	copy(session, rf, event)
-	delete_element_v(session, rf, event)
+	copy(session, frame, rf, event)
+	delete_element_v(session, frame, rf, event)
 
 @event('paste', 'after')
-def paste_after_line(session, rf, event):
+def paste_after_line(session, frame, rf, event):
 	"""
 	# Paste cache contents after the current vertical position.
 	"""
@@ -781,7 +781,7 @@ def paste_after_line(session, rf, event):
 	insert_lines(rf, ln+1, session.cache)
 
 @event('paste', 'before')
-def paste_before_line(session, rf, event):
+def paste_before_line(session, frame, rf, event):
 	"""
 	# Paste cache contents before the current vertical position.
 	"""
@@ -790,7 +790,7 @@ def paste_before_line(session, rf, event):
 	insert_lines(rf, ln, session.cache)
 
 @event('insert', 'text')
-def insert_segments(session, rf, event):
+def insert_segments(session, frame, rf, event):
 	"""
 	# Break the string instances in &segments into individual lines
 	# and insert them into the document at the cursor's position and
@@ -817,7 +817,7 @@ def insert_segments(session, rf, event):
 	rf.log.checkpoint()
 
 @event('insert', 'annotation')
-def insert_annotation(session, rf, event):
+def insert_annotation(session, frame, rf, event):
 	"""
 	# Apply the &rf.annotation.insertion as an insert at the cursor location.
 	"""

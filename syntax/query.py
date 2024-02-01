@@ -10,7 +10,7 @@ def type():
 	# Currently, just &format.Lambda.
 	return format.prepare(format.files.root)
 
-def refract(session, view, qtype, state, action):
+def refract(session, frame, view, qtype, state, action):
 	"""
 	# Construct a Refraction for representing a query.
 	"""
@@ -43,21 +43,21 @@ def refract(session, view, qtype, state, action):
 		session.keyboard.set('insert')
 	return lrf
 
-def find(session, rf, event):
+def find(session, frame, rf, event):
 	"""
 	# Perform a find operation against the subject's elements.
 	"""
 
 	*context, string = rf.elements
-	session.cancel()
-	subject = session.focus
+	session.dispatch_delta(frame.cancel())
+	subject = frame.focus
 	v, h = subject.focus
 	subject.query['search'] = string
 	ctl = subject.forward(len(subject.elements), v.get(), h.maximum)
-	session.focus.find(ctl, string)
-	session.deltas.append((session.focus, session.view))
+	frame.focus.find(ctl, string)
+	session.deltas.append((frame.focus, frame.view))
 
-def seek(session, rf, event):
+def seek(session, frame, rf, event):
 	"""
 	# Perform a seek operation on the refraction.
 	"""
@@ -66,11 +66,11 @@ def seek(session, rf, event):
 		*context, string = [y for y in (x.strip() for x in rf.elements) if y]
 	except ValueError:
 		# Empty
-		session.cancel()
+		session.dispatch_delta(frame.cancel())
 		return
 
-	session.cancel()
-	subject = session.focus
+	session.dispatch_delta(frame.cancel())
+	subject = frame.focus
 
 	if context:
 		op, whence = ' '.join(context).split()
@@ -100,7 +100,7 @@ def seek(session, rf, event):
 	ln += int(string) if string else len(subject.elements)
 
 	subject.seek(max(0, ln), 0)
-	session.deltas.append((session.focus, session.view))
+	session.deltas.append((frame.focus, frame.view))
 
 def getfield(fields, index):
 	fa, fp = fields
@@ -129,14 +129,14 @@ def prepare(rf, context, command):
 
 	return selector, op
 
-def rewrite(session, rf, event):
+def rewrite(session, frame, rf, event):
 	"""
 	# Rewrite the lines or fields of a vertical range.
 	"""
 
 	context, command = rf.elements
-	session.cancel()
-	subject = session.focus
+	session.dispatch_delta(frame.cancel())
+	subject = frame.focus
 
 	s, d = prepare(subject, context, command)
 	v, h = subject.focus
@@ -162,4 +162,4 @@ def rewrite(session, rf, event):
 			subject.log.write(delta.Update(lo, sub, removed, position))
 	subject.log.apply(subject.elements).commit().checkpoint()
 
-	session.deltas.append((session.focus, session.view))
+	session.deltas.append((frame.focus, frame.view))

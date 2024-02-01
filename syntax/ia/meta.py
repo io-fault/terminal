@@ -6,7 +6,7 @@ from . import types
 event, Index = types.Index.allocate('meta')
 
 @event('ineffective')
-def operation_not_found(session, rf, event):
+def operation_not_found(session, frame, rf, event):
 	"""
 	# No operational effect.
 
@@ -15,7 +15,7 @@ def operation_not_found(session, rf, event):
 	pass
 
 @event('session', 'exit')
-def application_quit(session, rf, event):
+def application_quit(session, frame, rf, event):
 	"""
 	# Raise SystemExit. Unsaved changes are ignored.
 	"""
@@ -23,21 +23,21 @@ def application_quit(session, rf, event):
 	raise SystemExit(0)
 
 @event('terminal', 'focus', 'acquire')
-def application_focused(session, rf, event):
+def application_focused(session, frame, rf, event):
 	"""
 	# Received explicit focus in event.
 	"""
 	pass
 
 @event('terminal', 'focus', 'release')
-def application_switched(session, rf, event):
+def application_switched(session, frame, rf, event):
 	"""
 	# Received explicit focus out event.
 	"""
 	pass
 
 @event('query')
-def directory_annotation_request(session, rf, event):
+def directory_annotation_request(session, frame, rf, event):
 	"""
 	# Construct and display the default directory annotation
 	# for the Refraction's syntax type or &.types.Annotation.rotate
@@ -52,29 +52,29 @@ def directory_annotation_request(session, rf, event):
 		pass
 
 for i, (rb, ri) in enumerate(annotations.integer_representations):
-	def int_annotation(session, rf, event, *, index=i):
+	def int_annotation(session, frame, rf, event, *, index=i):
 		rf.annotate(annotations.BaseAnnotation(rf.focus[1], index=index))
 		session.keyboard.revert()
 	event('integer', 'select', rb)(int_annotation)
 
 for i, (rb, ri) in enumerate(annotations.codepoint_representations):
-	def cp_annotation(session, rf, event, *, index=i):
+	def cp_annotation(session, frame, rf, event, *, index=i):
 		rf.annotate(annotations.CodepointAnnotation(rf.focus[1], index=index))
 		session.keyboard.revert()
 	event('codepoint', 'select', rb)(cp_annotation)
 
 @event('integer', 'color', 'swatch')
-def color_annotation(session, rf, event):
+def color_annotation(session, frame, rf, event):
 	rf.annotate(annotations.ColorAnnotation(rf.focus[1]))
 	session.keyboard.revert()
 
 @event('status')
-def status_annotation(session, rf, event):
+def status_annotation(session, frame, rf, event):
 	rf.annotate(annotations.Status('', session.keyboard, rf.focus))
 	session.keyboard.revert()
 
 @event('transition', 'annotation', 'void')
-def transition_no_such_annotation(session, rf, event):
+def transition_no_such_annotation(session, frame, rf, event):
 	"""
 	# Restore the mode to the previous selection and clear the annotation.
 	"""
@@ -83,7 +83,7 @@ def transition_no_such_annotation(session, rf, event):
 	session.keyboard.revert()
 
 @event('annotation', 'rotate')
-def annotation_rotate(session, rf, event, *, quantity=1):
+def annotation_rotate(session, frame, rf, event, *, quantity=1):
 	"""
 	# Change the image of the annotation using its rotate interface.
 	"""
@@ -92,7 +92,7 @@ def annotation_rotate(session, rf, event, *, quantity=1):
 		rf.annotation.rotate(quantity)
 
 @event('transition', 'annotations', 'select')
-def transition_capture_insert(session, rf, event):
+def transition_capture_insert(session, frame, rf, event):
 	"""
 	# Prepare to select an annotation.
 	"""
@@ -101,7 +101,7 @@ def transition_capture_insert(session, rf, event):
 	session.keyboard.set('annotations')
 
 @event('transition', 'exit')
-def transition_last_mode(session, rf, event):
+def transition_last_mode(session, frame, rf, event):
 	"""
 	# Restore the mode to the previous selection.
 	"""
@@ -109,7 +109,7 @@ def transition_last_mode(session, rf, event):
 	session.keyboard.revert()
 
 @event('transition', 'capture', 'replace')
-def transition_capture_replace(session, rf, event):
+def transition_capture_replace(session, frame, rf, event):
 	"""
 	# Prepare to replace the character at the cursor with a capture.
 	"""
@@ -117,7 +117,7 @@ def transition_capture_replace(session, rf, event):
 	session.keyboard.set('capture-replace')
 
 @event('transition', 'capture', 'key')
-def transition_capture_key(session, rf, event):
+def transition_capture_key(session, frame, rf, event):
 	"""
 	# Prepare to capture the key and modifiers of a stroke.
 	"""
@@ -125,7 +125,7 @@ def transition_capture_key(session, rf, event):
 	session.keyboard.set('capture-key')
 
 @event('transition', 'capture', 'insert')
-def transition_capture_insert(session, rf, event):
+def transition_capture_insert(session, frame, rf, event):
 	"""
 	# Prepare to insert a captured character at the cursor.
 	"""
@@ -133,13 +133,13 @@ def transition_capture_insert(session, rf, event):
 	session.keyboard.set('capture-insert')
 
 @event('view', 'refresh')
-def refresh_view_image(session, rf, event):
+def refresh_view_image(session, frame, rf, event):
 	"""
 	# Redraw the view's image.
 	"""
 
 	from .. import projection
-	view = session.view
+	view = frame.view
 	session.log(
 		f"View: {view.offset!r} {view.version!r} {view.area!r}",
 		f"Cursor: {rf.focus[0].snapshot()!r}",
@@ -149,7 +149,7 @@ def refresh_view_image(session, rf, event):
 	session.dispatch_delta(projection.refresh(rf, view, rf.visible[0]))
 
 @event('select', 'distributed', 'operation')
-def set_distributing(session, rf, event):
+def set_distributing(session, frame, rf, event):
 	"""
 	# Select distributed operations.
 	"""
@@ -157,7 +157,7 @@ def set_distributing(session, rf, event):
 	session.keyboard.qualify('distributed')
 
 @event('transition')
-def atposition_insert_mode_switch(session, rf, event):
+def atposition_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode.
 	"""
@@ -165,7 +165,7 @@ def atposition_insert_mode_switch(session, rf, event):
 	session.keyboard.set('insert')
 
 @event('transition', 'start-of-field')
-def fieldend_insert_mode_switch(session, rf, event):
+def fieldend_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the start
 	# of the horizontal range.
@@ -175,7 +175,7 @@ def fieldend_insert_mode_switch(session, rf, event):
 	session.keyboard.set('insert')
 
 @event('transition', 'end-of-field')
-def fieldend_insert_mode_switch(session, rf, event):
+def fieldend_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the end
 	# of the horizontal range.
@@ -185,7 +185,7 @@ def fieldend_insert_mode_switch(session, rf, event):
 	session.keyboard.set('insert')
 
 @event('transition', 'start-of-line')
-def startofline_insert_mode_switch(session, rf, event):
+def startofline_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the beginning of the line.
 	"""
@@ -199,7 +199,7 @@ def startofline_insert_mode_switch(session, rf, event):
 	session.keyboard.set('insert')
 
 @event('transition', 'end-of-line')
-def endofline_insert_mode_switch(session, rf, event):
+def endofline_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the end of the line.
 	"""
@@ -209,7 +209,7 @@ def endofline_insert_mode_switch(session, rf, event):
 	session.keyboard.set('insert')
 
 @event('session', 'suspend')
-def pause(session, rf, event):
+def pause(session, frame, rf, event):
 	"""
 	# Place the process in the background.
 	"""

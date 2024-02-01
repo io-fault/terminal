@@ -4,32 +4,44 @@
 from . import types
 event, Index = types.Index.allocate('session')
 
+@event('cancel')
+def cancel(session, frame, rf, event):
+	"""
+	# Refocus the subject refraction and reset any location area state.
+	"""
+
+	session.keyboard.set('control')
+	session.dispatch_delta(session.focus.cancel())
+
 @event('screen', 'refresh')
-def screen_refresh(session, rf, event, *, quantity=1):
-	session.refresh(session.device.quantity())
+def screen_refresh(session, frame, rf, event, *, quantity=1):
+	frame.refresh()
+
+	if session.device.quantity() > 0:
+		session.dispatch_delta(frame.render(session.device.screen))
 
 @event('screen', 'resize')
-def screen_resize(session, rf, event, *, quantity=1):
+def screen_resize(session, frame, rf, event, *, quantity=1):
 	session.resize()
 
 @event('resource', 'relocate')
-def s_open_resource(session, rf, event):
+def s_open_resource(session, frame, rf, event):
 	"""
 	# Navigate to the resource location.
 	"""
 
-	session.relocate((session.vertical, session.division))
+	frame.relocate((frame.vertical, frame.division))
 
 @event('resource', 'save')
-def s_update_resource(session, rf, event):
+def s_update_resource(session, frame, rf, event):
 	"""
 	# Update the resource to reflect the refraction's element state.
 	"""
 
-	session.rewrite((session.vertical, session.division))
+	frame.rewrite((frame.vertical, frame.division))
 
 @event('resource', 'write')
-def s_write_resource(session, rf, event):
+def s_write_resource(session, frame, rf, event):
 	"""
 	# Update the resource to reflect the refraction's element state
 	# without confirmation.
@@ -38,7 +50,7 @@ def s_write_resource(session, rf, event):
 	session.save_resource(rf.origin.ref_path, rf.elements)
 
 @event('resource', 'clone')
-def s_clone_resource(session, rf, event):
+def s_clone_resource(session, frame, rf, event):
 	"""
 	# Write the elements to the resource identified by the absolute path in
 	# device's text.
@@ -53,41 +65,41 @@ def s_clone_resource(session, rf, event):
 	session.save_resource(re, rf.elements)
 
 @event('resource', 'close')
-def s_close_resource(session, rf, event):
+def s_close_resource(session, frame, rf, event):
 	"""
 	# Remove the resource from the session releasing any associated memory.
 	"""
 
 	session.close_resource(rf.origin.ref_path)
-	session.chresource(session.vertical, session.division, rf.origin.ref_path@'/dev/null')
+	session.chresource(frame, rf.origin.ref_path@'/dev/null')
 	session.keyboard.set('control')
-	session.refocus()
+	frame.refocus()
 
 @event('resource', 'reload')
-def s_reload_resource(session, rf, event):
+def s_reload_resource(session, frame, rf, event):
 	"""
 	# Remove the resource from the session releasing any associated memory.
 	"""
 
 	session.close_resource(rf.origin.ref_path)
-	session.chresource(session.vertical, session.division, rf.origin.ref_path)
+	session.chresource(frame, rf.origin.ref_path)
 	session.keyboard.set('control')
-	session.refocus()
+	frame.refocus()
 
 @event('resource', 'open')
-def s_open_resource(session, rf, event):
+def s_open_resource(session, frame, rf, event):
 	"""
 	# Open the resource identified by the transferred text.
 	"""
 
 	url = session.device.transfer_text()
 	empty, path = url.split('file://')
-	session.chresource(session.vertical, session.division, rf.origin.ref_path@(path.strip()))
+	session.chresource(frame, rf.origin.ref_path@(path.strip()))
 	session.keyboard.set('control')
-	session.refocus()
+	frame.refocus()
 
 @event('elements', 'transmit')
-def transmit_selected_elements(session, rf, event):
+def transmit_selected_elements(session, frame, rf, event):
 	"""
 	# Send the selected elements to the device manager.
 	"""
