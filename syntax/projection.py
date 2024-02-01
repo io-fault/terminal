@@ -412,7 +412,7 @@ def update(rf, view, changes, *,
 		if lo >= start_of_view and lo < end_of_view:
 			yield from render(rf, view, lo)
 
-def refresh(rf:types.Refraction, view:types.View, whence:int):
+def refresh(rf, view:types.View, whence:int):
 	"""
 	# Overwrite &view.image with the elements in &rf
 	# starting at the absolute offset &whence.

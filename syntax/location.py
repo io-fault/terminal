@@ -111,7 +111,7 @@ def render(theme, rpath, context, line):
 def type(theme, lcontext, gcontext):
 	"""
 	# Construct the necessary processing functions for supporting
-	# line structure, formatting, and rendering in a &.types.Refraction.
+	# line structure, formatting, and rendering in a &.elements.Refraction.
 	"""
 
 	lc = lcontext.delimit()
@@ -214,7 +214,8 @@ def refract(theme, view, pathcontext, path, action):
 		None,
 	)
 
-	lrf = types.Refraction(
+	from .elements import Refraction
+	lrf = Refraction(
 		meta,
 		*type(theme, pathcontext, view.area),
 		list(map(str, determine(pathcontext, path))),

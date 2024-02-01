@@ -23,7 +23,8 @@ def refract(session, frame, view, qtype, state, action):
 		None,
 	)
 
-	lrf = types.Refraction(
+	from .elements import Refraction
+	lrf = Refraction(
 		meta,
 		*session.open_type(format.files.root),
 		list(map(str, [qtype, state])),

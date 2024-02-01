@@ -1,5 +1,5 @@
 """
-# &.types.Refraction.log operations.
+# &.elements.Refraction.log operations.
 """
 from . import types
 event, Index = types.Index.allocate('transaction')
