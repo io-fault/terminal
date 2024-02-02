@@ -1159,21 +1159,87 @@ class Session(Core):
 		# In cases of overflow, wrap the frame index.
 		"""
 
+		nframes = len(self.frames)
+		if self.frame < 0:
+			self.frame = nframes + (self.frame % -nframes)
+
 		try:
 			self.focus = self.frames[self.frame]
 		except IndexError:
-			nframes = len(self.frames)
 			if nframes == 0:
 				# Exit condition.
+				self.focus = None
+				self.frame = None
 				return
-			elif self.frame >= nframes:
-				self.focus = self.frames[0]
-				self.frame = 0
 			else:
-				self.focus = self.frames[-1]
-				self.frame = nframes - 1
+				self.frame = self.frame % nframes
+				self.focus = self.frames[self.frame]
 
 		self.focus.refocus()
+
+	def reframe(self, index):
+		"""
+		# Change the selected frame and redraw the screen to reflect the new status.
+		"""
+
+		screen = self.device.screen
+		last = self.frame
+		self.frame = index
+		self.refocus()
+		self.dispatch_delta(self.focus.render(self.device.screen))
+
+		# Use &self.frame as refocus may have compensated.
+		self.device.update_frame_status(self.frame, last)
+
+	def allocate(self, title=None):
+		"""
+		# Allocate a new frame.
+
+		# [ Returns ]
+		# The index of the new frame.
+		"""
+
+		screen = self.device.screen
+		cfg = self.focus.structure.configuration
+
+		f = Frame(self.theme, self.keyboard, screen.area, index=len(self.frames), title=title)
+		self.frames.append(f)
+
+		f.remodel(*cfg)
+		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(4)]))
+		f.refresh()
+		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
+		return f.index
+
+	def resequence(self):
+		"""
+		# Update the indexes of the frames to reflect their positions in &frames.
+		"""
+
+		for i, f in enumerate(self.frames):
+			f.index = i
+
+	def release(self, frame):
+		"""
+		# Destroy the &frame in the session.
+		"""
+
+		del self.frames[frame]
+		self.resequence()
+
+		if not self.frames:
+			# Exit condition.
+			self.frame = None
+			self.device.update_frame_list()
+			return
+		else:
+			self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
+			if frame == self.frame:
+				# Switch to a different frame.
+				self.reframe(frame)
+			else:
+				# Off screen frame.
+				pass
 
 	def chresource(self, frame, path):
 		self.dispatch_delta(frame.chresource((frame.vertical, frame.division), self.refract(path)))

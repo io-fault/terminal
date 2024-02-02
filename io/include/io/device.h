@@ -532,6 +532,9 @@ struct Cell
 	struct Color c_line;
 };
 
+#define Device_UpdateFrameStatus(DS, CUR, LAST) (DS->frame_status)(DS->cmd_context, CUR, LAST)
+#define Device_UpdateFrameList(DS, NF, FL) (DS->frame_list)(DS->cmd_context, NF, FL)
+
 #define Device_TransferEvent(DS) (DS->transfer_event)(DS->cmd_context)
 #define Device_TransferText(DS, CPTR, IPTR) (DS->transfer_text)(DS->cmd_context, CPTR, IPTR)
 #define Device_Transmit(DS, PTR, SIZE) (DS->cmd_status->st_receiver)(DS->cmd_context, PTR, SIZE)
@@ -573,6 +576,9 @@ struct Device
 	void (*render_pixels)(void *context);
 	void (*dispatch_frame)(void *context);
 	void (*synchronize)(void *context);
+
+	void (*frame_list)(void *context, uint16_t, const char **);
+	void (*frame_status)(void *context, uint16_t, uint16_t);
 };
 
 #define mforeach(SPAN, cv, ca) \

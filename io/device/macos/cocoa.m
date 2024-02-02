@@ -28,7 +28,11 @@ static void device_invalidate_cells(void *, struct CellArea);
 static void device_render_pixels(void *);
 static void device_dispatch_frame(void *);
 static void device_synchronize(void *);
+static void device_frame_status(void *context, uint16_t, uint16_t);
+static void device_frame_list(void *context, uint16_t, const char **titles);
+
 static void dispatch_application_instruction(CellMatrix *, NSString *, int32_t , enum ApplicationInstruction);
+static void dispatch_frame_select(CellMatrix *, uint16_t);
 
 #pragma mark CALayer SPI
 @interface CALayer ()
@@ -262,9 +266,11 @@ applicationWillFinishLaunching: (NSNotification *) anotify
 
 	dispatch_after(
 		dispatch_time(DISPATCH_TIME_NOW, 2 * 1000000000),
-		dispatch_get_main_queue(), ^(void) {
-		app.applicationIconImage = [self captureScreen];
-	});
+		dispatch_get_main_queue(),
+		^(void) {
+			app.applicationIconImage = [self captureScreen];
+		}
+	);
 }
 
 - (void)
@@ -394,6 +400,16 @@ cloneResource: (id) sender
 				dispatch_application_instruction(cm, op.URL.absoluteString, -1, ai_resource_clone);
 		}
 	];
+}
+
+- (void)
+selectFrame: (id) sender
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *cm = dm.root.contentView;
+	NSMenuItem *mi = (NSMenuItem *) sender;
+
+	dispatch_frame_select(cm, mi.tag);
 }
 
 - (void)
@@ -839,7 +855,9 @@ initWithFrame: (CGRect) r
 		.invalidate_cells = device_invalidate_cells,
 		.render_pixels = device_render_pixels,
 		.dispatch_frame = device_dispatch_frame,
-		.synchronize = device_synchronize
+		.synchronize = device_synchronize,
+		.frame_list = NULL,
+		.frame_status = NULL
 	};
 
 	[super initWithFrame: r];
@@ -1410,6 +1428,23 @@ event_context_interpret(NSEventModifierFlags evmf)
 	}
 
 	return(keys);
+}
+
+static void
+dispatch_frame_select(CellMatrix *self, uint16_t frame)
+{
+	dispatch_async(self.event_queue, ^(void) {
+		[self.event_write_lock lock];
+		{
+			struct ControllerStatus *ctl = &(self->_event_status);
+			self.event_text = nil;
+			ctl->st_dispatch = InstructionKey_Identifier(ai_frame_select);
+			ctl->st_quantity = frame;
+			ctl->st_text_length = 0;
+			ctl->st_keys = 0;
+		}
+		[self.event_read_lock unlock];
+	});
 }
 
 static void
@@ -2061,6 +2096,48 @@ device_transfer_event(void *context)
 	return(0);
 }
 
+static void
+device_frame_status(void *context, uint16_t current, uint16_t last)
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *terminal = context;
+	uint16_t floffset = [dm.framesSnapshot count];
+
+	if (floffset + last < [dm.framesMenu numberOfItems])
+		[dm.framesMenu itemAtIndex: floffset + last].state = NSControlStateValueOff;
+
+	if (floffset + current < [dm.framesMenu numberOfItems])
+		[dm.framesMenu itemAtIndex: floffset + current].state = NSControlStateValueOn;
+}
+
+static void
+device_frame_list(void *context, uint16_t frames, const char *titles[])
+{
+	DisplayManager *dm = NSApp.delegate;
+	CellMatrix *terminal = context;
+	int i;
+
+	/* Rebuild */
+	[dm.framesMenu removeAllItems];
+	for (i = 0; i < [dm.framesSnapshot count]; ++i)
+	{
+		[dm.framesMenu addItem: [dm.framesSnapshot objectAtIndex: i]];
+	}
+
+	/* Append Frames */
+	for (i = 0; i < frames; ++i)
+	{
+		const char keychar[] = {'1' + i, 0};
+		NSString *strtitle = [NSString stringWithUTF8String: titles[i]];
+		NSString *key = [NSString stringWithUTF8String: keychar];
+
+		[dm.framesMenu
+			addItemWithTitle: strtitle
+			action: @selector(selectFrame:)
+			keyEquivalent: key].tag = i + 1;
+	}
+}
+
 static int
 device_application_manager(const char *title, TerminalApplication fp)
 {
@@ -2089,12 +2166,19 @@ device_application_manager(const char *title, TerminalApplication fp)
 	app = [NSApplication sharedApplication];
 	app.delegate = dm;
 	app.mainMenu = create_macos_menu("Terminal Framework", dm, fontctx);
+	dm.framesMenu = [app.mainMenu itemWithTitle: @"Frames"].submenu;
+	dm.framesSnapshot = dm.framesMenu.itemArray;
 
 	terminal = (CellMatrix *) dm.root.contentView;
 	terminal.application = [[Coprocess alloc]
 		initWithContext: [terminal deviceReference]
 		andProgram: fp
 	];
+
+	/* Isolate initialization as it is exclusive to the DM. */
+	terminal.application.co_device->frame_list = device_frame_list;
+	terminal.application.co_device->frame_status = device_frame_status;
+
 	dispatch_application_instruction(terminal, nil, 0, ai_session_synchronize);
 
 	[app run];

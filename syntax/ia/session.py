@@ -98,6 +98,47 @@ def s_open_resource(session, frame, rf, event):
 	session.keyboard.set('control')
 	frame.refocus()
 
+@event('frame', 'create')
+def frame_create(session, frame, rf, event):
+	"""
+	# Create and focus a new session frame.
+	"""
+
+	session.reframe(session.allocate())
+
+@event('frame', 'close')
+def frame_close(session, frame, rf, event):
+	"""
+	# Close the current frame leaving resources open within the session.
+	"""
+
+	assert frame.index == session.frame
+	session.release(session.frame)
+
+@event('frame', 'previous')
+def frame_switch_previous(session, frame, rf, event):
+	"""
+	# Select and focus the next frame in the session.
+	"""
+
+	session.reframe(session.frame - 1)
+
+@event('frame', 'next')
+def frame_switch_next(session, frame, rf, event):
+	"""
+	# Select and focus the next frame in the session.
+	"""
+
+	session.reframe(session.frame + 1)
+
+@event('frame', 'select')
+def frame_switch(session, frame, rf, event):
+	"""
+	# Select and focus the next frame in the session.
+	"""
+
+	session.reframe(session.device.quantity() - 1)
+
 @event('elements', 'transmit')
 def transmit_selected_elements(session, frame, rf, event):
 	"""

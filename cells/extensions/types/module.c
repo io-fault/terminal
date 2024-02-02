@@ -1042,6 +1042,53 @@ device_reconnect(PyObject *self)
 	Py_RETURN_NONE;
 }
 
+static PyObject *
+device_update_frame_status(PyObject *self, PyObject *args)
+{
+	DeviceObject devob = (DeviceObject) self;
+	uint16_t current, last;
+
+	if (devob->dev_terminal->frame_status == NULL)
+		Py_RETURN_NONE;
+
+	if (!PyArg_ParseTuple(args, "kk", &current, &last))
+		return(NULL);
+
+	Device_UpdateFrameStatus(devob->dev_terminal, current, last);
+	Py_RETURN_NONE;
+}
+
+/**
+	// Temporary solution.
+*/
+static PyObject *
+device_update_frame_list(PyObject *self, PyObject *args)
+{
+	DeviceObject devob = (DeviceObject) self;
+	const char *tmplist[10] = {
+		NULL,
+	};
+
+	if (devob->dev_terminal->frame_list == NULL)
+		Py_RETURN_NONE;
+
+	if (!PyArg_ParseTuple(args, "|""sss""sss""sss",
+		&(tmplist[0]),
+		&(tmplist[1]),
+		&(tmplist[2]),
+		&(tmplist[3]),
+		&(tmplist[4]),
+		&(tmplist[5]),
+		&(tmplist[6]),
+		&(tmplist[7]),
+		&(tmplist[8])
+	))
+		return(NULL);
+
+	Device_UpdateFrameList(devob->dev_terminal, PyTuple_GET_SIZE(args), tmplist);
+	Py_RETURN_NONE;
+}
+
 static PyMethodDef device_methods[] = {
 	{"key", (PyCFunction) device_key, METH_NOARGS, NULL},
 	{"quantity", (PyCFunction) device_quantity, METH_NOARGS, NULL},
@@ -1058,6 +1105,9 @@ static PyMethodDef device_methods[] = {
 	{"render_pixels", (PyCFunction) device_render_pixels, METH_VARARGS, NULL},
 	{"dispatch_frame", (PyCFunction) device_dispatch_frame, METH_NOARGS, NULL},
 	{"synchronize", (PyCFunction) device_synchronize, METH_NOARGS, NULL},
+
+	{"update_frame_status", (PyCFunction) device_update_frame_status, METH_VARARGS, NULL},
+	{"update_frame_list", (PyCFunction) device_update_frame_list, METH_VARARGS, NULL},
 
 	{NULL, NULL, 0, NULL}
 };

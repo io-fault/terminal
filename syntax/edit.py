@@ -92,7 +92,7 @@ def configure_frame(executable, options, sources):
 	nullcount = max(0, (ndiv - len(init) - len(end)))
 	rfq = itertools.chain(
 		init[:ndiv-len(end)],
-		itertools.repeat(files.root@'dev/null', nullcount),
+		itertools.repeat(files.root@'/dev/null', nullcount),
 		end,
 	)
 
@@ -162,6 +162,8 @@ def main(inv:process.Invocation) -> process.Exit:
 		editor.log("Path Arguments:", *['\t' + s for s in sources])
 		editor.refocus()
 		editor.dispatch_delta(editor.focus.render(editor.device.screen))
+		editor.device.update_frame_list("Frame 1")
+		editor.device.update_frame_status(0, 0)
 
 		while editor.frames:
 			editor.cycle()

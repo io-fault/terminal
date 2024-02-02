@@ -56,6 +56,8 @@
 @interface DisplayManager : NSObject<NSApplicationDelegate>
 	@property (retain,nonatomic) NSFontManager *fonts;
 	@property (retain,nonatomic) NSWindow *root;
+	@property (retain,nonatomic) NSMenu *framesMenu;
+	@property (retain,nonatomic) NSArray<NSMenuItem *> *framesSnapshot;
 	@property (nonatomic) time_t iconUpdated;
 @end
 
