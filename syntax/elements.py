@@ -638,10 +638,6 @@ class Frame(Core):
 			yield from self.chpath(p, rf.origin)
 			yield from v.render(slice(0, None))
 
-		status = list(self.indicate(self.focus, self.view))
-		self._resets[:] = [(area, screen.select(area)) for area, _ in status]
-		yield from status
-
 	def select(self, dpath):
 		"""
 		# Get the &Refraction and &View pair at the given
@@ -1350,11 +1346,18 @@ class Session(Core):
 		screen = self.device.screen
 		frame = self.focus
 
+		status = list(frame.indicate(frame.focus, frame.view))
+		frame._resets[:] = [(area, screen.select(area)) for area, _ in status]
+		self.dispatch_delta(status)
+		self.device.render_pixels()
+		self.device.dispatch_frame()
 		self.device.synchronize() # Wait for render queue to clear.
+
 		self.device.transfer_event()
 		for r in frame._resets:
 			screen.rewrite(*r)
 			self.device.invalidate_cells(r[0])
+		del frame._resets[:]
 
 		for (rf, view) in self.dispatch():
 			current = rf.log.snapshot()
@@ -1362,9 +1365,3 @@ class Session(Core):
 			if current != view.version or rf.visible != voffsets:
 				self.dispatch_delta(Method(rf, view, rf.log.since(view.version)))
 				view.version = current
-
-		status = list(frame.indicate(frame.focus, frame.view))
-		frame._resets[:] = [(area, screen.select(area)) for area, _ in status]
-		self.dispatch_delta(status)
-		self.device.render_pixels()
-		self.device.dispatch_frame()
