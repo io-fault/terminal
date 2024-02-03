@@ -1183,7 +1183,7 @@ class Session(Core):
 		# Use &self.frame as refocus may have compensated.
 		self.device.update_frame_status(self.frame, last)
 
-	def allocate(self, configuration=None, title=None):
+	def allocate(self, layout=None, area=None, title=None):
 		"""
 		# Allocate a new frame.
 
@@ -1193,19 +1193,24 @@ class Session(Core):
 
 		screen = self.device.screen
 
-		if configuration is not None:
-			cfg = configuration
-		elif self.focus is not None:
-			cfg = self.focus.structure.configuration
+		if area is None and layout is None:
+			if self.focus is not None:
+				area, layout = self.focus.structure.configuration
+			else:
+				area = screen.area
 		else:
-			v = screen.area.span // 90
-			cfg = (screen.area, ((1,) * (max(0, v-1))) + (2,))
+			if area is None:
+				area = screen.area
 
-		f = Frame(self.theme, self.keyboard, screen.area, index=len(self.frames), title=title)
+		if layout is None:
+			v = area.span // 90
+			layout = ((1,) * (max(0, v-1))) + (2,)
+
+		f = Frame(self.theme, self.keyboard, area, index=len(self.frames), title=title)
 		self.frames.append(f)
 
-		f.remodel(*cfg)
-		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(sum(cfg[1]))]))
+		f.remodel(area, layout)
+		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(sum(layout))]))
 		f.refresh()
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 		return f.index
