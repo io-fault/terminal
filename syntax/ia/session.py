@@ -106,6 +106,17 @@ def frame_create(session, frame, rf, event):
 
 	session.reframe(session.allocate())
 
+@event('frame', 'clone')
+def frame_clone(session, frame, rf, event):
+	"""
+	# Copy the &frame and focus its new instance.
+	"""
+
+	fi = session.allocate()
+	session.frames[fi].fill(frame.refractions)
+	session.frames[fi].refresh()
+	session.reframe(fi)
+
 @event('frame', 'close')
 def frame_close(session, frame, rf, event):
 	"""

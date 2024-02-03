@@ -1282,6 +1282,7 @@ class Session(Core):
 		'(screen/resize)': 'session/screen/resize',
 
 		'(frame/create)': 'session/frame/create',
+		'(frame/clone)': 'session/frame/clone',
 		'(frame/close)': 'session/frame/close',
 		'(frame/previous)': 'session/frame/previous',
 		'(frame/next)': 'session/frame/next',

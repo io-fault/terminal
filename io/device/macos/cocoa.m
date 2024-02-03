@@ -1880,6 +1880,12 @@ create_macos_menu(const char *title, const char *aboutname, DisplayManager *dm, 
 	/* Frames Menu */
 	AddMenuItem(fm, "New", @selector(relayInstruction:), "N")
 		.tag = ai_frame_create;
+	{
+		NSMenuItem *mi = AddMenuItem(fm, "Clone", @selector(relayInstruction:), "n");
+		mi.keyEquivalentModifierMask |= NSEventModifierFlagControl;
+		mi.tag = ai_frame_clone;
+		mi.toolTip = @"Duplicate the frame maintaining layout and attached resources.";
+	}
 	AddMenuItem(fm, "Close", @selector(relayInstruction:), "W")
 		.tag = ai_frame_close;
 	AddSeparator(fm);

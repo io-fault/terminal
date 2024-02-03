@@ -186,6 +186,7 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(session, restore) \
 	AI_DEFINE(frame, status) \
 	AI_DEFINE(frame, create) \
+	AI_DEFINE(frame, clone) \
 	AI_DEFINE(frame, close) \
 	AI_DEFINE(frame, select) \
 	AI_DEFINE(frame, next) \
