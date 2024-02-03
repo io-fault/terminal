@@ -277,13 +277,15 @@ applicationWillFinishLaunching: (NSNotification *) anotify
 applicationDidFinishLaunching: (NSNotification *) anotify
 {
 	NSMenuItem *ami;
+	NSMenu *am, *amc;
 	NSApplication *app = [anotify object];
 	[app setActivationPolicy: NSApplicationActivationPolicyRegular];
 
 	/* Force application menu title. */
 	ami = [app.mainMenu itemAtIndex: 0];
-	[ami submenu].title = @"Application";
-	[ami submenu].title = ami.title;
+	am = ami.submenu;
+	am.title = @"";
+	am.title = ami.title;
 }
 
 - (void)
@@ -311,7 +313,7 @@ copy_string(void *terminal, const char *data, size_t length)
 {
 	CellMatrix *cm = (CellMatrix *) terminal;
 	NSPasteboard *pb = NSPasteboard.generalPasteboard;
-	NSData *nss = [[NSString alloc] initWithBytes: data length: length encoding: NSUTF8StringEncoding];
+	NSString *nss = [[NSString alloc] initWithBytes: data length: length encoding: NSUTF8StringEncoding];
 
 	[pb clearContents];
 	[pb setString: nss forType: NSPasteboardTypeString];
@@ -835,7 +837,7 @@ configurePixelImage
 	}
 	IOSurfaceUnlock(self.pixelImage, 0, NULL);
 
-	[self.pixelImageLayer setContents: self.pixelImage];
+	[self.pixelImageLayer setContents: (id) self.pixelImage];
 }
 
 - (instancetype)
@@ -927,7 +929,7 @@ report
 	NSLog(@"Matrix System Units %g %g", mp->x_screen_units, mp->y_screen_units);
 	NSLog(@"Cell System Units: %g %g", mp->x_cell_units, mp->y_cell_units);
 	NSLog(@"Matrix Cells %d %d", mp->x_cells, mp->y_cells);
-	NSLog(@"Volume %d cells, %g KiB", mp->v_cells, (sizeof(struct Cell) * mp->v_cells) / 1024.0);
+	NSLog(@"Volume %lu cells, %g KiB", mp->v_cells, (sizeof(struct Cell) * mp->v_cells) / 1024.0);
 	NSLog(@"Pixel Image %g MiB", IOSurfaceGetAllocSize(self.pixelImage) / (1024.0 * 1024.0));
 }
 
@@ -1231,7 +1233,7 @@ signalDisplay
 		else
 		{
 			[self.pixelImageLayer setContents: nil];
-			[self.pixelImageLayer setContents: self.pixelImage];
+			[self.pixelImageLayer setContents: (id) self.pixelImage];
 		}
 	}
 	[CATransaction commit];
@@ -1822,6 +1824,7 @@ create_macos_menu(const char *title, const char *aboutname, DisplayManager *dm, 
 		NSMenuItem *savefont = AddMenuItem(am, "Save User Fixed Pitch Font",
 			@selector(saveUserFixedPitchFont:), "U");
 		savefont.keyEquivalentModifierMask |= NSEventModifierFlagControl;
+		savefont.toolTip = @"Save the current screen font as the system's user fixed pitch font.";
 	}
 	AddSeparator(am);
 	AddMenuItem(am, "Quit", @selector(quit:), "q");

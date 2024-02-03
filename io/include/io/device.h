@@ -236,6 +236,10 @@ ModifierKey(enum KeyModifiers kmi)
 		#define KM_DEFINE(KM, KI) case km_##KM: return(K##KI);
 			KeyModifiers()
 		#undef KM_DEFINE
+
+		case km_void:
+		case km_sentinel:
+			return(0);
 	}
 
 	return(0);

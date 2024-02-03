@@ -18,6 +18,12 @@
 */
 @interface CellMatrix : NSView
 	/* Terminal Application and API support. */
+	- (void) connectApplication;
+	- (void) clientDisconnect;
+	- (struct MatrixParameters *) matrixParameters;
+	- (void) configureCellImage;
+	- (void) configurePixelImage;
+	- (void) configureFont: (NSFont *) f withContext: (NSFontManager *) m;
 	@property (retain,nonatomic) Coprocess *application;
 	@property (nonatomic) struct Device device;
 
