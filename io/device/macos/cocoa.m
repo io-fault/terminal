@@ -276,8 +276,14 @@ applicationWillFinishLaunching: (NSNotification *) anotify
 - (void)
 applicationDidFinishLaunching: (NSNotification *) anotify
 {
+	NSMenuItem *ami;
 	NSApplication *app = [anotify object];
 	[app setActivationPolicy: NSApplicationActivationPolicyRegular];
+
+	/* Force application menu title. */
+	ami = [app.mainMenu itemAtIndex: 0];
+	[ami submenu].title = @"Application";
+	[ami submenu].title = ami.title;
 }
 
 - (void)
@@ -1769,15 +1775,15 @@ customWindowsToEnterFullScreenForWindow: (NSWindow *) window
 #define AddSeparator(M) [M addItem: [NSMenuItem separatorItem]]
 
 NSMenu *
-create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
+create_macos_menu(const char *title, const char *aboutname, DisplayManager *dm, NSFontManager *fontctx)
 {
 	NSMenu *root;
-	NSString *about = [NSString stringWithFormat: @"About %s", title];
+	NSString *about = [NSString stringWithFormat: @"About %s", aboutname];
 
 	/* Menus */
 	NSMenu *am = Menu();
-	NSMenuItem *mia = MenuItem("Application", nil, "");
-	NSMenu *re = Menu();
+	NSMenuItem *mia = MenuItem((title ? title : "Application"), nil, "");
+	NSMenu *rm = Menu();
 	NSMenuItem *rie = MenuItem("Resource", nil, "");
 	NSMenu *em = Menu();
 	NSMenuItem *mie = MenuItem("Edit", nil, "");
@@ -1786,12 +1792,13 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 	NSMenu *sm = Menu();
 	NSMenuItem *sie = MenuItem("Screen", nil, "");
 
-	[rie setSubmenu: re];
 	[mia setSubmenu: am];
+	[rie setSubmenu: rm];
 	[mie setSubmenu: em];
 	[fie setSubmenu: fm];
 	[sie setSubmenu: sm];
-	[re setTitle: @"Resource"];
+	[am setTitle: [NSString stringWithUTF8String: title]];
+	[rm setTitle: @"Resource"];
 	[em setTitle: @"Edit"];
 	[fm setTitle: @"Frames"];
 	[sm setTitle: @"Screen"];
@@ -1820,26 +1827,26 @@ create_macos_menu(const char *title, DisplayManager *dm, NSFontManager *fontctx)
 	AddMenuItem(am, "Quit", @selector(quit:), "q");
 
 	/* Resource Menu */
-	AddMenuItem(re, "New", @selector(relayInstruction:), "n")
+	AddMenuItem(rm, "New", @selector(relayInstruction:), "n")
 		.tag = ai_resource_create;
-	AddMenuItem(re, "Open", @selector(openResources:), "o");
-	AddMenuItem(re, "Cycle", @selector(relayInstruction:), "`")
+	AddMenuItem(rm, "Open", @selector(openResources:), "o");
+	AddMenuItem(rm, "Cycle", @selector(relayInstruction:), "`")
 		.tag = ai_resource_cycle;
 
-	AddSeparator(re);
-	AddMenuItem(re, "Close", @selector(relayInstruction:), "w")
+	AddSeparator(rm);
+	AddMenuItem(rm, "Close", @selector(relayInstruction:), "w")
 		.tag = ai_resource_close;
-	AddMenuItem(re, "Save", @selector(relayInstruction:), "s")
+	AddMenuItem(rm, "Save", @selector(relayInstruction:), "s")
 		.tag = ai_resource_save;
-	AddMenuItem(re, "Duplicate", @selector(cloneResource:), "S")
+	AddMenuItem(rm, "Duplicate", @selector(cloneResource:), "S")
 		.tag = ai_resource_save;
-	AddMenuItem(re, "Reload", @selector(relayInstruction:), "")
+	AddMenuItem(rm, "Reload", @selector(relayInstruction:), "")
 		.tag = ai_resource_reload;
 
-	AddSeparator(re);
-	AddMenuItem(re, "Copy Location", @selector(copyLocation:), "C");
+	AddSeparator(rm);
+	AddMenuItem(rm, "Copy Location", @selector(copyLocation:), "C");
 	{
-		NSMenuItem *rmi = AddMenuItem(re, "Relocate", @selector(relayInstruction:), "l");
+		NSMenuItem *rmi = AddMenuItem(rm, "Relocate", @selector(relayInstruction:), "l");
 		rmi.toolTip = @"Change the frame's focus resource.";
 		rmi.tag = ai_resource_relocate;
 	}
@@ -2165,7 +2172,7 @@ device_application_manager(const char *title, TerminalApplication fp)
 
 	app = [NSApplication sharedApplication];
 	app.delegate = dm;
-	app.mainMenu = create_macos_menu("Terminal Framework", dm, fontctx);
+	app.mainMenu = create_macos_menu("ta/dm", "Terminal Framework", dm, fontctx);
 	dm.framesMenu = [app.mainMenu itemWithTitle: @"Frames"].submenu;
 	dm.framesSnapshot = dm.framesMenu.itemArray;
 
