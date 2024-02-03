@@ -8,12 +8,8 @@ import functools
 
 from . import symbols
 from . import palette
-from . import sequence
-from fault.terminal import matrix
 
 from ..cells.types import Line
-from .types import View
-Empty = View.Empty
 
 def mode_config(mode, relation, Cell):
 	if mode == 'insert':
@@ -93,65 +89,3 @@ def select_horizontal_position_indicator(mode, itype,
 		cc = range_color_palette['offset-active']
 
 	return functools.partial(mode_config, mode, cc)
-
-def collect_horizontal_position(phrase, position, units, *, len=len):
-	"""
-	# Collect the style information and character unit content at the requested positions
-	# of the &phrase.
-	"""
-
-	start, re = phrase.seek((0, 0), position, *phrase.m_codepoint)
-
-	# Skip words without text content. (Empty Redirect)
-	pl = len(phrase)
-	start = phrase.afirst(start)
-	while start[0] < len(phrase) and phrase[start[0]].text == "":
-		n = start[0] + 1
-		if n >= pl:
-			break
-		start = (n, 0)
-
-	co = phrase.tell(start, *phrase.m_cell)
-	end, re = phrase.seek(start, units, *phrase.m_unit)
-	ue = phrase.tell(end, *phrase.m_cell)
-
-	return (co, ue)
-
-def prepare_line_updates(mode, phrase, horizontal,
-		*,
-		names=('start', 'stop', 'position'),
-		select_hpi=select_horizontal_position_indicator,
-		select_hri=select_horizontal_range_indicator,
-		list=list, len=len, tuple=tuple, zip=zip,
-	):
-	"""
-	# Prepare the necessary changes for rendering the positions and range of the cursor.
-	"""
-	assert len(horizontal) == 3
-
-	# Normalize range here in case knowledge of the inversion is desired.
-	if horizontal[0] > horizontal[2]:
-		# Start beyond stop. Normalize.
-		horizontal = (
-			horizontal[2],
-			horizontal[1],
-			horizontal[0],
-		)
-		inverted = True
-	else:
-		inverted = False
-
-	# Apply changes to horizontal range first.
-	hs = horizontal
-	pstart = phrase.seek((0, 0), hs[0])[0]
-	pstop = phrase.seek(pstart, hs[2] - hs[0])[0]
-
-	cstart = phrase.tell(pstart, *phrase.m_cell)
-	cstop = phrase.tell(pstop, *phrase.m_cell)
-
-	rrange = select_hri(mode, 'range')
-	yield (slice(cstart, cstop), rrange)
-
-	hp = collect_horizontal_position(phrase, hs[1], 1)
-	s = select_hpi(mode, 'position', inverted, hs)
-	yield (slice(hp[0], hp[1] + (1 if hp[1] == hp[0] else 0)), s)

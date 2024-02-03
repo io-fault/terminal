@@ -1,7 +1,7 @@
 """
 # Interface element implementations.
 """
-from collections.abc import Sequence, Mapping
+from collections.abc import Sequence, Mapping, Iterable
 from typing import Optional
 import collections
 import itertools
@@ -466,9 +466,8 @@ class Frame(Core):
 		self.refractions = []
 		self.returns = []
 		self.reflections = {}
-		self._resets = []
 
-	def reflect(self, ref:Reference, *sole):
+	def reflect(self, ref:Reference, *sole) -> Iterable[Refraction]:
 		"""
 		# Iterate through all the Refractions representing &ref and
 		# its associated view. &sole, as an iterable, is returned if
@@ -477,7 +476,7 @@ class Frame(Core):
 
 		return self.reflections.get(ref.ref_path, sole)
 
-	def attach(self, dpath, refraction):
+	def attach(self, dpath, refraction) -> types.View:
 		"""
 		# Assign the &refraction to the view associated with
 		# the &division of the &vertical.
@@ -794,84 +793,79 @@ class Frame(Core):
 		# Iterable of reset sequences that clears the cursor position.
 		"""
 
+		fai = focus.annotation
 		rx, ry = (0, 0)
 		ctx = view.area
-		vx, vy = (ctx.x_offset, ctx.y_offset)
+		vx, vy = (ctx.left_offset, ctx.top_offset)
 		hoffset = view.horizontal_offset
 		top, left = focus.visible
 		hedge, edge = (ctx.span, ctx.lines)
 
 		# Get the cursor line.
 		v, h = focus.focus
-		ln = focus.focus[0].get()
+		ln = v.get()
+		rln = ln - top
 		try:
 			line = focus.elements[ln]
 		except IndexError:
 			line = ""
 
-		# Render cursor line.
-		erase = 0
-		rln = ln - top
-		sln = vy + rln
-		fai = focus.annotation
-		real = None
-		if rln >= 0 and rln < edge:
-			# Focus line is visible.
-			# Use cached version in image if available.
-			whole = view.image[rln]
-			w = view.whence[rln]
-			if fai is not None:
-				# Overwrite, but get the cell count of the un-annotated form first.
-				real = whole.cellcount()
-				lfields = focus.structure(line)
-				fai.update(line, lfields)
-				afields = list(annotations.extend(fai, lfields))
-				whole = focus.format(afields)
-				w = whole.seek((0, 0), hoffset, *whole.m_cell)
-		else:
-			# Still need translations for scale_ipositions,
-			# render off screen line as well.
-			fai = None
-			whole = focus.render(line)
-			w = whole.seek((0, 0), hoffset, *whole.m_cell)
-
-		m_cell = whole.m_cell
-		m_cp = whole.m_codepoint
-		hs = h.snapshot()
-
-		hcp = whole.tell(w[0], *m_cp)
-
-		cline = view.rendercells(rln, whole.render())
+		# Prepare phrase and cells.
+		lfields = focus.structure(line)
 		if fai is not None:
-			# Update annotation.
-			yield cline
+			# Overwrite, but get the cell count of the un-annotated form first.
+			fai.update(line, lfields)
+			lfields = list(annotations.extend(fai, lfields))
 
-		if rln >= 0 and rln < edge:
-			c = list(cursor.prepare_line_updates(self.keyboard.mapping, whole, hs))
-			for (cellslice, celldelta) in c:
-				ccursor = [celldelta(x) for x in cline[1][cellslice]]
-				if ccursor:
-					cline[1][cellslice] = ccursor
-					yield ctx.__class__(sln, vx + cellslice.start, 1, len(ccursor)), ccursor
+		phrase = focus.format(lfields)
 
 		# Translate codepoint offsets to cell offsets.
+		m_cell = phrase.m_cell
+		m_cp = phrase.m_codepoint
+		hs = h.snapshot()
+		if hs[0] > hs[2]:
+			inverted = True
+			hs = tuple(reversed(hs))
+		else:
+			inverted = False
 		hc = [
-			whole.tell(whole.seek((0, 0), x, *m_cp)[0], *m_cell)
+			phrase.tell(phrase.seek((0, 0), x, *m_cp)[0], *m_cell)
 			for x in hs
 		]
+
+		# Ignore when offscreen.
+		if rln >= 0 and rln < edge:
+			cells = list(phrase.render())
+			# Need one empty cell.
+			cells.append(types.text.Cell(codepoint=ord(' '), cellcolor=0x000000))
+			ccount = len(cells)
+			ip = cursor.select_horizontal_position_indicator(self.keyboard.mapping, 'position', inverted, hs)
+			span = min(hc[1], ccount-1)
+			upc = cells[span].codepoint
+			span += 1
+			while span < ccount and cells[span].codepoint == upc and cells[span].window > 0:
+				span += 1
+			cp = cells[hc[1]:span]
+			cells[hc[1]:span] = map(ip, cp)
+
+			ir = cursor.select_horizontal_range_indicator(self.keyboard.mapping, 'range')
+			cr = cells[hc[0]:hc[2]]
+			cells[hc[0]:hc[2]] = map(ir, cr)
+
+			yield ctx.__class__(vy + rln, vx, 1, hedge), cells[hoffset:hoffset+hedge]
+
 		si = list(self.structure.scale_ipositions(
 			self.structure.indicate,
 			(vx - rx, vy - ry),
 			(hedge, edge),
 			hc,
 			v.snapshot(),
-			focus.visible[1],
-			focus.visible[0],
+			left, top,
 		))
 
 		for pi in self.structure.r_indicators(si, rtypes=view.edges):
 			(x, y), color, ic, bc = pi
-			picell = cline[1][0].__class__(textcolor=color, codepoint=ord(ic))
+			picell = types.text.Cell(textcolor=color, codepoint=ord(ic))
 			yield ctx.__class__(y, x, 1, 1), (picell,)
 
 class Session(Core):
@@ -1262,8 +1256,9 @@ class Session(Core):
 		s = d.screen
 		for area, data in ixn:
 			if data.__class__ is area.__class__:
-				s.replicate(area, data.y_offset, data.x_offset)
 				d.replicate_cells(area, data)
+				d.synchronize() # Temporary race fix.
+				s.replicate(area, data.y_offset, data.x_offset)
 			else:
 				s.rewrite(area, data)
 				d.invalidate_cells(area)
@@ -1298,10 +1293,11 @@ class Session(Core):
 
 	def dispatch(self):
 		"""
-		# Execute the action associated with the event currently
-		# described by the device's controller status.
+		# Wait for the next event from the device manager and
+		# execute the associated action.
 		"""
 		try:
+			self.device.transfer_event()
 			key = self.device.key()
 			frame = self.focus
 
@@ -1347,17 +1343,15 @@ class Session(Core):
 		frame = self.focus
 
 		status = list(frame.indicate(frame.focus, frame.view))
-		frame._resets[:] = [(area, screen.select(area)) for area, _ in status]
+		restore = [(area, screen.select(area)) for area, _ in status]
 		self.dispatch_delta(status)
 		self.device.render_pixels()
 		self.device.dispatch_frame()
 		self.device.synchronize() # Wait for render queue to clear.
 
-		self.device.transfer_event()
-		for r in frame._resets:
+		for r in restore:
 			screen.rewrite(*r)
 			self.device.invalidate_cells(r[0])
-		del frame._resets[:]
 
 		for (rf, view) in self.dispatch():
 			current = rf.log.snapshot()

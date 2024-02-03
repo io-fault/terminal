@@ -488,31 +488,6 @@ class View(object):
 		assert len(self.whence) == self.height
 		yield from self.render(slice(start, len(self.image)))
 
-	def rendercells(self, offset, cells):
-		"""
-		# Sequence the necessary display instructions for rendering
-		# a single, View relative, line at &offset.
-		"""
-
-		ec = text.Cell(codepoint=-1, cellcolor=0x000000)
-		AType = self.area.__class__
-		rx = self.area.x_offset
-		ry = self.area.y_offset
-		width = self.area.span
-		cview = list(cells)
-		ccount = len(cview)
-		hoffset = self.horizontal_offset
-		voffset = offset
-
-		# Erase to margin.
-		v = (width - (ccount - hoffset))
-		if v > 0:
-			cview.extend(ec for i in range(v))
-		else:
-			cview = cview[hoffset:hoffset+width]
-
-		return AType(offset + ry, 0 + rx, 1, width), cview
-
 	def render(self, area, *, min=min, max=max, len=len, list=list, zip=zip):
 		"""
 		# Sequence the necessary display instructions for rendering
