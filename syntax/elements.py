@@ -1139,7 +1139,9 @@ class Session(Core):
 		"""
 
 		self.device.reconnect()
-		self.focus.resize(self.device.screen.area)
+		new = self.device.screen.area
+		for frame in self.frames:
+			frame.resize(new)
 		self.dispatch_delta(self.focus.render(self.device.screen))
 
 	def refocus(self):
