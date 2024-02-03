@@ -50,16 +50,6 @@ required = {
 	'-Y': ('field-replace', 'vertical-size'),
 }
 
-def override_dimensions(terminal, dimensions):
-	if None in dimensions:
-		real = (terminal.width, terminal.height)
-		return (
-			dimensions[0] or real[0],
-			dimensions[1] or real[1],
-		)
-	else:
-		return dimensions
-
 def configure_frame(executable, options, sources):
 	"""
 	# Apply configuration &options and load initial &sources for the &editor &Session.
@@ -98,6 +88,44 @@ def configure_frame(executable, options, sources):
 
 	return model, rfq
 
+def configure_log_builtin(session):
+	def klog(*lines, depth=[0], elog=session.log):
+		if depth[0] > 0:
+			# No logging while logging.
+			return
+		else:
+			depth[0] += 1
+			try:
+				elog(*lines)
+			finally:
+				depth[0] -= 1
+	import builtins
+	builtins.log = klog
+
+def configure_working_directory(config):
+	if config['working-directory'] is None:
+		wd = config['working-directory'] = process.fs_pwd()
+	else:
+		wd = config['working-directory'] = files.root@config['working-directory']
+		process.fs_chdir(wd)
+	return wd
+
+def identify_executable(inv):
+	from fault.system.query import executables as qexe
+
+	exepath = str(inv.parameters['system']['name'])
+	if exepath[:1] != '/':
+		for executable in qexe(exepath):
+			path = executable
+			break
+		else:
+			# Unrecognized origin.
+			path = files.root@'/var/empty/sy'
+	else:
+		path = files.root@exepath
+
+	return path
+
 def main(inv:process.Invocation) -> process.Exit:
 	config = {
 		'interface-device': None,
@@ -116,50 +144,23 @@ def main(inv:process.Invocation) -> process.Exit:
 		config, recognition.legacy(restricted, required, inv.argv),
 	)
 
-	from fault.system.query import executables as qexe
-	exepath = str(inv.parameters['system']['name'])
-	if exepath[:1] != '/':
-		for executable in qexe(exepath):
-			path = executable
-			break
-		else:
-			# Unrecognized origin.
-			path = files.root@'/var/empty/sy'
-	else:
-		path = files.root@exepath
-
-	# sys.terminaldevice
+	path = identify_executable(inv)
+	wd = configure_working_directory(config)
 	editor = elements.Session(path, types.Device())
+	configure_log_builtin(editor)
 
-	def klog(*lines, depth=[0], elog=editor.log):
-		if depth[0] > 0:
-			# No logging while logging.
-			return
-		else:
-			depth[0] += 1
-			try:
-				elog(*lines)
-			finally:
-				depth[0] -= 1
-	import builtins
-	builtins.log = klog
-
-	if config['working-directory'] is None:
-		wd = config['working-directory'] = process.fs_pwd()
-	else:
-		wd = config['working-directory'] = files.root@config['working-directory']
-		process.fs_chdir(wd)
-
-	divisions, rfq = configure_frame(path, config, sources)
-	fi = editor.allocate(configuration=(editor.device.screen.area, divisions))
+	layout, rfq = configure_frame(path, config, sources)
+	fi = editor.allocate(layout = layout)
 	editor.frames[fi].fill(map(editor.refract, rfq))
 	editor.reframe(fi)
 
-	try:
-		editor.log("Device: " + (config.get('interface-device') or "unspecified"))
-		editor.log("Working Directory: " + str(process.fs_pwd()))
+	editor.log("Factor: " + __name__)
+	editor.log("Device: " + (config.get('interface-device') or "manager default"))
+	editor.log("Working Directory: " + str(wd))
+	if sources:
 		editor.log("Path Arguments:", *['\t' + s for s in sources])
 
+	try:
 		while editor.frames:
 			editor.cycle()
 	finally:
