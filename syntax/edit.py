@@ -151,19 +151,14 @@ def main(inv:process.Invocation) -> process.Exit:
 		process.fs_chdir(wd)
 
 	divisions, rfq = configure_frame(path, config, sources)
+	fi = editor.allocate(configuration=(editor.device.screen.area, divisions))
+	editor.frames[fi].fill(map(editor.refract, rfq))
+	editor.reframe(fi)
 
 	try:
-		editor.focus.remodel(editor.device.screen.area, divisions)
-		editor.focus.fill(map(editor.refract, rfq))
-		editor.focus.refresh()
-
 		editor.log("Device: " + (config.get('interface-device') or "unspecified"))
 		editor.log("Working Directory: " + str(process.fs_pwd()))
 		editor.log("Path Arguments:", *['\t' + s for s in sources])
-		editor.refocus()
-		editor.dispatch_delta(editor.focus.render(editor.device.screen))
-		editor.device.update_frame_list("Frame 1")
-		editor.device.update_frame_status(0, 0)
 
 		while editor.frames:
 			editor.cycle()

@@ -924,9 +924,9 @@ class Session(Core):
 			for x in ia.sections()
 		}
 
-		self.focus = Frame(self.theme, self.keyboard, self.device.screen.area, index=0)
+		self.focus = None
 		self.frame = 0
-		self.frames = [self.focus]
+		self.frames = []
 
 	def lookup_type(self, resource:files.Path):
 		"""
@@ -1183,7 +1183,7 @@ class Session(Core):
 		# Use &self.frame as refocus may have compensated.
 		self.device.update_frame_status(self.frame, last)
 
-	def allocate(self, title=None):
+	def allocate(self, configuration=None, title=None):
 		"""
 		# Allocate a new frame.
 
@@ -1192,13 +1192,20 @@ class Session(Core):
 		"""
 
 		screen = self.device.screen
-		cfg = self.focus.structure.configuration
+
+		if configuration is not None:
+			cfg = configuration
+		elif self.focus is not None:
+			cfg = self.focus.structure.configuration
+		else:
+			v = screen.area.span // 90
+			cfg = (screen.area, ((1,) * (max(0, v-1))) + (2,))
 
 		f = Frame(self.theme, self.keyboard, screen.area, index=len(self.frames), title=title)
 		self.frames.append(f)
 
 		f.remodel(*cfg)
-		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(4)]))
+		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(sum(cfg[1]))]))
 		f.refresh()
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 		return f.index
