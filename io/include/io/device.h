@@ -471,19 +471,19 @@ line_pattern_string(enum LinePattern lp)
 	#define mkcolor(a, r, g, b) (struct Color) {a, b, g, r}
 	struct Color
 	{
-			uint8_t b : CM_COLOR_CHANNEL_SIZE;
-			uint8_t g : CM_COLOR_CHANNEL_SIZE;
-			uint8_t r : CM_COLOR_CHANNEL_SIZE;
-			uint8_t a : CM_COLOR_CHANNEL_SIZE;
+		uint8_t b : CM_COLOR_CHANNEL_SIZE;
+		uint8_t g : CM_COLOR_CHANNEL_SIZE;
+		uint8_t r : CM_COLOR_CHANNEL_SIZE;
+		uint8_t a : CM_COLOR_CHANNEL_SIZE;
 	} __attribute__((packed));
 #else
 	#define mkcolor(a, r, g, b) (struct Color) {r, g, b, a}
 	struct Color
 	{
-			uint8_t a : CM_COLOR_CHANNEL_SIZE;
-			uint8_t r : CM_COLOR_CHANNEL_SIZE;
-			uint8_t g : CM_COLOR_CHANNEL_SIZE;
-			uint8_t b : CM_COLOR_CHANNEL_SIZE;
+		uint8_t a : CM_COLOR_CHANNEL_SIZE;
+		uint8_t r : CM_COLOR_CHANNEL_SIZE;
+		uint8_t g : CM_COLOR_CHANNEL_SIZE;
+		uint8_t b : CM_COLOR_CHANNEL_SIZE;
 	} __attribute__((packed));
 #endif
 
