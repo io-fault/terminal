@@ -65,6 +65,7 @@
 	@property (retain,nonatomic) NSMenu *framesMenu;
 	@property (retain,nonatomic) NSArray<NSMenuItem *> *framesSnapshot;
 	@property (nonatomic) time_t iconUpdated;
+	@property (nonatomic) uint32_t iconColor;
 @end
 
 @interface WindowControl : NSObject<NSWindowDelegate>

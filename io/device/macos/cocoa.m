@@ -618,7 +618,7 @@ captureScreen
 	/* Generate the surrounding rectangle with rounded corners. */
 	CGAffineTransform rrelocate = CGAffineTransformMakeTranslation(-hpad, -vpad);
 	CIFilter<CIRoundedRectangleGenerator> *round = [CIFilter roundedRectangleGeneratorFilter];
-	round.color = [[CIColor alloc] initWithColor: rgb(0x444444)];
+	round.color = [[CIColor alloc] initWithColor: rgb(self.iconColor)];
 	round.extent = CGRectMake(hpad, vpad, target.width - hpad, target.height - vpad);
 	round.radius = 16.0;
 	CIImage *rect = [round.outputImage imageByApplyingTransform: rrelocate];
@@ -2170,6 +2170,20 @@ device_application_manager(const char *title, TerminalApplication fp)
 	[fontctx setSelectedFont: font isMultiple: NO];
 
 	dm = [[DisplayManager alloc] init];
+
+	dm.iconColor = 0xAA606060;
+	{
+		NSString *c = [[[NSProcessInfo processInfo] environment] objectForKey: @"TERMINAL_ICON_COLOR"];
+
+		if (c != nil)
+		{
+			unsigned int v = 0;
+			BOOL found = [[NSScanner scannerWithString: c] scanHexInt: &v];
+			if (found == YES)
+				dm.iconColor = v;
+		}
+	}
+
 	dm.fonts = fontctx;
 	dm.root = create_matrix_window(
 		[NSScreen mainScreen],
