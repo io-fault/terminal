@@ -147,15 +147,16 @@ def stop_relative_insert(area, start, stop):
 	# (illustration)`[||||-||||] -> [xxx|<<start stop||||]`
 	"""
 
+	d = stop - start
 	return (
 		types.Area(
 			area.y_offset + 0,
 			area.x_offset + 0,
-			stop - start,
+			start - d,
 			area.span
 		),
 		types.Area(
-			area.y_offset + start,
+			area.y_offset + d,
 			area.x_offset + 0,
 			0, 0
 		),
