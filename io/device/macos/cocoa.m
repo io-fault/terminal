@@ -1571,72 +1571,70 @@ identify_event_key(NSString *unmod)
 {
 	int src = string_codepoint(unmod);
 
+	switch (src)
 	{
-		switch (src)
+		case NSBackTabCharacter:
+			// Apple's backtab case.
+		case '\t':
+			return(KTab);
+
+		case ' ':
+			return(KSpace);
+		case '\r':
+			return(KReturn);
+		case '\n':
+		case 0x03:
+			return(KEnter);
+
+		case '\x1b':
+			return(KEscape);
+		case 0x7f:
+			return(KDeleteBackwards);
+		case NSDeleteFunctionKey:
+			return(KDeleteForwards);
+		case NSInsertFunctionKey:
+			return(KInsert);
+
+		case NSUpArrowFunctionKey:
+			return(KUpArrow);
+		case NSDownArrowFunctionKey:
+			return(KDownArrow);
+		case NSLeftArrowFunctionKey:
+			return(KLeftArrow);
+		case NSRightArrowFunctionKey:
+			return(KRightArrow);
+
+		case NSPageUpFunctionKey:
+			return(KPageUp);
+		case NSPageDownFunctionKey:
+			return(KPageDown);
+		case NSHomeFunctionKey:
+			return(KHome);
+		case NSEndFunctionKey:
+			return(KEnd);
+
+		case NSPrevFunctionKey:
+			return(KPreviousPage);
+		case NSNextFunctionKey:
+			return(KNextPage);
+
+		case NSClearDisplayFunctionKey:
+			return(KClearScreen);
+		case NSPrintScreenFunctionKey:
+			return(KPrintScreen);
+		case NSBreakFunctionKey:
+			return(KBreak);
+		case NSPauseFunctionKey:
+			return(KPause);
+
+		default:
 		{
-			case NSBackTabCharacter:
-				// Apple's backtab case.
-			case '\t':
-				return(KTab);
-
-			case ' ':
-				return(KSpace);
-			case '\r':
-				return(KReturn);
-			case '\n':
-			case 0x03:
-				return(KEnter);
-
-			case '\x1b':
-				return(KEscape);
-			case 0x7f:
-				return(KDeleteBackwards);
-			case NSDeleteFunctionKey:
-				return(KDeleteForwards);
-			case NSInsertFunctionKey:
-				return(KInsert);
-
-			case NSUpArrowFunctionKey:
-				return(KUpArrow);
-			case NSDownArrowFunctionKey:
-				return(KDownArrow);
-			case NSLeftArrowFunctionKey:
-				return(KLeftArrow);
-			case NSRightArrowFunctionKey:
-				return(KRightArrow);
-
-			case NSPageUpFunctionKey:
-				return(KPageUp);
-			case NSPageDownFunctionKey:
-				return(KPageDown);
-			case NSHomeFunctionKey:
-				return(KHome);
-			case NSEndFunctionKey:
-				return(KEnd);
-
-			case NSPrevFunctionKey:
-				return(KPreviousPage);
-			case NSNextFunctionKey:
-				return(KNextPage);
-
-			case NSClearDisplayFunctionKey:
-				return(KClearScreen);
-			case NSPrintScreenFunctionKey:
-				return(KPrintScreen);
-			case NSBreakFunctionKey:
-				return(KBreak);
-			case NSPauseFunctionKey:
-				return(KPause);
-
-			default:
+			if (src >= 0xF704 && src <= 0xF726)
 			{
-				if (src >= 0xF704 && src <= 0xF726)
-				{
-					return(FunctionKey_Identifier(src - 0xF704 + 1));
-				}
+				return(FunctionKey_Identifier(src - 0xF704 + 1));
 			}
-			break;
 		}
+		break;
 	}
 
 	return(src);
