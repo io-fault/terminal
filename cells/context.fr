@@ -1,4 +1,4 @@
 http://fault.io/integration/machines/include
 http://fault.io/integration/machines/python.runtime
-http://jwp.github.io/terminal/io/include
-http://jwp.github.io/terminal/io/device
+http://fault.io/terminal/io/include
+http://fault.io/terminal/io/device

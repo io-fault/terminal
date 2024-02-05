@@ -8,7 +8,7 @@
 	#define BUNDLE_VERSION "1"
 	#define BUNDLE_SHORT_VERSION "0.0"
 	#define BUNDLE_NAME "syntax"
-	#define BUNDLE_ID "io.github.jwp.terminal.syntax"
+	#define BUNDLE_ID "io.fault.terminal.syntax"
 	#define BUNDLE_REGION "en"
 	#define PRINCIPAL_CLASS "NSApplication"
 
