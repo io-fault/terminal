@@ -80,9 +80,9 @@ coprocess_invocation(void *ctx)
 {
 	int r = 255;
 	PyObject *ob;
-	const char *argv[] = {"syntax", NULL};
+	const char *argv[] = {"terminal", "--session", NULL};
 
-	r = fault_python_initialize(1, argv);
+	r = fault_python_initialize(2, argv);
 	if (r != 0)
 		return(r);
 

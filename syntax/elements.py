@@ -1245,6 +1245,53 @@ class Session(Core):
 				# Off screen frame.
 				pass
 
+	@staticmethod
+	def limit_resources(limit, rlist, null=files.root@'/dev/null'):
+		"""
+		# Truncate and compensate the given &rlist by &limit using &null.
+		"""
+
+		del rlist[limit:]
+		n = len(rlist)
+		if n < limit:
+			rlist.extend(null for x in range(limit - n))
+
+	def restore(self, frames):
+		"""
+		# Allocate and fill the &frames in order to restore a session.
+		"""
+
+		for frame_id, layout, resources, returns in frames:
+			# Align the resources and returns with the layout.
+			divcount = sum(layout)
+			self.limit_resources(divcount, resources)
+			self.limit_resources(divcount, returns)
+
+			# Allocate a new frame and attach refractions.
+			fi = self.allocate(layout, title=frame_id or None)
+			f = self.frames[fi]
+			f.fill(map(self.refract, resources))
+			f.returns[:divcount] = map(self.refract, returns)
+
+			# Populate View images.
+			f.refresh()
+
+		if 0:
+			self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
+
+	def snapshot(self):
+		"""
+		# Construct a snapshot of the session suitable for sequencing with &.session.sequence_frames.
+		"""
+
+		for f in self.frames:
+			frame_id = f.title
+			layout = f.structure.configuration[1]
+			resources = [rf.origin.ref_path for rf in f.refractions]
+			returns = [rf.origin.ref_path for rf in f.returns if rf is not None]
+
+			yield (frame_id, layout, resources, returns)
+
 	def chresource(self, frame, path):
 		self.dispatch_delta(frame.chresource((frame.vertical, frame.division), self.refract(path)))
 

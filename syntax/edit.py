@@ -33,7 +33,9 @@ def fkrt(inv:process.Invocation) -> process.Exit:
 	system.dispatch(inv, Executable(Session(exe, terminal).setup))
 	system.control()
 
-restricted = {}
+restricted = {
+	'--session': ('field-replace', True, 'session-sources'),
+}
 restricted.update(
 	('-' + str(i), ('sequence-append', i, 'vertical-divisions'))
 	for i in range(1, 10)
@@ -50,7 +52,7 @@ required = {
 	'-Y': ('field-replace', 'vertical-size'),
 }
 
-def configure_frame(executable, options, sources):
+def configure_frame(directory, executable, options, sources):
 	"""
 	# Apply configuration &options and load initial &sources for the &editor &Session.
 	"""
@@ -69,7 +71,7 @@ def configure_frame(executable, options, sources):
 	# Sources from command line. Follow with session status views and
 	# a fill of /dev/null refractions between. Transcript is fairly
 	# important right now, so force it in if there is space.
-	init = [wd@x for x in sources]
+	init = [directory@x for x in sources]
 
 	end = [
 		executable/x
@@ -138,6 +140,7 @@ def main(inv:process.Invocation) -> process.Exit:
 		'vertical-position': '1',
 		'horizontal-size': None,
 		'vertical-size': None,
+		'session-sources': False,
 	}
 
 	sources = recognition.merge(
@@ -149,11 +152,33 @@ def main(inv:process.Invocation) -> process.Exit:
 	editor = elements.Session(path, types.Device())
 	configure_log_builtin(editor)
 
-	layout, rfq = configure_frame(path, config, sources)
-	fi = editor.allocate(layout = layout)
-	editor.frames[fi].fill(map(editor.refract, rfq))
-	editor.reframe(fi)
+	fi = 0
+	session_file = None
+	if config['session-sources']:
+		if not sources:
+			sources.append(str(home()/'.syntax/Frames'))
+		session_file = sources[-1]
 
+		from .session import structure_frames as parse
+		for sf in sources:
+			with open(sf) as f:
+				fspecs = parse(f.read())
+
+			try:
+				editor.restore(fspecs)
+			except:
+				pass
+		else:
+			# Clear source list for fallback case of an empty session.
+			sources = []
+
+	# Create frame if not session sourced or the session was empty.
+	if not editor.frames or not config['session-sources']:
+		layout, rfq = configure_frame(wd, path, config, sources)
+		fi = editor.allocate(layout = layout)
+		editor.frames[fi].fill(map(editor.refract, rfq))
+
+	editor.reframe(fi)
 	editor.log("Factor: " + __name__)
 	editor.log("Device: " + (config.get('interface-device') or "manager default"))
 	editor.log("Working Directory: " + str(wd))
@@ -164,4 +189,7 @@ def main(inv:process.Invocation) -> process.Exit:
 		while editor.frames:
 			editor.cycle()
 	finally:
-		pass
+		if session_file is not None:
+			from .session import sequence_frames as seq
+			with open(session_file, 'w') as f:
+				f.write(seq(editor.snapshot()))
