@@ -7,6 +7,7 @@
 #include <fault/python/environ.h>
 #include <unistd.h>
 #include <signal.h>
+#include <locale.h>
 
 /**
 	// The application module is currently unused as &.types.Device
@@ -62,6 +63,7 @@ main(int argc, const char *argv[])
 		// The terminal application's exit code is the responsibility of
 		// the component that creates it.
 	*/
+	char *locale_selection = setlocale(LC_ALL, "");
 	return(device_manage_terminal(FACTOR_CONTEXT(".", "syntax.edit"), coprocess_invocation));
 }
 

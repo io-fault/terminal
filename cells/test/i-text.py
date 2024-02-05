@@ -1,9 +1,11 @@
 import functools
 from itertools import repeat
 from fault.system.tty import cells as syscellcount
+from fault.system.text import setlocale
 from .. import types
 from .. import text as module
 
+setlocale()
 module.graphemes = functools.partial(module.graphemes, syscellcount)
 
 def mkscreen(w, h):
