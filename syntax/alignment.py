@@ -145,14 +145,14 @@ def scroll_backward(area, quantity):
 
 	return (
 		area.__class__(
-			area.y_offset + 0,
-			area.x_offset + 0,
+			area.top_offset + 0,
+			area.left_offset + 0,
 			area.lines - quantity,
 			area.span
 		),
 		area.__class__(
-			area.y_offset + quantity,
-			area.x_offset + 0,
+			area.top_offset + quantity,
+			area.left_offset + 0,
 			0, 0
 		),
 	)
@@ -166,14 +166,14 @@ def scroll_forward(area, quantity):
 
 	return (
 		area.__class__(
-			area.y_offset + quantity,
-			area.x_offset + 0,
+			area.top_offset + quantity,
+			area.left_offset + 0,
 			area.lines - quantity,
 			area.span
 		),
 		area.__class__(
-			area.y_offset + 0,
-			area.x_offset + 0,
+			area.top_offset + 0,
+			area.left_offset + 0,
 			0, 0
 		),
 	)
@@ -187,14 +187,14 @@ def start_relative_delete(area, start, stop):
 
 	return (
 		area.__class__(
-			area.y_offset + start,
-			area.x_offset + 0,
+			area.top_offset + start,
+			area.left_offset + 0,
 			area.lines - stop,
 			area.span
 		),
 		area.__class__(
-			area.y_offset + stop,
-			area.x_offset + 0,
+			area.top_offset + stop,
+			area.left_offset + 0,
 			0, 0
 		),
 	)
@@ -209,14 +209,14 @@ def start_relative_insert(area, start, stop):
 	d = stop - start
 	return (
 		area.__class__(
-			area.y_offset + stop,
-			area.x_offset + 0,
+			area.top_offset + stop,
+			area.left_offset + 0,
 			(area.lines - start) - d,
 			area.span
 		),
 		area.__class__(
-			area.y_offset + start,
-			area.x_offset + 0,
+			area.top_offset + start,
+			area.left_offset + 0,
 			0, 0
 		),
 	)
@@ -231,14 +231,14 @@ def stop_relative_insert(area, start, stop):
 	d = stop - start
 	return (
 		area.__class__(
-			area.y_offset + 0,
-			area.x_offset + 0,
+			area.top_offset + 0,
+			area.left_offset + 0,
 			start - d,
 			area.span
 		),
 		area.__class__(
-			area.y_offset + d,
-			area.x_offset + 0,
+			area.top_offset + d,
+			area.left_offset + 0,
 			0, 0
 		),
 	)
@@ -252,18 +252,14 @@ def stop_relative_delete(area, start, stop):
 
 	return (
 		area.__class__(
-			area.y_offset + (stop - start),
-			area.x_offset + 0,
+			area.top_offset + (stop - start),
+			area.left_offset + 0,
 			start,
 			area.span
 		),
 		area.__class__(
-			area.y_offset + 0,
-			area.x_offset + 0,
+			area.top_offset + 0,
+			area.left_offset + 0,
 			0, 0
 		),
 	)
-
-if __name__ == '__main__':
-	import sys
-	print(scroll(*map(int, sys.argv[1:])))
