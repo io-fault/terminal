@@ -281,7 +281,7 @@ applicationDidFinishLaunching: (NSNotification *) anotify
 	NSApplication *app = [anotify object];
 	[app setActivationPolicy: NSApplicationActivationPolicyRegular];
 
-	/* Force application menu title. */
+	/* Force application menu title; drops bold trait. */
 	ami = [app.mainMenu itemAtIndex: 0];
 	am = ami.submenu;
 	am.title = @"";
@@ -317,8 +317,7 @@ copy_string(void *terminal, const char *data, size_t length)
 - (void)
 copy: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 
 	cm.device.cmd_status->st_receiver = copy_string;
 	dispatch_application_instruction(cm, nil, 0, ai_elements_select);
@@ -327,8 +326,7 @@ copy: (id) sender
 - (void)
 cut: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 
 	cm.device.cmd_status->st_receiver = copy_string;
 	dispatch_application_instruction(cm, nil, 0, ai_elements_select);
@@ -338,8 +336,7 @@ cut: (id) sender
 - (void)
 paste: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 
 	NSPasteboard *pb = NSPasteboard.generalPasteboard;
 	NSString *text = [pb stringForType: NSPasteboardTypeString];
@@ -353,8 +350,7 @@ paste: (id) sender
 - (void)
 openResources: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	NSOpenPanel *op = [NSOpenPanel openPanel];
 
 	op.canChooseFiles = YES;
@@ -364,7 +360,7 @@ openResources: (id) sender
 	op.treatsFilePackagesAsDirectories = YES;
 	op.allowsOtherFileTypes = YES;
 
-	[op beginSheetModalForWindow: dm.root completionHandler: ^(NSModalResponse result) {
+	[op beginSheetModalForWindow: self.root completionHandler: ^(NSModalResponse result) {
 		NSString *files;
 		if (result != NSModalResponseOK)
 			return;
@@ -381,8 +377,7 @@ openResources: (id) sender
 - (void)
 cloneResource: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	NSSavePanel *op = [NSSavePanel savePanel];
 
 	op.treatsFilePackagesAsDirectories = YES;
@@ -391,7 +386,7 @@ cloneResource: (id) sender
 	op.extensionHidden = NO;
 	op.message = @"Save a copy of the current version.";
 
-	[op beginSheetModalForWindow: dm.root
+	[op beginSheetModalForWindow: self.root
 		completionHandler: ^(NSModalResponse result) {
 			if (result != NSModalResponseOK)
 				return;
@@ -407,8 +402,7 @@ cloneResource: (id) sender
 - (void)
 selectFrame: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	NSMenuItem *mi = (NSMenuItem *) sender;
 
 	dispatch_frame_select(cm, mi.tag);
@@ -478,8 +472,7 @@ minimize: (id) sender
 - (void)
 resizeCellImage: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	struct MatrixParameters *mp = [cm matrixParameters];
 
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
@@ -492,8 +485,7 @@ resizeCellImage: (id) sender
 - (void)
 refreshAll: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	/* +1 quantity signals display flush */
 	dispatch_application_instruction(cm, nil, +1, ai_screen_refresh);
 }
@@ -501,8 +493,7 @@ refreshAll: (id) sender
 - (void)
 refreshCells: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	/* +1 quantity signals withheld flush */
 	dispatch_application_instruction(cm, nil, -1, ai_screen_refresh);
 }
@@ -510,8 +501,7 @@ refreshCells: (id) sender
 - (void)
 refreshPixels: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	struct MatrixParameters *mp = [cm matrixParameters];
 
 	/* Rewrite pixels without application I/O */
@@ -534,8 +524,7 @@ toggleFontSelector: (id) sender
 - (void)
 changeFont: (NSFontManager *) fontctx
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	NSFont *dfont = [fontctx convertFont: cm.font];
 	[cm configureFont: dfont withContext: fontctx];
 	[self refreshPixels: nil];
@@ -544,8 +533,7 @@ changeFont: (NSFontManager *) fontctx
 - (void)
 increaseFontSize: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 
 	[cm configureFont: [self.fonts convertFont: cm.font toSize: cm.font.pointSize + 1.0]
 		withContext: self.fonts
@@ -557,8 +545,7 @@ increaseFontSize: (id) sender
 - (void)
 decreaseFontSize: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 
 	[cm configureFont: [self.fonts convertFont: cm.font toSize: cm.font.pointSize - 1.0]
 		withContext: self.fonts
@@ -570,8 +557,7 @@ decreaseFontSize: (id) sender
 - (void)
 saveUserFixedPitchFont: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 
 	[NSFont setUserFixedPitchFont: cm.font];
 }
@@ -579,8 +565,7 @@ saveUserFixedPitchFont: (id) sender
 - (void)
 revertScreen: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	struct MatrixParameters *mp = [cm matrixParameters];
 
 	NSFont *font = [NSFont userFixedPitchFontOfSize: 0.0];
