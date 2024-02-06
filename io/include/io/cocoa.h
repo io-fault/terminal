@@ -21,9 +21,26 @@
 	- (void) connectApplication;
 	- (void) clientDisconnect;
 	- (struct MatrixParameters *) matrixParameters;
+	- (struct Device *) deviceReference;
+	- (void) resizeMatrix: (CGSize) s;
+	- (void) centerBounds: (CGSize) s;
+	- (void) applicationInitialize;
 	- (void) configureCellImage;
+	- (void) refreshCellImage;
 	- (void) configurePixelImage;
+	- (void) refreshPixelImage;
 	- (void) configureFont: (NSFont *) f withContext: (NSFontManager *) m;
+	- (void)
+		dispatchApplicationInstruction: (enum ApplicationInstruction) ai
+		withText: (NSString *) s
+		quantity: (int32_t) q;
+	- (void)
+		dispatchFrameSelect: (uint16_t) nth;
+	- (instancetype)
+		initWithFrame: (CGRect) r
+		andFont: (NSFont *) font
+		context: (NSFontManager *) fontctx;
+
 	@property (retain,nonatomic) Coprocess *application;
 	@property (nonatomic) struct Device device;
 
@@ -57,9 +74,9 @@
 @end
 
 /**
-	// Application delegate managing connections to applications.
+	// Application delegate for direct sessions.
 */
-@interface DisplayManager : NSObject<NSApplicationDelegate>
+@interface DeviceManager : NSObject<NSApplicationDelegate>
 	@property (retain,nonatomic) NSFontManager *fonts;
 	@property (retain,nonatomic) NSWindow *root;
 	@property (retain,nonatomic) NSMenu *framesMenu;
@@ -71,6 +88,18 @@
 @interface WindowControl : NSObject<NSWindowDelegate>
 	- (void) windowDidResize: (NSNotification *) notification;
 @end
+
+static inline
+NSColor *
+mknscolor(uint32_t color)
+{
+	float a = ((0xFF & (255 - (color >> 24))) / 255.0);
+	float r = ((0xFF & (color >> 16)) / 255.0);
+	float g = ((0xFF & (color >> +8)) / 255.0);
+	float b = ((0xFF & (color >> +0)) / 255.0);
+
+	return [NSColor colorWithDeviceRed: r green: g blue: b alpha: a];
+}
 
 /**
 	// Translate cell coordinates to the (point) positions.
