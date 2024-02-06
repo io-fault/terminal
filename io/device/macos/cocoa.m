@@ -289,12 +289,6 @@ applicationDidFinishLaunching: (NSNotification *) anotify
 }
 
 - (void)
-applicationWillTerminate: (NSNotification *) anotify
-{
-	NSApplication *app = [anotify object];
-}
-
-- (void)
 applicationDidBecomeActive: (NSNotification *) anotify
 {
 	NSApplication *app = [anotify object];
@@ -420,17 +414,22 @@ selectFrame: (id) sender
 	dispatch_frame_select(cm, mi.tag);
 }
 
+/**
+	// Near default menu item action forwarding the menu item
+	// tag as the identified instruction.
+*/
 - (void)
 relayInstruction: (id) sender
 {
-	DisplayManager *dm = NSApp.delegate;
-	CellMatrix *cm = dm.root.contentView;
+	CellMatrix *cm = self.root.contentView;
 	NSMenuItem *mi = (NSMenuItem *) sender;
 
 	dispatch_application_instruction(cm, nil, 0, (enum ApplicationInstruction) mi.tag);
 }
 
-/* Application menu actions */
+/**
+	// Application menu about receiver.
+*/
 - (void)
 about: (id) sender
 {
@@ -447,10 +446,27 @@ about: (id) sender
 	[aw runModal];
 }
 
+/**
+	// Application menu quit receiver.
+*/
 - (void)
 quit: (id) sender
 {
+	CellMatrix *cm = self.root.contentView;
 	[NSApp terminate: self];
+}
+
+- (void)
+applicationWillTerminate: (NSNotification *) anotify
+{
+	int co_status = 253;
+	NSApplication *app = [anotify object];
+	CellMatrix *cm = self.root.contentView;
+
+	if (cm.application != nil)
+		co_status = cm.application.co_status;
+
+	exit(co_status);
 }
 
 - (void)
@@ -2155,8 +2171,8 @@ device_frame_list(void *context, uint16_t frames, const char *titles[])
 static int
 device_application_manager(const char *title, TerminalApplication fp)
 {
+	int co_status = 255;
 	NSApplication *app;
-	Coprocess *application_thread;
 	DisplayManager *dm; /* Application delegate. */
 	CellMatrix *terminal;
 	struct MatrixParameters *mp;
@@ -2210,7 +2226,16 @@ device_application_manager(const char *title, TerminalApplication fp)
 	dispatch_application_instruction(terminal, nil, 0, ai_session_synchronize);
 
 	[app run];
-	return(200);
+	/*
+		// NSApplication.run does not normally return.
+		// However, attempt to be consistent with the anticipated
+		// NSApplication exit if never were to occur.
+	*/
+	if (terminal.application != nil)
+	{
+		co_status = terminal.application.co_status;
+	}
+	return(co_status);
 }
 
 int
