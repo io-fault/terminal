@@ -27,176 +27,6 @@ def render(rf, view, *lines):
 		view.update(area, (ph,))
 		yield from view.render(area)
 
-def scroll_backward(area, quantity):
-	"""
-	# Move all lines backward by &quantity copying over the initial &quantity lines.
-
-	# (illustration)`[||||||||] -> [xxx|||||<<]`
-	"""
-
-	return (
-		types.Area(
-			area.y_offset + 0,
-			area.x_offset + 0,
-			area.lines - quantity,
-			area.span
-		),
-		types.Area(
-			area.y_offset + quantity,
-			area.x_offset + 0,
-			0, 0
-		),
-	)
-	return (
-		(0, 0),
-		(area.span, area.lines - quantity),
-
-		# Destination Point
-		(0, quantity),
-	)
-
-def scroll_forward(area, quantity):
-	"""
-	# Move all lines forward by &quantity copying over the final &quantity lines.
-
-	# (illustration)`[||||||||] -> [>>|||||xxx]`
-	"""
-
-	return (
-		types.Area(
-			area.y_offset + quantity,
-			area.x_offset + 0,
-			area.lines - quantity,
-			area.span
-		),
-		types.Area(
-			area.y_offset + 0,
-			area.x_offset + 0,
-			0, 0
-		),
-	)
-	return (
-		(0, quantity),
-		(area.span, area.lines - quantity),
-
-		# Destination Point
-		(0, 0),
-	)
-
-def start_relative_delete(area, start, stop):
-	"""
-	# Move the lines below &stop up to &start.
-
-	# (illustration)`[||||start | stop||||] -> [||||xxx||||<<]`
-	"""
-
-	return (
-		types.Area(
-			area.y_offset + start,
-			area.x_offset + 0,
-			area.lines - stop,
-			area.span
-		),
-		types.Area(
-			area.y_offset + stop,
-			area.x_offset + 0,
-			0, 0
-		),
-	)
-	return (
-		(0, stop),
-		(span, lines),
-
-		# Destination Point
-		(0, start),
-	)
-
-def start_relative_insert(area, start, stop):
-	"""
-	# Move the lines above &start down next to &stop.
-
-	# (illustration)`[||||-||||] -> [||||start stop>>|xxx]`
-	"""
-
-	d = stop - start
-	return (
-		types.Area(
-			area.y_offset + stop,
-			area.x_offset + 0,
-			(area.lines - start) - d,
-			area.span
-		),
-		types.Area(
-			area.y_offset + start,
-			area.x_offset + 0,
-			0, 0
-		),
-	)
-	return (
-		(0, start),
-		(span, lines - d),
-
-		# Destination Point
-		(0, stop),
-	)
-
-def stop_relative_insert(area, start, stop):
-	"""
-	# Copy the lines above &stop up directly above &start overwriting initial lines.
-
-	# (illustration)`[||||-||||] -> [xxx|<<start stop||||]`
-	"""
-
-	d = stop - start
-	return (
-		types.Area(
-			area.y_offset + 0,
-			area.x_offset + 0,
-			start - d,
-			area.span
-		),
-		types.Area(
-			area.y_offset + d,
-			area.x_offset + 0,
-			0, 0
-		),
-	)
-	return (
-		(0, stop - start),
-		(span, stop),
-
-		# Destination Point
-		(0, 0),
-	)
-
-def stop_relative_delete(area, start, stop):
-	"""
-	# Copy the lines above &start down next to &stop.
-
-	# (illustration)`[||||start | stop||||] -> [>>||||xxx||||]`
-	"""
-
-	return (
-		types.Area(
-			area.y_offset + (stop - start),
-			area.x_offset + 0,
-			start,
-			area.span
-		),
-		types.Area(
-			area.y_offset + 0,
-			area.x_offset + 0,
-			0, 0
-		),
-	)
-	return (
-		(0, 0),
-		(ctx.width, start),
-
-		# Destination Point
-		(0, (stop - start)),
-	)
-
 def update(rf, view, changes, *,
 		len=len, min=min, max=max, sum=sum, list=list,
 		isinstance=isinstance, enumerate=enumerate,
@@ -263,12 +93,12 @@ def update(rf, view, changes, *,
 
 		if ve >= vt and vo > 0:
 			# When on last page and first is not last.
-			dins = stop_relative_insert
-			ddel = stop_relative_delete
+			dins = alignment.stop_relative_insert
+			ddel = alignment.stop_relative_delete
 			last_page = True
 		else:
-			dins = start_relative_insert
-			ddel = start_relative_delete
+			dins = alignment.start_relative_insert
+			ddel = alignment.start_relative_delete
 			last_page = False
 
 		nd = len(r.deletion or ())
@@ -371,7 +201,7 @@ def update(rf, view, changes, *,
 			# Advance offset after aligning the image.
 			view.delete(0, dv)
 			view.offset += dv
-			dimage.append([scroll_backward(view.area, dv)])
+			dimage.append([alignment.scroll_backward(view.area, dv)])
 		else:
 			# View's position is beyond the refraction's.
 			# Align the image with prefix.
@@ -379,7 +209,7 @@ def update(rf, view, changes, *,
 				rf.elements[start_of_view:start_of_view-dv]
 			)))
 			view.trim()
-			dimage.append([scroll_forward(view.area, -dv)] + list(view.render(s)))
+			dimage.append([alignment.scroll_forward(view.area, -dv)] + list(view.render(s)))
 
 	# Trim or Compensate
 	displayed = len(view.image)

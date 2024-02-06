@@ -138,6 +138,176 @@ def backward(total, visible, position, quantity, *, min=min, max=max):
 
 	return (start, change, (start, min(start - change, start + visible)))
 
+def scroll_backward(area, quantity):
+	"""
+	# Move all lines backward by &quantity copying over the initial &quantity lines.
+
+	# (illustration)`[||||||||] -> [xxx|||||<<]`
+	"""
+
+	return (
+		area.__class__(
+			area.y_offset + 0,
+			area.x_offset + 0,
+			area.lines - quantity,
+			area.span
+		),
+		area.__class__(
+			area.y_offset + quantity,
+			area.x_offset + 0,
+			0, 0
+		),
+	)
+	return (
+		(0, 0),
+		(area.span, area.lines - quantity),
+
+		# Destination Point
+		(0, quantity),
+	)
+
+def scroll_forward(area, quantity):
+	"""
+	# Move all lines forward by &quantity copying over the final &quantity lines.
+
+	# (illustration)`[||||||||] -> [>>|||||xxx]`
+	"""
+
+	return (
+		area.__class__(
+			area.y_offset + quantity,
+			area.x_offset + 0,
+			area.lines - quantity,
+			area.span
+		),
+		area.__class__(
+			area.y_offset + 0,
+			area.x_offset + 0,
+			0, 0
+		),
+	)
+	return (
+		(0, quantity),
+		(area.span, area.lines - quantity),
+
+		# Destination Point
+		(0, 0),
+	)
+
+def start_relative_delete(area, start, stop):
+	"""
+	# Move the lines below &stop up to &start.
+
+	# (illustration)`[||||start | stop||||] -> [||||xxx||||<<]`
+	"""
+
+	return (
+		area.__class__(
+			area.y_offset + start,
+			area.x_offset + 0,
+			area.lines - stop,
+			area.span
+		),
+		area.__class__(
+			area.y_offset + stop,
+			area.x_offset + 0,
+			0, 0
+		),
+	)
+	return (
+		(0, stop),
+		(span, lines),
+
+		# Destination Point
+		(0, start),
+	)
+
+def start_relative_insert(area, start, stop):
+	"""
+	# Move the lines above &start down next to &stop.
+
+	# (illustration)`[||||-||||] -> [||||start stop>>|xxx]`
+	"""
+
+	d = stop - start
+	return (
+		area.__class__(
+			area.y_offset + stop,
+			area.x_offset + 0,
+			(area.lines - start) - d,
+			area.span
+		),
+		area.__class__(
+			area.y_offset + start,
+			area.x_offset + 0,
+			0, 0
+		),
+	)
+	return (
+		(0, start),
+		(span, lines - d),
+
+		# Destination Point
+		(0, stop),
+	)
+
+def stop_relative_insert(area, start, stop):
+	"""
+	# Copy the lines above &stop up directly above &start overwriting initial lines.
+
+	# (illustration)`[||||-||||] -> [xxx|<<start stop||||]`
+	"""
+
+	d = stop - start
+	return (
+		area.__class__(
+			area.y_offset + 0,
+			area.x_offset + 0,
+			start - d,
+			area.span
+		),
+		area.__class__(
+			area.y_offset + d,
+			area.x_offset + 0,
+			0, 0
+		),
+	)
+	return (
+		(0, stop - start),
+		(span, stop),
+
+		# Destination Point
+		(0, 0),
+	)
+
+def stop_relative_delete(area, start, stop):
+	"""
+	# Copy the lines above &start down next to &stop.
+
+	# (illustration)`[||||start | stop||||] -> [>>||||xxx||||]`
+	"""
+
+	return (
+		area.__class__(
+			area.y_offset + (stop - start),
+			area.x_offset + 0,
+			start,
+			area.span
+		),
+		area.__class__(
+			area.y_offset + 0,
+			area.x_offset + 0,
+			0, 0
+		),
+	)
+	return (
+		(0, 0),
+		(ctx.width, start),
+
+		# Destination Point
+		(0, (stop - start)),
+	)
+
 if __name__ == '__main__':
 	import sys
 	print(scroll(*map(int, sys.argv[1:])))
