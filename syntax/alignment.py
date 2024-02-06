@@ -1,8 +1,6 @@
 """
 # Functions controlling alignment and limits.
 
-# Currently unused.
-
 # [ Parameters ]
 # /total/
 	# The available units prior to a change being applied.
@@ -158,13 +156,6 @@ def scroll_backward(area, quantity):
 			0, 0
 		),
 	)
-	return (
-		(0, 0),
-		(area.span, area.lines - quantity),
-
-		# Destination Point
-		(0, quantity),
-	)
 
 def scroll_forward(area, quantity):
 	"""
@@ -186,13 +177,6 @@ def scroll_forward(area, quantity):
 			0, 0
 		),
 	)
-	return (
-		(0, quantity),
-		(area.span, area.lines - quantity),
-
-		# Destination Point
-		(0, 0),
-	)
 
 def start_relative_delete(area, start, stop):
 	"""
@@ -213,13 +197,6 @@ def start_relative_delete(area, start, stop):
 			area.x_offset + 0,
 			0, 0
 		),
-	)
-	return (
-		(0, stop),
-		(span, lines),
-
-		# Destination Point
-		(0, start),
 	)
 
 def start_relative_insert(area, start, stop):
@@ -243,13 +220,6 @@ def start_relative_insert(area, start, stop):
 			0, 0
 		),
 	)
-	return (
-		(0, start),
-		(span, lines - d),
-
-		# Destination Point
-		(0, stop),
-	)
 
 def stop_relative_insert(area, start, stop):
 	"""
@@ -272,13 +242,6 @@ def stop_relative_insert(area, start, stop):
 			0, 0
 		),
 	)
-	return (
-		(0, stop - start),
-		(span, stop),
-
-		# Destination Point
-		(0, 0),
-	)
 
 def stop_relative_delete(area, start, stop):
 	"""
@@ -299,13 +262,6 @@ def stop_relative_delete(area, start, stop):
 			area.x_offset + 0,
 			0, 0
 		),
-	)
-	return (
-		(0, 0),
-		(ctx.width, start),
-
-		# Destination Point
-		(0, (stop - start)),
 	)
 
 if __name__ == '__main__':
