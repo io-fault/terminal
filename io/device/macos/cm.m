@@ -778,10 +778,12 @@ deviceReference
 	return(&_device);
 }
 
+/**
+	// render_queue only method.
+*/
 - (void)
 invalidateCells: (struct CellArea) ca
 {
-	/* Add to queue */
 	[self.pending_updates
 		addObject: [NSValue valueWithBytes: &ca objCType: @encode(struct CellArea)]
 	];
@@ -1186,8 +1188,8 @@ identify_event_key(NSString *unmod)
 
 	switch (src)
 	{
+		/* Apple's shift-tab case. */
 		case NSBackTabCharacter:
-			// Apple's backtab case.
 		case '\t':
 			return(KTab);
 
@@ -1272,7 +1274,14 @@ identify_event_stroke(NSEvent *ev)
 			stroke = ev.charactersIgnoringModifiers;
 	}
 	else
+	{
+		/*
+			// Usual worst case here is having to make additional
+			// keybinds to recognize shifted keys.
+			// For instance, Shift-Underscore must be bound instead of Shift-Dash.
+		*/
 		stroke = ev.charactersIgnoringModifiers;
+	}
 
 	return([stroke uppercaseString]);
 }

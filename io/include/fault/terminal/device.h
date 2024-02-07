@@ -61,4 +61,4 @@ struct Device
 	void (*frame_status)(void *context, uint16_t, uint16_t);
 };
 
-#endif /* TERMINAL_IO_DEVICE_H */
+#endif /* FAULT_TERMINAL_DEVICE_H */
