@@ -1120,9 +1120,14 @@ class Session(Core):
 			.commit()
 		)
 
+		# Initialization cases where a frame is not available.
+		frame = self.focus
+		if frame is None:
+			return
+
 		ref = Reference(None, None, None, transcript, None)
-		for trf, v in self.focus.reflect(ref):
-			if trf == self.focus:
+		for trf, v in frame.reflect(ref):
+			if trf == frame.focus:
 				# Update handled by main loop.
 				continue
 
