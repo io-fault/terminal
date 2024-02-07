@@ -1,8 +1,6 @@
 /**
-	// Cocoa based bindings for cell matrix views and display management.
-
-	// Contains the primary implementation of the necessary components
-	// to execute a Cellspaces session on macOS systems using Cocoa.framework.
+	// CellMatrix implementation constructing the terminal device
+	// and managaing the terminal application.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -10,10 +8,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <QuartzCore/CALayer.h>
-#import <CoreGraphics/CoreGraphics.h>
-#import <ApplicationServices/ApplicationServices.h>
 #import <IOSurface/IOSurface.h>
-#import <CoreImage/CIFilterBuiltins.h>
 
 #include <io/device.h>
 #include <io/cocoa.h>
@@ -231,6 +226,9 @@ string_codepoint(NSString *str)
 	return(-1);
 }
 
+/**
+	// The terminal application's thread, exit status, and device pointer.
+*/
 @implementation Coprocess
 - (instancetype)
 initWithContext: (struct Device *) dev
