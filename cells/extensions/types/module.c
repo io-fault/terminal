@@ -7,7 +7,7 @@
 #include <fault/libc.h>
 #include <fault/python/environ.h>
 
-#include <io/device.h>
+#include <fault/terminal/device.h>
 #include <python/terminal.h>
 
 static PyGetSetDef

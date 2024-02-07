@@ -10,8 +10,8 @@
 #import <QuartzCore/CALayer.h>
 #import <IOSurface/IOSurface.h>
 
-#include <io/device.h>
-#include <io/cocoa.h>
+#include <fault/terminal/device.h>
+#include <fault/terminal/cocoa.h>
 
 /*
 	// Device API for CellMatrix views.

@@ -52,7 +52,7 @@ python_environment_setup()
 }
 #endif
 
-/* &.cells.device */
+/* &.io.device */
 int device_manage_terminal(const char *, void *);
 static int coprocess_invocation(void *);
 int

@@ -4,8 +4,8 @@
 #import <Cocoa/Cocoa.h>
 #import <CoreImage/CIFilterBuiltins.h>
 
-#include <io/device.h>
-#include <io/cocoa.h>
+#include <fault/terminal/device.h>
+#include <fault/terminal/cocoa.h>
 
 #define dispatch_application_instruction(CM, S, Q, AI) \
 	[cm dispatchApplicationInstruction: AI withText: S quantity: Q]
