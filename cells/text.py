@@ -195,11 +195,11 @@ class Words(tuple):
 	# for subclasses like &Redirect.
 	text = property(operator.itemgetter(1))
 
-	def render(self):
+	def render(self, Define=ord):
 		cr = range(self.cellrate)
 		cf = self.style.inscribe
 		for t in self.text:
-			cp = ord(t)
+			cp = Define(t)
 			for i in cr:
 				yield cf(cp, i)
 
@@ -307,10 +307,10 @@ class Unit(Words):
 	"""
 	__slots__ = ()
 
-	def render(self):
+	def render(self, Define=ord):
 		cf = self.style.inscribe
 		if self.text:
-			cp = ord(self.text)
+			cp = Define(self.text)
 		else:
 			cp = -1
 		for i in range(self.cellrate):
@@ -338,10 +338,10 @@ class Redirect(Unit):
 
 	text = property(operator.itemgetter(3))
 
-	def render(self):
+	def render(self, Define=ord):
 		cf = self.style.update
 		for t in self[1]:
-			cp = ord(t)
+			cp = Define(t)
 			yield cf(codepoint=cp)
 
 class Phrase(tuple):
@@ -351,13 +351,13 @@ class Phrase(tuple):
 	"""
 	__slots__ = ()
 
-	def render(self):
+	def render(self, *, Define=ord):
 		"""
 		# Generate the cells that would represent the words of the phrase.
 		"""
 
 		for word in self:
-			yield from word.render()
+			yield from word.render(Define)
 
 	@staticmethod
 	def frame_word(cf, cells, text):

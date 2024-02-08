@@ -59,6 +59,22 @@ def test_words_zwj_unit(test):
 	gi = module.graphemes("a\u200Db")
 	test/list(module.words(gi)) == [(-1, "a\u200Db")]
 
+def test_words_zwj_emoji(test):
+	"""
+	# - &.module.graphemes
+	# - &.module.words
+
+	# Double check a few emoji expressions.
+	"""
+
+	sux = ''.join((map(chr, [0x1F3F4, 0x200D, 0x2620, 0xFE0F])))
+	sgi = module.graphemes(sux)
+	test/list(module.words(sgi)) == [(-2, sux)]
+
+	lux = ''.join((map(chr, [128105, 0x200D, 10084, 65039, 0x200D, 128139, 0x200D, 128104])))
+	lgi = module.graphemes(lux)
+	test/list(module.words(lgi)) == [(-2, lux)]
+
 def test_words_combining_unit(test):
 	"""
 	# - &.module.graphemes
@@ -128,6 +144,33 @@ def test_Phrase_render(test):
 	cv = list(ph.render())
 	for c, t in zip(cv, "test"):
 		test/c.codepoint == ord(t)
+
+def test_Phrase_render_Define(test):
+	"""
+	# - &module.Phrase.render
+	# - &module.Words.render
+	# - &module.Unit.render
+	# - &module.Redirect.render
+
+	# Validate Define parameter usage.
+	"""
+
+	def D(x):
+		return -1
+	wi = module.words(module.graphemes("test", ctlsize=4))
+	ph = module.Phrase.from_segmentation([
+		(module.Cell(), wi),
+		(module.Cell(), [(-1, 'U')]),
+	])
+	cv = list(ph.render(Define=D))
+	for c, t in zip(cv, range(5)):
+		test/c.codepoint == -1
+
+	ph = module.Phrase([
+		module.Redirect((1, "-", module.Cell(), "")),
+	])
+	c = list(ph.render(Define=D))[0]
+	test/c.codepoint == -1
 
 def test_Phrase_render_double_width(test):
 	"""

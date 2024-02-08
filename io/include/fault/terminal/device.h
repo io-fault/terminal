@@ -18,6 +18,7 @@ typedef int (*TerminalApplication)(void *context);
 #define Device_TransferEvent(DS) (DS->transfer_event)(DS->cmd_context)
 #define Device_TransferText(DS, CPTR, IPTR) (DS->transfer_text)(DS->cmd_context, CPTR, IPTR)
 #define Device_Transmit(DS, PTR, SIZE) (DS->cmd_status->st_receiver)(DS->cmd_context, PTR, SIZE)
+#define Device_Define(DS, STR) (DS->define)(DS->cmd_context, STR)
 #define Device_ReplicateCells(DS, DST, SRC) (DS->replicate_cells)(DS->cmd_context, DST, SRC)
 #define Device_InvalidateCells(DS, DST) (DS->invalidate_cells)(DS->cmd_context, DST)
 #define Device_RenderPixels(DS) (DS->render_pixels)(DS->cmd_context)
@@ -51,6 +52,9 @@ struct Device
 	void *cmd_context;
 	uint16_t (*transfer_event)(void *context);
 	void (*transfer_text)(void *context, const char **txt, uint32_t *bytelength);
+
+	int32_t (*define)(void *context, const char *txt);
+
 	void (*replicate_cells)(void *context, struct CellArea dst, struct CellArea src);
 	void (*invalidate_cells)(void *context, struct CellArea ca);
 	void (*render_pixels)(void *context);

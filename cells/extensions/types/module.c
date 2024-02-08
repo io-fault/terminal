@@ -1089,6 +1089,27 @@ device_update_frame_list(PyObject *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
+static PyObject *
+device_define(PyObject *self, PyObject *args)
+{
+	DeviceObject devob = (DeviceObject) self;
+	PyObject *ux;
+	int32_t v = 0;
+
+	if (!PyArg_ParseTuple(args, "U", &ux))
+		return(NULL);
+
+	if (PyUnicode_GetLength(ux) == 1)
+		v = PyUnicode_ReadChar(ux, 0);
+	else
+	{
+		const char *uxstr = PyUnicode_AsUTF8(ux);
+		v = Device_Define(devob->dev_terminal, uxstr);
+	}
+
+	return(PyLong_FromLong(v));
+}
+
 static PyMethodDef device_methods[] = {
 	{"key", (PyCFunction) device_key, METH_NOARGS, NULL},
 	{"quantity", (PyCFunction) device_quantity, METH_NOARGS, NULL},
@@ -1100,6 +1121,7 @@ static PyMethodDef device_methods[] = {
 	{"transmit", (PyCFunction) device_transmit, METH_VARARGS, NULL},
 
 	{"reconnect", (PyCFunction) device_reconnect, METH_NOARGS, NULL},
+	{"define", (PyCFunction) device_define, METH_VARARGS, NULL},
 	{"replicate_cells", (PyCFunction) device_replicate_cells, METH_VARARGS, NULL},
 	{"invalidate_cells", (PyCFunction) device_invalidate_cells, METH_VARARGS, NULL},
 	{"render_pixels", (PyCFunction) device_render_pixels, METH_VARARGS, NULL},

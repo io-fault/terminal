@@ -17,6 +17,7 @@
 	// Device API for CellMatrix views.
 */
 static uint16_t device_transfer_event(void *);
+static int32_t device_define(void *context, const char *uexpression);
 static void device_transfer_text(void *, const char **, uint32_t *);
 static void device_replicate_cells(void *, struct CellArea, struct CellArea);
 static void device_invalidate_cells(void *, struct CellArea);
@@ -487,6 +488,7 @@ initWithFrame: (CGRect) r
 		.cmd_view = &_view,
 
 		.cmd_context = (void *) self,
+		.define = device_define,
 		.transfer_event = device_transfer_event,
 		.transfer_text = device_transfer_text,
 		.replicate_cells = device_replicate_cells,
@@ -499,6 +501,11 @@ initWithFrame: (CGRect) r
 	};
 
 	[super initWithFrame: r];
+
+	self.expressionIdentifierSequence = -1024; /* Reserve initial negatives for constants. */
+	self.codepointToString = [[NSMutableDictionary alloc] init];
+	self.stringToCodepoint = [[NSMutableDictionary alloc] init];
+
 	self.cellImage = NULL;
 	self.render_queue = dispatch_queue_create("render-queue", DISPATCH_QUEUE_SERIAL);
 	self.event_queue = dispatch_queue_create("event-queue", DISPATCH_QUEUE_SERIAL);
@@ -683,6 +690,7 @@ renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
 	struct MatrixParameters *mp = [self matrixParameters];
 	struct GlyphInscriptionParameters *ip = &_inscription;
 	int iwindow;
+	int32_t cp = cell->c_codepoint;
 	CGFloat x_offset = 0.0;
 	NSGraphicsContext *ctx, *stored = [NSGraphicsContext currentContext];
 	NSBitmapImageRep *bir;
@@ -700,18 +708,28 @@ renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
 		// Also, isolated spaces and zero-width characters are not given underliness,
 		// so encourage Core Text to produce them.
 	*/
-	switch (cell->c_codepoint)
+	if (cp < 0)
 	{
-		case '\t':
-		case ' ':
-			cellglyph = @"{   }";
-			iwindow = 2;
-		break;
+		NSValue *cpv = [NSValue valueWithBytes: &cp objCType: @encode(int32_t)];
+		NSString *ux = [self.codepointToString objectForKey: cpv];
+		cellglyph = [NSString stringWithFormat: @"{ %@ }", ux];
+		iwindow = cell->c_window + 2;
+	}
+	else
+	{
+		switch (cp)
+		{
+			case '\t':
+			case ' ':
+				cellglyph = @"{   }";
+				iwindow = 2;
+			break;
 
-		default:
-			cellglyph = [NSString stringWithFormat: @"{ %@ }", codepoint_string(cell->c_codepoint)];
-			iwindow = cell->c_window + 2;
-		break;
+			default:
+				cellglyph = [NSString stringWithFormat: @"{ %@ }", codepoint_string(cp)];
+				iwindow = cell->c_window + 2;
+			break;
+		}
 	}
 
 	[NSGraphicsContext setCurrentContext: ctx];
@@ -1363,7 +1381,40 @@ clipsToBounds
 {
 	return(YES);
 }
+
+- (int32_t)
+defineCodepoint: (NSString *) ux
+{
+	int32_t cpi;
+	NSValue *v;
+
+	/* Positive codepoint */
+	if (string_codepoint_count(ux) == 1)
+		return(string_codepoint(ux));
+
+	/* Requires an expression; allocate a slot for the codepoint if necessary. */
+	v = [self.stringToCodepoint objectForKey: ux];
+	if (v == nil)
+	{
+		/* Allocate */
+		self.expressionIdentifierSequence -= 1;
+		v = [NSValue valueWithBytes: &(_expressionIdentifierSequence) objCType: @encode(int32_t)];
+
+		[self.codepointToString setObject: ux forKey: v];
+		[self.stringToCodepoint setObject: v forKey: ux];
+	}
+
+	[v getValue: &cpi size: sizeof(cpi)];
+	return(cpi);
+}
 @end
+
+static int32_t
+device_define(void *context, const char *uexpression)
+{
+	CellMatrix *terminal = context;
+	return([terminal defineCodepoint: [NSString stringWithUTF8String: uexpression]]);
+}
 
 static void
 device_invalidate_cells(void *context, struct CellArea ca)

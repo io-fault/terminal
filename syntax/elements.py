@@ -446,7 +446,8 @@ class Frame(Core):
 	refractions: Sequence[Refraction]
 	returns: Sequence[Refraction|None]
 
-	def __init__(self, theme, keyboard, area, index=None, title=None):
+	def __init__(self, define, theme, keyboard, area, index=None, title=None):
+		self.define = define
 		self.theme = theme
 		self.keyboard = keyboard
 		self.area = area
@@ -575,13 +576,13 @@ class Frame(Core):
 		self.paths = {p: i for i, p in enumerate(self.panes)}
 
 		self.views = list(
-			View(Area(*ctx), [], [], {'top': 'weak'})
+			View(Area(*ctx), [], [], {'top': 'weak'}, self.define)
 			for ctx in self.structure.itercontexts(area)
 		)
 
 		# Locations
 		self.headings = list(
-			View(Area(*ctx), [], [], {'bottom': 'weak'})
+			View(Area(*ctx), [], [], {'bottom': 'weak'}, self.define)
 			for ctx in self.structure.itercontexts(area, section=1)
 		)
 
@@ -790,7 +791,7 @@ class Frame(Core):
 			# The &.types.View connected to the refraction.
 
 		# [ Returns ]
-		# Iterable of reset sequences that clears the cursor position.
+		# Iterable of screen deltas.
 		"""
 
 		fai = focus.annotation
@@ -835,7 +836,7 @@ class Frame(Core):
 
 		# Ignore when offscreen.
 		if rln >= 0 and rln < edge:
-			cells = list(phrase.render())
+			cells = list(phrase.render(Define=self.define))
 			# Need one empty cell.
 			cells.append(types.text.Cell(codepoint=ord(' '), cellcolor=0x000000))
 			ccount = len(cells)
@@ -1211,7 +1212,7 @@ class Session(Core):
 			v = area.span // 90
 			layout = ((1,) * (max(0, v-1))) + (2,)
 
-		f = Frame(self.theme, self.keyboard, area, index=len(self.frames), title=title)
+		f = Frame(self.device.define, self.theme, self.keyboard, area, index=len(self.frames), title=title)
 		self.frames.append(f)
 
 		f.remodel(area, layout)

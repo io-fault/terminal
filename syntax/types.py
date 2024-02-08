@@ -432,6 +432,7 @@ class View(object):
 	image: Sequence[text.Phrase]
 	whence: Sequence[tuple[tuple[int,int], int]]
 	edges: Mapping[str, str]
+	define: object
 	version: object = (0, 0, None)
 	offset: int = 0
 	horizontal_offset = 0
@@ -504,7 +505,7 @@ class View(object):
 
 		cv = []
 		for (phrase, w) in zip(self.image[area], self.whence[area]):
-			cells = list(phrase.render())
+			cells = list(phrase.render(Define=self.define))
 			visible = min(limit, max(0, len(cells) - hoffset))
 			v = limit - visible
 
