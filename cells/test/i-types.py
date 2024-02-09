@@ -138,32 +138,32 @@ def test_Area_hash(test):
 	test/d[v3] == 3
 	test/d[v4] == 4
 
-def test_Cell_instances(test):
-	empty = module.Cell()
+def test_Glyph_instances(test):
+	empty = module.Glyph()
 	test/empty.codepoint == -1
 	test/empty.window == 0
 	test/empty.italic == False
 	test/empty.bold == False
 	test/empty.caps == False
 
-	test/module.Cell(italic=True).italic == True
-	test/module.Cell(bold=True).bold == True
-	test/module.Cell(caps=True).caps == True
+	test/module.Glyph(italic=True).italic == True
+	test/module.Glyph(bold=True).bold == True
+	test/module.Glyph(caps=True).caps == True
 
-def test_Cell_negative_codepoints(test):
-	c = module.Cell(codepoint=-1000)
+def test_Glyph_negative_codepoints(test):
+	c = module.Glyph(codepoint=-1000)
 	test/c.codepoint == -1000
 
 	# Check boundary.
-	c = module.Cell(codepoint=-0x7FFFFFFF)
+	c = module.Glyph(codepoint=-0x7FFFFFFF)
 	test/c.codepoint == -0x7FFFFFFF
 
-def test_Cell_update(test):
+def test_Glyph_update(test):
 	"""
 	# Validate field inheritance.
 	"""
 
-	c = module.Cell(
+	c = module.Glyph(
 		codepoint=0,
 		textcolor=0xFFFFFF00,
 		cellcolor=0x11111122,
@@ -172,12 +172,12 @@ def test_Cell_update(test):
 	test/c.update(textcolor=c.cellcolor, cellcolor=c.textcolor).cellcolor == c.textcolor
 	test/c.update(textcolor=c.cellcolor, cellcolor=c.textcolor).textcolor == c.cellcolor
 
-def test_Cell_inscribe(test):
+def test_Glyph_inscribe(test):
 	"""
 	# Validate field inheritance and interface.
 	"""
 
-	c = module.Cell(
+	c = module.Glyph(
 		codepoint=0,
 		textcolor=0xFFFFFF00,
 		cellcolor=0x11111122,
@@ -240,11 +240,11 @@ def test_Screen_rewrite(test):
 	buf = bytearray([0]) * (module.Cell.size * 10 * 10)
 	s = module.Screen(sd, buf)
 	test/s.volume == 100
-	s.rewrite(module.Area(0, 0, 1, 1), [module.Cell(codepoint=20)])
+	s.rewrite(module.Area(0, 0, 1, 1), [module.Glyph(codepoint=20)])
 	cell = s.select(module.Area(0, 0, 1, 1))
 	test/cell[0].codepoint == 20
 
-	rewrites = [module.Cell(codepoint=i) for i in range(10)]
+	rewrites = [module.Glyph(codepoint=i) for i in range(10)]
 	s.rewrite(module.Area(9, 0, 1, 10), rewrites)
 	cells = s.select(module.Area(9, 0, 1, 10))
 	test/[x.codepoint for x in cells] == [c.codepoint for c in rewrites]
@@ -279,7 +279,7 @@ def test_Screen_replicate(test):
 	s = module.Screen(sd, buf)
 	test/s.volume == 100
 
-	s.rewrite(s.area, (module.Cell(codepoint=i) for i in range(100)))
+	s.rewrite(s.area, (module.Glyph(codepoint=i) for i in range(100)))
 	snapshot = s.select(s.area)
 
 	s.replicate(module.Area(0, 0, 5, 10), 5, 0)

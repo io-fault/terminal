@@ -273,7 +273,7 @@ AreaType = {
 };
 
 static int
-cell_initialize(CellObject co, PyObj args, PyObj kw)
+glyph_initialize(CellObject co, PyObj args, PyObj kw)
 {
 	static char *kwlist[] = {
 		"codepoint",
@@ -326,7 +326,7 @@ cell_initialize(CellObject co, PyObj args, PyObj kw)
 }
 
 static PyObj
-cell_inscribe(PyObj self, PyObj args)
+glyph_inscribe(PyObj self, PyObj args)
 {
 	PyObj rob;
 	int codepoint;
@@ -348,7 +348,7 @@ cell_inscribe(PyObj self, PyObj args)
 }
 
 static PyObj
-cell_update(PyObj self, PyObj args, PyObj kw)
+glyph_update(PyObj self, PyObj args, PyObj kw)
 {
 	PyObj rob;
 	CellObject co = (CellObject) self;
@@ -358,7 +358,7 @@ cell_update(PyObj self, PyObj args, PyObj kw)
 		return(NULL);
 
 	memcpy(&((CellObject) rob)->cell, &co->cell, sizeof(struct Cell));
-	if (cell_initialize((CellObject) rob, args, kw) < 0)
+	if (glyph_initialize((CellObject) rob, args, kw) < 0)
 	{
 		Py_DECREF(rob);
 		return(NULL);
@@ -368,7 +368,7 @@ cell_update(PyObj self, PyObj args, PyObj kw)
 }
 
 static PyMemberDef
-cell_members[] = {
+glyph_members[] = {
 	{"codepoint", T_INT, offsetof(struct CellObject, cell.c_codepoint), READONLY, NULL},
 	{"textcolor", T_UINT, offsetof(struct CellObject, cell.c_switch.txt.t_glyph), READONLY, NULL},
 	{"cellcolor", T_UINT, offsetof(struct CellObject, cell.c_cell), READONLY, NULL},
@@ -377,21 +377,21 @@ cell_members[] = {
 };
 
 static PyObj
-cell_size(PyObj self)
+glyph_size(PyObj self)
 {
 	return(PyLong_FromLong(sizeof(struct Cell)));
 }
 
 static PyMethodDef
-cell_methods[] = {
-	{"inscribe", (PyCFunction) cell_inscribe, METH_VARARGS, NULL},
-	{"update", (PyCFunction) cell_update, METH_VARARGS|METH_KEYWORDS, NULL},
-	{"size", (PyCFunction) cell_size, METH_NOARGS|METH_CLASS, NULL},
+glyph_methods[] = {
+	{"inscribe", (PyCFunction) glyph_inscribe, METH_VARARGS, NULL},
+	{"update", (PyCFunction) glyph_update, METH_VARARGS|METH_KEYWORDS, NULL},
+	{"size", (PyCFunction) glyph_size, METH_NOARGS|METH_CLASS, NULL},
 	{NULL,},
 };
 
 static PyObj
-cell_get_window(PyObj self, void *ctx)
+glyph_get_window(PyObj self, void *ctx)
 {
 	CellObject co = (CellObject) self;
 
@@ -400,7 +400,7 @@ cell_get_window(PyObj self, void *ctx)
 
 #define CELL_TRAIT(NAME) \
 	static PyObj \
-	cell_get_##NAME(PyObj self, void *ctx) \
+	glyph_get_##NAME(PyObj self, void *ctx) \
 	{ \
 		CellObject co = (CellObject) self; \
 		if (co->cell.c_switch.txt.t_traits.NAME) \
@@ -413,17 +413,17 @@ cell_get_window(PyObj self, void *ctx)
 #undef CELL_TRAIT
 
 static PyGetSetDef
-cell_getset[] = {
-	{"window", cell_get_window, NULL,},
+glyph_getset[] = {
+	{"window", glyph_get_window, NULL,},
 
-	#define CELL_TRAIT(NAME) {#NAME, cell_get_##NAME, NULL,},
+	#define CELL_TRAIT(NAME) {#NAME, glyph_get_##NAME, NULL,},
 		CELL_TRAITS()
 	#undef CELL_TRAIT
 	{NULL,},
 };
 
 static PyObj
-cell_new(PyTypeObject *subtype, PyObj args, PyObj kw)
+glyph_new(PyTypeObject *subtype, PyObj args, PyObj kw)
 {
 	PyObj rob;
 	CellObject co;
@@ -442,7 +442,7 @@ cell_new(PyTypeObject *subtype, PyObj args, PyObj kw)
 	Cell_TextTraits(co->cell)->underline = lp_void;
 	Cell_TextTraits(co->cell)->strikethrough = lp_void;
 
-	if (cell_initialize(co, args, kw) < 0)
+	if (glyph_initialize(co, args, kw) < 0)
 	{
 		Py_DECREF(rob);
 		rob = NULL;
@@ -458,10 +458,20 @@ CellType = {
 	.tp_name = PYTHON_MODULE_PATH("Cell"),
 	.tp_basicsize = sizeof(struct CellObject),
 	.tp_flags = Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DEFAULT,
-	.tp_methods = cell_methods,
-	.tp_members = cell_members,
-	.tp_getset = cell_getset,
-	.tp_new = cell_new,
+};
+
+static PyTypeObject
+GlyphType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+
+	.tp_name = PYTHON_MODULE_PATH("Glyph"),
+	.tp_basicsize = sizeof(struct CellObject),
+	.tp_flags = Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DEFAULT,
+	.tp_methods = glyph_methods,
+	.tp_members = glyph_members,
+	.tp_getset = glyph_getset,
+	.tp_new = glyph_new,
+	.tp_base = (&CellType),
 };
 
 /**
@@ -514,7 +524,7 @@ screen_rewrite(PyObj self, PyObj args)
 		{
 			CellObject co = (CellObject) cell;
 
-			if (Py_TYPE(cell) != &CellType)
+			if (!PyObject_IsInstance(cell, (PyObject *) &CellType))
 			{
 				PyErr_SetString(PyExc_ValueError, "rewrite requires cell instances");
 				break;
@@ -568,7 +578,9 @@ screen_select(PyObj self, PyObj area)
 
 		mforeach(so->dimensions.span, so->image, &selection)
 		{
-			CellObject co = (CellObject) PyAllocate(&CellType);
+			CellObject co;
+			if (Cell_GlyphType(co->cell))
+				co = (CellObject) PyAllocate(&GlyphType);
 
 			if (co == NULL)
 			{
@@ -1254,6 +1266,7 @@ DeviceType = {
 	ID(Line) \
 	ID(Area) \
 	ID(Cell) \
+	ID(Glyph) \
 	ID(Screen) \
 	ID(Device)
 

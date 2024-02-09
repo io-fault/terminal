@@ -14,7 +14,7 @@ from fault.syntax import keywords as kos
 from ..cells.text import Phrase, Redirect, Words, Unit, graphemes, words
 graphemes = functools.partial(graphemes, syscellcount)
 
-from ..cells.types import Cell
+from ..cells.types import Glyph
 
 palette = {
 	'terminal-default': 0xf0f0f0, # Identifies default cell and text color.
@@ -166,7 +166,7 @@ def isolate(line):
 
 	return line[:leading], line[leading:llen-trailing], line[llen-trailing:]
 
-cell = Cell(codepoint=-1, cellcolor=0x000000, textcolor=0xFFFFFF)
+cell = Glyph(codepoint=-1, cellcolor=0x000000, textcolor=0xFFFFFF)
 theme = {
 	'inclusion-stop-exclusion': 'dark',
 	'inclusion-stop-literal': 'dark',
@@ -340,10 +340,10 @@ def control(theme, ftype, field):
 
 constants = {
 	# Display Unit Separator control character as a caret.
-	0x1f: Redirect((1, '\u2038', Cell(codepoint=ord('-'), textcolor=0x444444), "\x1f"))
+	0x1f: Redirect((1, '\u2038', Glyph(codepoint=ord('-'), textcolor=0x444444), "\x1f"))
 }
-obstruction = Cell(codepoint=-1, textcolor=0x5050DF)
-representation = Cell(codepoint=-1, textcolor=0x777777)
+obstruction = Glyph(codepoint=-1, textcolor=0x5050DF)
+representation = Glyph(codepoint=-1, textcolor=0x777777)
 
 def redirects(phrasewords, *, Unit=Unit, isinstance=isinstance):
 	"""

@@ -26,7 +26,7 @@ from . import keyboard
 from . import ia
 from . import types
 
-from .types import Model, View, Reference, Area, Cell, Device
+from .types import Model, View, Reference, Area, Glyph, Device
 
 class Core(object):
 	"""
@@ -623,7 +623,7 @@ class Frame(Core):
 		# Render a complete frame using the current view image state.
 		"""
 
-		border = Cell(textcolor=0x666666)
+		border = Glyph(textcolor=0x666666)
 		def rborder(i, BCell=border, ord=ord):
 			for ar, ch in i:
 				a = Area(*ar)
@@ -838,7 +838,7 @@ class Frame(Core):
 		if rln >= 0 and rln < edge:
 			cells = list(phrase.render(Define=self.define))
 			# Need one empty cell.
-			cells.append(types.text.Cell(codepoint=ord(' '), cellcolor=0x000000))
+			cells.append(types.text.Glyph(codepoint=ord(' '), cellcolor=0x000000))
 			ccount = len(cells)
 			ip = cursor.select_horizontal_position_indicator(self.keyboard.mapping, 'position', inverted, hs)
 			span = min(hc[1], ccount-1)
@@ -866,7 +866,7 @@ class Frame(Core):
 
 		for pi in self.structure.r_indicators(si, rtypes=view.edges):
 			(x, y), color, ic, bc = pi
-			picell = types.text.Cell(textcolor=color, codepoint=ord(ic))
+			picell = types.text.Glyph(textcolor=color, codepoint=ord(ic))
 			yield ctx.__class__(y, x, 1, 1), (picell,)
 
 class Session(Core):

@@ -6,7 +6,7 @@ import itertools
 import functools
 from collections.abc import Iterable
 
-from .types import Cell
+from .types import Glyph
 
 def graphemes(Cells, ci:Iterable[str], ctlsize=0, tabsize=8):
 	"""
@@ -172,7 +172,7 @@ def words(gi:Iterable[tuple[str, int]]) -> tuple[int, str]:
 class Words(tuple):
 	"""
 	# &Phrase segments identifying the cell count of the word text
-	# and the &Cell frame that should be used to style the text.
+	# and the &Glyph frame that should be used to style the text.
 	"""
 	__slots__ = ()
 
@@ -204,7 +204,7 @@ class Words(tuple):
 				yield cf(cp, i)
 
 	@property
-	def style(self) -> Cell:
+	def style(self) -> Glyph:
 		"""
 		# The traits and colors to use when rendering the text.
 		"""

@@ -278,9 +278,9 @@ def color_variant(ctx, variant, src, sign, integer):
 	"""
 
 	if variant.isspace():
-		return [(format.Cell(textcolor=0x000000, cellcolor=integer), variant)]
+		return [(format.Glyph(textcolor=0x000000, cellcolor=integer), variant)]
 	else:
-		return [(format.Cell(cellcolor=0x000000, textcolor=integer), variant)]
+		return [(format.Glyph(cellcolor=0x000000, textcolor=integer), variant)]
 
 # Color preview constructor.
 ColorAnnotation = Preview.reference(

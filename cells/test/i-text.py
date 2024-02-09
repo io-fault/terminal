@@ -9,7 +9,7 @@ setlocale()
 module.graphemes = functools.partial(module.graphemes, syscellcount)
 
 def mkscreen(w, h):
-	m = bytearray(b'X') * types.Cell.size
+	m = bytearray(b'X') * types.Glyph.size
 	types.Screen(types.Area(0, 0, h, w), m)
 
 def test_graphemes_control(test):
@@ -134,12 +134,12 @@ def test_Phrase_render(test):
 	# - &module.Words.render
 	# - &module.Unit.render
 
-	# Validate the creation of Cell instances representing the phrase.
+	# Validate the creation of Glyph instances representing the phrase.
 	"""
 
 	wi = module.words(module.graphemes("test", ctlsize=4))
 	ph = module.Phrase.from_segmentation([
-		(module.Cell(), wi),
+		(module.Glyph(), wi),
 	])
 	cv = list(ph.render())
 	for c, t in zip(cv, "test"):
@@ -159,15 +159,15 @@ def test_Phrase_render_Define(test):
 		return -1
 	wi = module.words(module.graphemes("test", ctlsize=4))
 	ph = module.Phrase.from_segmentation([
-		(module.Cell(), wi),
-		(module.Cell(), [(-1, 'U')]),
+		(module.Glyph(), wi),
+		(module.Glyph(), [(-1, 'U')]),
 	])
 	cv = list(ph.render(Define=D))
 	for c, t in zip(cv, range(5)):
 		test/c.codepoint == -1
 
 	ph = module.Phrase([
-		module.Redirect((1, "-", module.Cell(), "")),
+		module.Redirect((1, "-", module.Glyph(), "")),
 	])
 	c = list(ph.render(Define=D))[0]
 	test/c.codepoint == -1
@@ -178,13 +178,13 @@ def test_Phrase_render_double_width(test):
 	# - &module.Words.render
 	# - &module.Unit.render
 
-	# Validate the creation of Cell instances representing a phrase with double-width characters.
+	# Validate the creation of Glyph instances representing a phrase with double-width characters.
 	"""
 
 	ch_sample = "中国人"
 	wi = module.words(module.graphemes(ch_sample, ctlsize=4))
 	ph = module.Phrase.from_segmentation([
-		(module.Cell(), wi),
+		(module.Glyph(), wi),
 	])
 
 	cv = list(ph.render())

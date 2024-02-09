@@ -11,7 +11,7 @@ from fault.context import tools
 from collections.abc import Sequence, Mapping
 
 from ..cells import text
-from ..cells.types import Area, Cell, Device
+from ..cells.types import Area, Glyph, Device
 
 class Annotation(Protocol):
 	"""
@@ -425,7 +425,7 @@ class View(object):
 
 	# Placeholder insertion used to compensate for image changes.
 	Empty = text.Phrase([
-		text.Words((0, "", text.Cell(codepoint=-1, cellcolor=0x000000)))
+		text.Words((0, "", text.Glyph(codepoint=-1, cellcolor=0x000000)))
 	])
 
 	area: Area
@@ -495,7 +495,7 @@ class View(object):
 		# the &area reflecting the current &image state.
 		"""
 
-		ec = text.Cell(codepoint=-1, cellcolor=0x000000)
+		ec = text.Glyph(codepoint=-1, cellcolor=0x000000)
 		AType = self.area.__class__
 		rx = self.area.x_offset
 		ry = self.area.y_offset

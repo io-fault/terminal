@@ -266,6 +266,7 @@ struct Traits
 
 #define Cell_SetCodepoint(C, CP) ((C).c_codepoint = CP)
 #define Cell_SetWindow(C, W) ((C).c_window = W)
+#define Cell_GlyphType(C) ((C).c_window != CM_IMAGE_TILE)
 #define Cell_FillColor(C) (&((C).c_cell)))
 #define Cell_TextTraits(C) (&((C).c_switch.txt.t_traits))
 #define Cell_GlyphColor(C) (&((C).c_switch.txt.t_glyph))
