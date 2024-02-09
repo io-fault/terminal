@@ -113,18 +113,18 @@ recolor(struct Color *c)
 static NSFont *
 refont(CellMatrix *cm, struct Cell *cell)
 {
-	if (cell->c_traits.bold)
+	if (Cell_TextTraits(*cell)->bold)
 	{
-		if (cell->c_traits.italic)
+		if (Cell_TextTraits(*cell)->italic)
 			return(cm.boldItalic);
 		else
 			return(cm.bold);
 	}
 
-	if (cell->c_traits.italic)
+	if (Cell_TextTraits(*cell)->italic)
 		return(cm.italic);
 
-	if (cell->c_traits.caps)
+	if (Cell_TextTraits(*cell)->caps)
 		return(cm.caps);
 
 	return(cm.font);
@@ -727,14 +727,14 @@ renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
 
 			attributes: @{
 				NSFontAttributeName: sfont,
-				NSForegroundColorAttributeName: recolor(&cell->c_text),
+				NSForegroundColorAttributeName: recolor(Cell_GlyphColor(*cell)),
 				NSBackgroundColorAttributeName: [NSColor clearColor],
 
-				NSUnderlineStyleAttributeName: @(uline(cell->c_traits.underline)),
-				NSUnderlineColorAttributeName: recolor(&cell->c_line),
+				NSUnderlineStyleAttributeName: @(uline(Cell_TextTraits(*cell)->underline)),
+				NSUnderlineColorAttributeName: recolor(Cell_LineColor(*cell)),
 				NSStrokeWidthAttributeName: @(-1.0),
 
-				NSStrikethroughStyleAttributeName: @(uline(cell->c_traits.strikethrough))
+				NSStrikethroughStyleAttributeName: @(uline(Cell_TextTraits(*cell)->strikethrough))
 			}
 		];
 

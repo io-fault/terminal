@@ -196,7 +196,7 @@ area_compare(PyObj self, PyObj operand, int op)
 	AreaObject ao = (AreaObject) self;
 	AreaObject aoperand;
 
-	if (!PyObject_IsInstance(operand, Py_TYPE(self)))
+	if (!PyObject_IsInstance(operand, (PyObject *) Py_TYPE(self)))
 		Py_RETURN_FALSE;
 
 	aoperand = (AreaObject) operand;
@@ -284,18 +284,19 @@ cell_initialize(CellObject co, PyObj args, PyObj kw)
 		NULL
 	};
 
-	bool italic = co->cell.c_traits.italic;
-	bool bold = co->cell.c_traits.bold;
-	bool caps = co->cell.c_traits.caps;
+	bool italic = Cell_TextTraits(co->cell)->italic;
+	bool bold = Cell_TextTraits(co->cell)->bold;
+	bool caps = Cell_TextTraits(co->cell)->caps;
+
 	unsigned char window = co->cell.c_window;
 	LineObject underline = NULL, strikethrough = NULL;
 
 	// Must line up with &kwlist.
 	#define FIELDS \
 		&co->cell.c_codepoint, \
-		&co->cell.c_text, \
+		&co->cell.c_switch.txt.t_glyph, \
 		&co->cell.c_cell, \
-		&co->cell.c_line, \
+		&co->cell.c_switch.txt.t_line, \
 		&italic, \
 		&bold, \
 		&caps, \
@@ -309,17 +310,17 @@ cell_initialize(CellObject co, PyObj args, PyObj kw)
 		return(-1);
 
 	#undef FIELDS
+	Cell_SetWindow(co->cell, window);
 
 	// Bit fields
-	co->cell.c_traits.italic = italic;
-	co->cell.c_traits.bold = bold;
-	co->cell.c_traits.caps = caps;
-	co->cell.c_window = window;
+	Cell_TextTraits(co->cell)->italic = italic;
+	Cell_TextTraits(co->cell)->bold = bold;
+	Cell_TextTraits(co->cell)->caps = caps;
 
 	if (underline != NULL)
-		co->cell.c_traits.underline = underline->line;
+		Cell_TextTraits(co->cell)->underline = underline->line;
 	if (strikethrough != NULL)
-		co->cell.c_traits.strikethrough = strikethrough->line;
+		Cell_TextTraits(co->cell)->strikethrough = strikethrough->line;
 
 	return(0);
 }
@@ -369,9 +370,9 @@ cell_update(PyObj self, PyObj args, PyObj kw)
 static PyMemberDef
 cell_members[] = {
 	{"codepoint", T_INT, offsetof(struct CellObject, cell.c_codepoint), READONLY, NULL},
-	{"textcolor", T_UINT, offsetof(struct CellObject, cell.c_text), READONLY, NULL},
+	{"textcolor", T_UINT, offsetof(struct CellObject, cell.c_switch.txt.t_glyph), READONLY, NULL},
 	{"cellcolor", T_UINT, offsetof(struct CellObject, cell.c_cell), READONLY, NULL},
-	{"linecolor", T_UINT, offsetof(struct CellObject, cell.c_line), READONLY, NULL},
+	{"linecolor", T_UINT, offsetof(struct CellObject, cell.c_switch.txt.t_line), READONLY, NULL},
 	{NULL,},
 };
 
@@ -402,7 +403,7 @@ cell_get_window(PyObj self, void *ctx)
 	cell_get_##NAME(PyObj self, void *ctx) \
 	{ \
 		CellObject co = (CellObject) self; \
-		if (co->cell.c_traits.NAME) \
+		if (co->cell.c_switch.txt.t_traits.NAME) \
 			Py_RETURN_TRUE; \
 		else \
 			Py_RETURN_FALSE; \
@@ -432,13 +433,14 @@ cell_new(PyTypeObject *subtype, PyObj args, PyObj kw)
 		return(NULL);
 
 	co = (CellObject) rob;
-	co->cell.c_codepoint = (-1);
-	co->cell.c_traits.italic = false;
-	co->cell.c_traits.bold = false;
-	co->cell.c_traits.caps = false;
-	co->cell.c_traits.underline = lp_void;
-	co->cell.c_traits.strikethrough = lp_void;
-	co->cell.c_window = 0;
+	Cell_SetCodepoint(co->cell, -1);
+	Cell_SetWindow(co->cell, 0);
+
+	Cell_TextTraits(co->cell)->italic = false;
+	Cell_TextTraits(co->cell)->bold = false;
+	Cell_TextTraits(co->cell)->caps = false;
+	Cell_TextTraits(co->cell)->underline = lp_void;
+	Cell_TextTraits(co->cell)->strikethrough = lp_void;
 
 	if (cell_initialize(co, args, kw) < 0)
 	{

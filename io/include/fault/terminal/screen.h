@@ -7,11 +7,6 @@
 	#define CM_COLOR_CHANNEL_SIZE 8
 #endif
 
-#ifndef CM_MAXIMUM_GLYPH_WIDTH
-	#define CM_MAXIMUM_GLYPH_WIDTH 2
-	#define CM_GLYPH_WINDOW_BITS 2
-#endif
-
 /**
 	// Declare system_units_t here and switch on the platform.
 	// The factor will hardcode the selected system header,
@@ -260,6 +255,25 @@ struct Traits
 } __attribute__((packed));
 
 /**
+	// Identifies the size of the &Cell.c_window field and how
+	// image tiles are recognized.
+*/
+#ifndef CM_MAXIMUM_GLYPH_WIDTH
+	#define CM_GLYPH_WINDOW_BITS 4
+	#define CM_IMAGE_TILE (CM_GLYPH_WINDOW_BITS * CM_GLYPH_WINDOW_BITS)
+	#define CM_MAXIMUM_GLYPH_WIDTH (CM_IMAGE_TILE - 1)
+#endif
+
+#define Cell_SetCodepoint(C, CP) ((C).c_codepoint = CP)
+#define Cell_SetWindow(C, W) ((C).c_window = W)
+#define Cell_FillColor(C) (&((C).c_cell)))
+#define Cell_TextTraits(C) (&((C).c_switch.txt.t_traits))
+#define Cell_GlyphColor(C) (&((C).c_switch.txt.t_glyph))
+#define Cell_LineColor(C) (&((C).c_switch.txt.t_line))
+#define Cell_ImageXTile(C) (&((C).c_switch.img.i_xtile))
+#define Cell_ImageYTile(C) (&((C).c_switch.img.i_ytile))
+
+/**
 	// The necessary parameters for rendering a cell's image for display.
 
 	// [ Elements ]
@@ -268,30 +282,49 @@ struct Traits
 		// the cell. Positive values, should, map directly to single unicode
 		// codepoints where negatives refer to index entries holding
 		// the codepoint expression necessary to identify the glyph.
+	// /c_cell/
+		// The fill color of the cell's area.
+		// Used with text or image tiles.
 	// /c_window/
 		// The horizontal section of the glyph to display. Normally,
 		// in the range of `0-1` inclusive, but ultimately font and
 		// configuration dependent. Used to support the display of
-		// double (or n) wide characters.
-	// /c_text/
-		// The stroke color of the drawn glyph.
-	// /c_cell/
-		// The fill color of the cell's area.
-	// /c_line/
-		// The color of the line.
-	// /c_traits/
-		// The &Traits used to control the desired rendering.
+		// double (or n) wide characters and to select the &c_switch
+		// element.
+	// /c_switch/
+		// /txt/
+			// /t_text/
+				// The stroke color of the drawn glyph.
+			// /t_line/
+				// The color of the line.
+			// /t_traits/
+				// The &Traits used to control the desired rendering.
+		// /img/
+			// /i_xtile/
+				// The column of the source image that should be displayed
+				// when &c_window indicates that the codepoint refers to an image.
+			// /i_ytile/
+				// The row of the source image that should be displayed
+				// when &c_window indicates that the codepoint refers to an image.
 */
 struct Cell
 {
 	int32_t c_codepoint;
+	struct Color c_cell;
 
 	uint8_t c_window : CM_GLYPH_WINDOW_BITS;
-	struct Traits c_traits;
+	union {
+		struct {
+			struct Traits t_traits;
+			struct Color t_glyph;
+			struct Color t_line;
+		} txt;
 
-	struct Color c_text;
-	struct Color c_cell;
-	struct Color c_line;
+		struct {
+			uint16_t i_xtile;
+			uint16_t i_ytile;
+		} img;
+	} c_switch;
 };
 
 #define mforeach(SPAN, cv, ca) \
