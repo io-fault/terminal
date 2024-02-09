@@ -102,26 +102,10 @@ static inline
 NSColor *
 recolor(struct Color *c)
 {
-	/*
-		// RGBA -> BGRA
-		// R -> B
-		// G -> G
-		// B -> R
-		// A -> A
-
-		// The swapping of of R and B is performed as the NSBitmapImageRep does
-		// not provide enough format control. To avoid wasteful processing time,
-		// the tile bitmaps need to be in a format acceptable for display.
-
-		// Inverted alpha so that when the leading byte is unspecified,
-		// the zero value has the effect of no transparency.
-		// Otherwise, `0xFF0000` would not be visislbe if
-		// the color struct was initialized using an integer value.
-	*/
 	return [NSColor
-		colorWithDeviceRed: c->b / 255.0
+		colorWithDeviceRed: c->r / 255.0
 		green: c->g / 255.0
-		blue: c->r / 255.0
+		blue: c->b / 255.0
 		alpha: (255 - c->a) / 255.0
 	];
 }
@@ -780,6 +764,21 @@ renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
 		[ctx flushGraphics];
 	}
 	[NSGraphicsContext setCurrentContext: stored];
+
+	/* Rotate channels: RGBA -> BGRA */
+	/* Handled with &recolor at some point, but perform it manually for emoji. */
+	{
+		uint32_t i, npixels = [bir pixelsWide] * [bir pixelsHigh];
+		uint32_t *pixel = (uint32_t *) bir.bitmapData;
+
+		for (i = 0; i < npixels; ++i)
+		{
+			uint32_t s = pixel[i];
+			pixel[i] = (s & 0xFF00FF00)
+				| ((s & 0x000000FF) << 16)
+				| ((s & 0x00FF0000) >> 16);
+		}
+	}
 
 	return(bir);
 }
