@@ -9,6 +9,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <QuartzCore/CALayer.h>
 #import <IOSurface/IOSurface.h>
+#import <CoreImage/CIFilterBuiltins.h>
 
 #include <fault/terminal/device.h>
 #include <fault/terminal/cocoa.h>
@@ -18,6 +19,7 @@
 */
 static uint16_t device_transfer_event(void *);
 static int32_t device_define(void *context, const char *uexpression);
+static int32_t device_integrate(void *context, const char *ref, uint32_t l, uint16_t lines, uint16_t span);
 static void device_transfer_text(void *, const char **, uint32_t *);
 static void device_replicate_cells(void *, struct CellArea, struct CellArea);
 static void device_invalidate_cells(void *, struct CellArea);
@@ -95,6 +97,34 @@ uline(enum LinePattern lp)
 		case lp_void:
 			return NSUnderlineStyleNone;
 		break;
+	}
+}
+
+static inline
+NSString *
+utf8str(const char *s, uint32_t l)
+{
+	return [
+		[NSString alloc] initWithBytes: s length: l encoding: NSUTF8StringEncoding
+	];
+}
+
+/**
+	// Rotate channels: RGBA -> BGRA
+*/
+static inline
+void
+bgra(NSBitmapImageRep *ir)
+{
+	uint32_t i, npixels = [ir pixelsWide] * [ir pixelsHigh];
+	uint32_t *pixel = (uint32_t *) ir.bitmapData;
+
+	for (i = 0; i < npixels; ++i)
+	{
+		uint32_t s = pixel[i];
+		pixel[i] = (s & 0xFF00FF00)
+			| ((s & 0x000000FF) << 16)
+			| ((s & 0x00FF0000) >> 16);
 	}
 }
 
@@ -473,6 +503,7 @@ initWithFrame: (CGRect) r
 
 		.cmd_context = (void *) self,
 		.define = device_define,
+		.integrate = device_integrate,
 		.transfer_event = device_transfer_event,
 		.transfer_text = device_transfer_text,
 		.replicate_cells = device_replicate_cells,
@@ -485,6 +516,11 @@ initWithFrame: (CGRect) r
 	};
 
 	[super initWithFrame: r];
+
+	/* Integrated images */
+	self.resourceIdentifierSequence = 0;
+	self.resourceIndex = [[NSMutableDictionary alloc] init];
+	self.integrations = [[NSMutableDictionary alloc] init];
 
 	self.expressionIdentifierSequence = -1024; /* Reserve initial negatives for constants. */
 	self.codepointToString = [[NSMutableDictionary alloc] init];
@@ -624,11 +660,22 @@ cellBitmap: (struct Cell *) cell
 	NSBitmapImageRep *ir;
 	NSData *key = [NSData dataWithBytes: (void *) cell length: sizeof(struct Cell)];
 
-	ir = [self.tileCache objectForKey:key];
+	ir = [self.tileCache objectForKey: key];
 	if (ir == nil)
 	{
-		ir = [self renderCell: cell withFont: self.font];
-		[self.tileCache setObject:ir forKey: key];
+		if (Cell_PixelsType(*cell))
+		{
+			NSValue *v = [NSValue valueWithBytes: &(cell->c_codepoint) objCType: @encode(int32_t)];
+			ir = [self renderPixelsCell: cell withImage: self.integrations[v]];
+		}
+		else
+		{
+			ir = [self renderGlyphCell: cell withFont: self.font];
+		}
+
+		/* Convert cached tile from RGBA to BGRA for copying into the IOSurface */
+		bgra(ir);
+		[self.tileCache setObject: ir forKey: key];
 	}
 
 	return(ir);
@@ -669,7 +716,7 @@ createTile: (CGSize) tiled
 	// Render the cell with the given font.
 */
 - (NSBitmapImageRep *)
-renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
+renderGlyphCell: (struct Cell *) cell withFont: (NSFont *) cfont
 {
 	struct MatrixParameters *mp = [self matrixParameters];
 	struct GlyphInscriptionParameters *ip = &_inscription;
@@ -765,20 +812,40 @@ renderCell: (struct Cell *) cell withFont: (NSFont *) cfont
 	}
 	[NSGraphicsContext setCurrentContext: stored];
 
-	/* Rotate channels: RGBA -> BGRA */
-	/* Handled with &recolor at some point, but perform it manually for emoji. */
-	{
-		uint32_t i, npixels = [bir pixelsWide] * [bir pixelsHigh];
-		uint32_t *pixel = (uint32_t *) bir.bitmapData;
+	return(bir);
+}
 
-		for (i = 0; i < npixels; ++i)
-		{
-			uint32_t s = pixel[i];
-			pixel[i] = (s & 0xFF00FF00)
-				| ((s & 0x000000FF) << 16)
-				| ((s & 0x00FF0000) >> 16);
-		}
+- (NSBitmapImageRep *)
+renderPixelsCell: (struct Cell *) cell withImage: (NSImage *) img
+{
+	struct MatrixParameters *mp = [self matrixParameters];
+	NSGraphicsContext *ctx, *stored = [NSGraphicsContext currentContext];
+	NSBitmapImageRep *bir;
+	CGRect tiler = CGRectMake(0.0, 0.0, mp->x_cell_units, mp->y_cell_units);
+	CGRect src = CGRectMake(
+		mp->x_cell_units * cell->c_switch.img.i_xtile,
+		img.size.height - (mp->y_cell_units * (cell->c_switch.img.i_ytile + 1)),
+		mp->x_cell_units, mp->y_cell_units
+	);
+
+	bir = [self createTile: tiler.size];
+	ctx = [NSGraphicsContext graphicsContextWithBitmapImageRep: bir];
+	CGContextSetInterpolationQuality([ctx CGContext], kCGInterpolationNone);
+
+	[NSGraphicsContext setCurrentContext: ctx];
+	{
+		[recolor(&(cell->c_cell)) setFill];
+		NSRectFill(tiler);
+
+		if (img != nil)
+			[img drawInRect: (NSRect) tiler
+				fromRect: (NSRect) src
+				operation: NSCompositingOperationSourceOver
+				fraction: 1.0
+				respectFlipped: YES
+				hints: nil];
 	}
+	[NSGraphicsContext setCurrentContext: stored];
 
 	return(bir);
 }
@@ -1406,6 +1473,61 @@ defineCodepoint: (NSString *) ux
 	[v getValue: &cpi size: sizeof(cpi)];
 	return(cpi);
 }
+
+- (NSImage *)
+resizeImage: (CIImage *) ci
+pixelsWide: (uint32_t) width
+pixelsHigh: (uint32_t) height
+{
+	CIImage *scaled;
+	NSBitmapImageRep *ir;
+	NSImage *ni;
+	CGSize d = ci.extent.size;
+
+	CIFilter<CILanczosScaleTransform> *resize = [CIFilter lanczosScaleTransformFilter];
+	resize.inputImage = ci;
+	resize.scale = height / d.height;
+	resize.aspectRatio = width / (d.width * resize.scale);
+	scaled = resize.outputImage;
+
+	ir = [[NSBitmapImageRep alloc] initWithCIImage: scaled];
+	ni = [[NSImage alloc] initWithSize: ir.size];
+	[ni addRepresentation: ir];
+
+	return(ni);
+}
+
+- (int32_t)
+integrateImage: (NSURL *) re
+	cellLines: (uint16_t) lines
+	cellSpan: (uint16_t) span
+{
+	int32_t cpi;
+	NSValue *v;
+	CIImage *ci;
+	NSImage *img;
+	struct MatrixParameters *mp = [self matrixParameters];
+	uint32_t width = (mp->x_cell_units * mp->scale_factor) * span;
+	uint32_t height = (mp->y_cell_units * mp->scale_factor) * lines;
+
+	ci = self.resourceIndex[re];
+	if (ci == nil)
+	{
+		ci = [CIImage imageWithContentsOfURL: re];
+		self.resourceIndex[re] = ci;
+		if (ci == nil)
+			return(0);
+	}
+
+	img = [self resizeImage: ci pixelsWide: width pixelsHigh: height];
+	[img setSize: CGSizeMake(mp->x_cell_units * span, mp->y_cell_units * lines)];
+
+	self.resourceIdentifierSequence += 1;
+	v = [NSValue valueWithBytes: &(_resourceIdentifierSequence) objCType: @encode(int32_t)];
+	[self.integrations setObject: img forKey: v];
+
+	return(self.resourceIdentifierSequence);
+}
 @end
 
 static int32_t
@@ -1413,6 +1535,28 @@ device_define(void *context, const char *uexpression)
 {
 	CellMatrix *terminal = context;
 	return([terminal defineCodepoint: [NSString stringWithUTF8String: uexpression]]);
+}
+
+/**
+	// Pixels Cells image integration.
+*/
+static int32_t
+device_integrate(void *context, const char *ref, uint32_t length, uint16_t lines, uint16_t span)
+{
+	CellMatrix *terminal = context;
+	NSString *refstr = utf8str(ref, length);
+	NSURL *refurl;
+
+	if (ref[0] == '/')
+		refurl = [NSURL fileURLWithPath: refstr];
+	else
+		refurl = [NSURL URLWithString: refstr];
+
+	return([terminal
+		integrateImage: refurl
+		cellLines: lines
+		cellSpan: span
+	]);
 }
 
 static void

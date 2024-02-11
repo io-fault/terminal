@@ -190,6 +190,23 @@ def test_Glyph_inscribe(test):
 	test/x.textcolor == c.textcolor
 	test/x.cellcolor == c.cellcolor
 
+def test_Pixels_Cell(test):
+	"""
+	# Validate instantiation parameters and attributes.
+	"""
+
+	pc = module.Pixels(
+		identity=1001,
+		cellcolor=0xFFFFFF,
+		x=21,
+		y=31,
+	)
+
+	test/pc.identity == 1001
+	test/pc.cellcolor == 0xFFFFFF,
+	test/pc.xtile == 21
+	test/pc.ytile == 31
+
 def test_Screen_memory_requirements(test):
 	"""
 	# Validate that instances check that the available memory is enough

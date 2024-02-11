@@ -260,13 +260,14 @@ struct Traits
 */
 #ifndef CM_MAXIMUM_GLYPH_WIDTH
 	#define CM_GLYPH_WINDOW_BITS 4
-	#define CM_IMAGE_TILE (CM_GLYPH_WINDOW_BITS * CM_GLYPH_WINDOW_BITS)
+	#define CM_IMAGE_TILE ((CM_GLYPH_WINDOW_BITS * CM_GLYPH_WINDOW_BITS) - 1)
 	#define CM_MAXIMUM_GLYPH_WIDTH (CM_IMAGE_TILE - 1)
 #endif
 
 #define Cell_SetCodepoint(C, CP) ((C).c_codepoint = CP)
 #define Cell_SetWindow(C, W) ((C).c_window = W)
 #define Cell_GlyphType(C) ((C).c_window != CM_IMAGE_TILE)
+#define Cell_PixelsType(C) ((C).c_window == CM_IMAGE_TILE)
 #define Cell_FillColor(C) (&((C).c_cell)))
 #define Cell_TextTraits(C) (&((C).c_switch.txt.t_traits))
 #define Cell_GlyphColor(C) (&((C).c_switch.txt.t_glyph))

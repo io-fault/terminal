@@ -474,6 +474,105 @@ GlyphType = {
 	.tp_base = (&CellType),
 };
 
+static int
+pixels_initialize(CellObject co, PyObj args, PyObj kw)
+{
+	static char *kwlist[] = {
+		"identity",
+		"cellcolor",
+		"x", "y",
+		NULL
+	};
+
+	#define FIELDS \
+		&co->cell.c_codepoint, \
+		&co->cell.c_cell, \
+		&co->cell.c_switch.img.i_xtile, \
+		&co->cell.c_switch.img.i_ytile
+
+	if (!PyArg_ParseTupleAndKeywords(args, kw, "|iIHH", kwlist, FIELDS))
+		return(-1);
+
+	#undef FIELDS
+	Cell_SetWindow(co->cell, CM_IMAGE_TILE);
+	return(0);
+}
+
+static PyObj
+pixels_switch(PyObj self, PyObj args)
+{
+	PyObj rob;
+	uint16_t x = 0, y = 0;
+	CellObject co = (CellObject) self;
+
+	if (!PyArg_ParseTuple(args, "HH", &y, &x))
+		return(NULL);
+
+	rob = PyAllocate(Py_TYPE(self));
+	if (rob == NULL)
+		return(NULL);
+
+	memcpy(&((CellObject) rob)->cell, &co->cell, sizeof(struct Cell));
+	((CellObject) rob)->cell.c_switch.img.i_ytile = y;
+	((CellObject) rob)->cell.c_switch.img.i_xtile = x;
+
+	return(rob);
+}
+
+static PyMemberDef
+pixels_members[] = {
+	{"identity", T_INT, offsetof(struct CellObject, cell.c_codepoint), READONLY, NULL},
+	{"cellcolor", T_INT, offsetof(struct CellObject, cell.c_cell), READONLY, NULL},
+	{"xtile", T_USHORT, offsetof(struct CellObject, cell.c_switch.img.i_xtile), READONLY, NULL},
+	{"ytile", T_USHORT, offsetof(struct CellObject, cell.c_switch.img.i_ytile), READONLY, NULL},
+	{NULL,},
+};
+
+static PyMethodDef
+pixels_methods[] = {
+	{"switch", (PyCFunction) pixels_switch, METH_VARARGS, NULL},
+	{NULL,},
+};
+
+static PyGetSetDef
+pixels_getset[] = {
+	{NULL,},
+};
+
+static PyObj
+pixels_new(PyTypeObject *subtype, PyObj args, PyObj kw)
+{
+	PyObj rob;
+	CellObject co;
+
+	rob = PyAllocate(subtype);
+	if (rob == NULL)
+		return(NULL);
+
+	co = (CellObject) rob;
+	if (pixels_initialize(co, args, kw) < 0)
+	{
+		Py_DECREF(rob);
+		rob = NULL;
+	}
+
+	return(rob);
+}
+
+static PyTypeObject
+PixelsType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+
+	.tp_name = PYTHON_MODULE_PATH("Pixels"),
+	.tp_basicsize = sizeof(struct CellObject),
+	.tp_flags = Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DEFAULT,
+	.tp_methods = pixels_methods,
+	.tp_members = pixels_members,
+	.tp_getset = pixels_getset,
+	.tp_new = pixels_new,
+	.tp_base = (&CellType),
+};
+
 /**
 	// Setup size constants.
 */
@@ -579,8 +678,10 @@ screen_select(PyObj self, PyObj area)
 		mforeach(so->dimensions.span, so->image, &selection)
 		{
 			CellObject co;
-			if (Cell_GlyphType(co->cell))
+			if (Cell_GlyphType(*Cell))
 				co = (CellObject) PyAllocate(&GlyphType);
+			else
+				co = (CellObject) PyAllocate(&PixelsType);
 
 			if (co == NULL)
 			{
@@ -1124,6 +1225,22 @@ device_define(PyObject *self, PyObject *args)
 	return(PyLong_FromLong(v));
 }
 
+static PyObject *
+device_integrate(PyObject *self, PyObject *args)
+{
+	DeviceObject devob = (DeviceObject) self;
+	const char *resource;
+	uint16_t cspan, clines;
+	int32_t v = 0;
+	Py_ssize_t sl = 0;
+
+	if (!PyArg_ParseTuple(args, "s#HH", &resource, &sl, &clines, &cspan))
+		return(NULL);
+
+	v = Device_Integrate(devob->dev_terminal, resource, (uint32_t) sl, clines, cspan);
+	return(PyLong_FromLong(v));
+}
+
 static PyMethodDef device_methods[] = {
 	{"key", (PyCFunction) device_key, METH_NOARGS, NULL},
 	{"quantity", (PyCFunction) device_quantity, METH_NOARGS, NULL},
@@ -1136,6 +1253,7 @@ static PyMethodDef device_methods[] = {
 
 	{"reconnect", (PyCFunction) device_reconnect, METH_NOARGS, NULL},
 	{"define", (PyCFunction) device_define, METH_VARARGS, NULL},
+	{"integrate", (PyCFunction) device_integrate, METH_VARARGS, NULL},
 	{"replicate_cells", (PyCFunction) device_replicate_cells, METH_VARARGS, NULL},
 	{"invalidate_cells", (PyCFunction) device_invalidate_cells, METH_VARARGS, NULL},
 	{"render_pixels", (PyCFunction) device_render_pixels, METH_VARARGS, NULL},
@@ -1267,6 +1385,7 @@ DeviceType = {
 	ID(Area) \
 	ID(Cell) \
 	ID(Glyph) \
+	ID(Pixels) \
 	ID(Screen) \
 	ID(Device)
 
