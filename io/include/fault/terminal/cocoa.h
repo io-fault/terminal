@@ -66,7 +66,7 @@
 
 	/* Tile rendering */
 	@property (nonatomic) int32_t resourceIdentifierSequence;
-	@property (retain,nonatomic) NSMutableDictionary<NSURL *, NSImage *> *resourceIndex;
+	@property (retain,nonatomic) NSMutableDictionary<NSURL *, CIImage *> *resourceIndex;
 	@property (retain,nonatomic) NSMutableDictionary<NSValue *, NSImage *> *integrations;
 	@property (nonatomic) int32_t expressionIdentifierSequence;
 	@property (retain,nonatomic) NSMutableDictionary<NSValue *, NSString *> *codepointToString;
