@@ -282,6 +282,25 @@ main
 @end
 
 @implementation CellMatrix
+
+- (struct MatrixParameters *)
+matrixParameters
+{
+	return(&_dimensions);
+}
+
+- (struct Device *)
+deviceReference
+{
+	return(&_device);
+}
+
+- (struct GlyphInscriptionParameters *)
+inscriptionParameters
+{
+	return(&_inscription);
+}
+
 - (void) applicationInitialize
 {
 	dispatch_application_instruction(self, nil, 0, ai_session_synchronize);
@@ -848,18 +867,6 @@ renderPixelsCell: (struct Cell *) cell withImage: (NSImage *) img
 	[NSGraphicsContext setCurrentContext: stored];
 
 	return(bir);
-}
-
-- (struct MatrixParameters *)
-matrixParameters
-{
-	return(&_dimensions);
-}
-
-- (struct Device *)
-deviceReference
-{
-	return(&_device);
 }
 
 /**

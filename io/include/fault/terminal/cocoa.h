@@ -20,8 +20,6 @@
 	/* Terminal Application and API support. */
 	- (void) connectApplication;
 	- (void) clientDisconnect;
-	- (struct MatrixParameters *) matrixParameters;
-	- (struct Device *) deviceReference;
 	- (void) resizeMatrix: (CGSize) s;
 	- (void) centerBounds: (CGSize) s;
 	- (void) applicationInitialize;
