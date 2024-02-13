@@ -105,6 +105,105 @@ mknscolor(uint32_t color)
 	return [NSColor colorWithDeviceRed: r green: g blue: b alpha: a];
 }
 
+static inline
+NSColor *
+recolor(struct Color *c)
+{
+	return [NSColor
+		colorWithDeviceRed: c->r / 255.0
+		green: c->g / 255.0
+		blue: c->b / 255.0
+		alpha: (255 - c->a) / 255.0
+	];
+}
+
+static inline
+NSString *
+utf8str(const char *s, uint32_t l)
+{
+	return [
+		[NSString alloc] initWithBytes: s length: l encoding: NSUTF8StringEncoding
+	];
+}
+
+static inline
+unsigned int
+string_codepoint_count(NSString *str)
+{
+	NSUInteger rclen = [str length];
+
+	// Fast path for strings that cannot be expressions.
+	if (rclen < 2)
+		return(rclen);
+
+	return [str lengthOfBytesUsingEncoding: NSUTF32StringEncoding] / 4;
+}
+
+static inline
+NSString *
+codepoint_string(int32_t codepoint)
+{
+	size_t blength = 0;
+	unichar pair[2] = {0, 0};
+
+	if (codepoint >= 0)
+	{
+		switch (CFStringGetSurrogatePairForLongCharacter(codepoint, pair))
+		{
+			case true:
+				blength = 2;
+			break;
+
+			case false:
+				blength = 1;
+			break;
+		}
+	}
+
+	return([
+		[NSString alloc]
+		initWithCharacters: pair
+		length: blength
+	]);
+}
+
+static inline
+int32_t
+string_codepoint(NSString *str)
+{
+	NSUInteger clen = [str length];
+
+	/* Single UTF-16 character. */
+	switch (clen)
+	{
+		case 0:
+			return(-1);
+		break;
+
+		case 1:
+			return([str characterAtIndex: 0]);
+		break;
+
+		default:
+			/* Pair or codepoint expression. */
+		break;
+	}
+
+	/* Single codepoint, two characters; presume surrogate pair. */
+	if (clen == 2 && string_codepoint_count(str) == 1)
+	{
+		unichar high, low;
+
+		high = [str characterAtIndex: 0];
+		low = [str characterAtIndex: 1];
+
+		return(CFStringGetLongCharacterForSurrogatePair(high, low));
+	}
+
+	/* XXX: Define/lookup codepoint for &str and return negative */
+	return(-1);
+}
+
 /**
 	// Translate cell coordinates to the (point) positions.
 */
