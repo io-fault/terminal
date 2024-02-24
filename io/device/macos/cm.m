@@ -140,6 +140,33 @@ refont(CellMatrix *cm, struct Cell *cell)
 }
 
 /**
+	// Identify the real bounding rectangle of a monospaced cell
+	// using a small, constant, sample text.
+*/
+static CGSize
+size_monospace_font(const char *sample, NSFont *font)
+{
+	NSString *str = [NSString stringWithUTF8String: sample];
+	size_t units = [str length];
+	CGSize fsize = [font boundingRectForFont].size;
+
+	NSAttributedString *castr = [
+		[NSAttributedString alloc]
+		initWithString: str
+
+		attributes: @{
+			NSFontAttributeName: font,
+		}
+	];
+
+	NSRect r = [castr boundingRectWithSize: CGSizeMake(units * fsize.width, fsize.height)
+		options: 0 context: nil
+	];
+
+	return(CGSizeMake(r.size.width / units, r.size.height));
+}
+
+/**
 	// The terminal application's thread, exit status, and device pointer.
 */
 @implementation Coprocess
@@ -502,33 +529,6 @@ report
 	NSLog(@"Matrix Cells %d %d", mp->x_cells, mp->y_cells);
 	NSLog(@"Volume %lu cells, %g KiB", mp->v_cells, (sizeof(struct Cell) * mp->v_cells) / 1024.0);
 	NSLog(@"Pixel Image %g MiB", IOSurfaceGetAllocSize(self.pixelImage) / (1024.0 * 1024.0));
-}
-
-/**
-	// Identify the real bounding rectangle of a monospaced cell
-	// using a small, constant, sample text.
-*/
-static CGSize
-size_monospace_font(const char *sample, NSFont *font)
-{
-	NSString *str = [NSString stringWithUTF8String: sample];
-	size_t units = [str length];
-	CGSize fsize = [font boundingRectForFont].size;
-
-	NSAttributedString *castr = [
-		[NSAttributedString alloc]
-		initWithString: str
-
-		attributes: @{
-			NSFontAttributeName: font,
-		}
-	];
-
-	NSRect r = [castr boundingRectWithSize: CGSizeMake(units * fsize.width, fsize.height)
-		options: 0 context: nil
-	];
-
-	return(CGSizeMake(r.size.width / units, r.size.height));
 }
 
 - (void)
