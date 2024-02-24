@@ -1,6 +1,6 @@
 import functools
 from itertools import repeat
-from fault.system.tty import cells as syscellcount
+from fault.system.text import cells as syscellcount
 from fault.system.text import setlocale
 from .. import types
 from .. import text as module

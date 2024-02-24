@@ -7,7 +7,7 @@ import functools
 import collections
 
 from fault.system import files
-from fault.system.tty import cells as syscellcount
+from fault.system.text import cells as syscellcount
 from fault.context.tools import struct
 from fault.syntax import keywords as kos
 
@@ -20,7 +20,6 @@ palette = {
 	'terminal-default': 0xf0f0f0, # Identifies default cell and text color.
 	'application-border': 0x606060,
 
-	# Common Names; bound to normal tty-16 colors palette by default.
 	'black': 0x000000,
 	'white': 0xFFFFFF,
 
