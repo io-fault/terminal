@@ -1,0 +1,10 @@
+http://if.fault.io/factors/meta
+	chapter.txt fault-1 kleptic
+	references.fr text lines
+http://if.fault.io/factors/system
+	references.sr text lines
+	elements.c 2011 c
+	void.h header c
+http://if.fault.io/factors/python
+	module.py psf-v3
+	interface.pyi psf-v3
