@@ -2,7 +2,7 @@
 # Analyze &.delta
 """
 
-from .. import delta as module
+from ...syntax import delta as module
 
 def test_Update(test):
 	r = module.Update(0, "", "", 0)

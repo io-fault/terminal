@@ -1,7 +1,7 @@
 """
 # Validate type interface.
 """
-from .. import types as module
+from ...cells import types as module
 
 def test_Line_type(test):
 	"""

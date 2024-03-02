@@ -2,8 +2,9 @@ import functools
 from itertools import repeat
 from fault.system.text import cells as syscellcount
 from fault.system.text import setlocale
-from .. import types
-from .. import text as module
+
+from ...cells import types
+from ...cells import text as module
 
 setlocale()
 module.graphemes = functools.partial(module.graphemes, syscellcount)

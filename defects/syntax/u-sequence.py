@@ -1,4 +1,4 @@
-from .. import sequence as module
+from ...syntax import sequence as module
 
 def test_Segments(test):
 	"""
