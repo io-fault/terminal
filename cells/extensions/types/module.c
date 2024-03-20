@@ -1376,7 +1376,7 @@ DeviceType = {
 	.tp_members = device_members,
 	.tp_getset = device_getset,
 	.tp_new = device_new,
-	.tp_clear = device_clear,
+	.tp_clear = (inquiry)device_clear,
 	.tp_dealloc = device_dealloc,
 };
 
