@@ -1166,7 +1166,7 @@ device_update_frame_status(PyObject *self, PyObject *args)
 	if (devob->dev_terminal->frame_status == NULL)
 		Py_RETURN_NONE;
 
-	if (!PyArg_ParseTuple(args, "kk", &current, &last))
+	if (!PyArg_ParseTuple(args, "HH", &current, &last))
 		return(NULL);
 
 	Device_UpdateFrameStatus(devob->dev_terminal, current, last);

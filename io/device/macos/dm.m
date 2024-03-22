@@ -606,12 +606,22 @@ device_frame_status(void *context, uint16_t current, uint16_t last)
 	DeviceManager *dm = NSApp.delegate;
 	CellMatrix *terminal = context;
 	uint16_t floffset = [dm.framesSnapshot count];
+	uint16_t micount = [dm.framesMenu numberOfItems];
 
-	if (floffset + last < [dm.framesMenu numberOfItems])
-		[dm.framesMenu itemAtIndex: floffset + last].state = NSControlStateValueOff;
+	/* Change frame status. */
+	dispatch_sync(dispatch_get_main_queue(), ^(void) {
+		if (floffset + last < micount)
+		{
+			NSMenuItem *mi_off = [dm.framesMenu itemAtIndex: floffset + last];
+			mi_off.state = NSControlStateValueOff;
+		}
 
-	if (floffset + current < [dm.framesMenu numberOfItems])
-		[dm.framesMenu itemAtIndex: floffset + current].state = NSControlStateValueOn;
+		if (floffset + current < micount)
+		{
+			NSMenuItem *mi_on = [dm.framesMenu itemAtIndex: floffset + current];
+			mi_on.state = NSControlStateValueOn;
+		}
+	});
 }
 
 static void
@@ -619,27 +629,29 @@ device_frame_list(void *context, uint16_t frames, const char *titles[])
 {
 	DeviceManager *dm = NSApp.delegate;
 	CellMatrix *terminal = context;
-	int i;
 
-	/* Rebuild */
-	[dm.framesMenu removeAllItems];
-	for (i = 0; i < [dm.framesSnapshot count]; ++i)
-	{
-		[dm.framesMenu addItem: [dm.framesSnapshot objectAtIndex: i]];
-	}
+	/* Rebuild frame list. */
+	dispatch_sync(dispatch_get_main_queue(), ^(void) {
+		int i;
+		[dm.framesMenu removeAllItems];
+		for (i = 0; i < [dm.framesSnapshot count]; ++i)
+		{
+			[dm.framesMenu addItem: [dm.framesSnapshot objectAtIndex: i]];
+		}
 
-	/* Append Frames */
-	for (i = 0; i < frames; ++i)
-	{
-		const char keychar[] = {'1' + i, 0};
-		NSString *strtitle = [NSString stringWithUTF8String: titles[i]];
-		NSString *key = [NSString stringWithUTF8String: keychar];
+		/* Append Frames */
+		for (i = 0; i < frames; ++i)
+		{
+			const char keychar[] = {'1' + i, 0};
+			NSString *strtitle = [NSString stringWithUTF8String: titles[i]];
+			NSString *key = [NSString stringWithUTF8String: keychar];
 
-		[dm.framesMenu
-			addItemWithTitle: strtitle
-			action: @selector(selectFrame:)
-			keyEquivalent: key].tag = i + 1;
-	}
+			[dm.framesMenu
+				addItemWithTitle: strtitle
+				action: @selector(selectFrame:)
+				keyEquivalent: key].tag = i + 1;
+		}
+	});
 }
 
 static NSWindow *
