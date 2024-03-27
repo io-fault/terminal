@@ -693,7 +693,7 @@ renderGlyphCell: (struct Cell *) cell withFont: (NSFont *) cfont
 
 				NSUnderlineStyleAttributeName: @(uline(Cell_TextTraits(*cell)->underline)),
 				NSUnderlineColorAttributeName: recolor(Cell_LineColor(*cell)),
-				NSStrokeWidthAttributeName: @(-1.0),
+				NSStrokeWidthAttributeName: @(-0.5),
 
 				NSStrikethroughStyleAttributeName: @(uline(Cell_TextTraits(*cell)->strikethrough))
 			}
