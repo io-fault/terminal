@@ -94,6 +94,16 @@
 @end
 
 static inline
+CGFloat
+notch_height(NSScreen *screen)
+{
+	if (@available(macOS 12.0, *))
+		return screen.auxiliaryTopLeftArea.size.height;
+	else
+		return 0.0;
+}
+
+static inline
 NSColor *
 mknscolor(uint32_t color)
 {

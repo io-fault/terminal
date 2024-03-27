@@ -17,13 +17,20 @@
 applicationWillFinishLaunching: (NSNotification *) anotify
 {
 	NSApplication *app = [anotify object];
+	NSScreen *mscreen;
+	NSRect vframe;
 	Coprocess *co;
 	CellMatrix *mv;
 
 	if (!(self.root.styleMask & NSWindowStyleMaskFullScreen))
 		[self.root toggleFullScreen: self];
 
-	[self.root setFrame: [[NSScreen mainScreen] frame] display: NO];
+	// Screen frame minus the notch.
+	mscreen = [NSScreen mainScreen];
+	vframe = [mscreen frame];
+	vframe.size.height -= notch_height(mscreen);
+
+	[self.root setFrame: vframe display: NO];
 	[self.root makeKeyAndOrderFront: self];
 
 	mv = self.root.contentView;
@@ -660,6 +667,7 @@ create_matrix_window(NSScreen *screen, NSFontManager *fontctx, NSFont *font)
 	CellMatrix *cm;
 	NSWindow *root = [NSWindow alloc];
 	CGSize screen_size = [screen frame].size;
+	screen_size.height -= notch_height(screen);
 
 	[root
 		initWithContentRect:
