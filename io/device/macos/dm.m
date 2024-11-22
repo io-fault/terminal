@@ -208,8 +208,7 @@ about: (id) sender
 
 	[aw setMessageText: @"Terminal Framework"];
 	[aw setInformativeText: @(
-		"Terminal manager providing a single cell image display"
-		" and abstractions for system I/O requirements."
+		"Terminal manager providing a display and event I/O for cell matrix applications."
 	)];
 	[aw addButtonWithTitle: @"OK"];
 	[aw setIcon: [NSApp applicationIconImage]];
@@ -716,7 +715,7 @@ device_application_manager(const char *title, TerminalApplication fp)
 {
 	int co_status = 255;
 	NSApplication *app;
-	DeviceManager *dm; /* Application delegate. */
+	DeviceManager *dm;
 	CellMatrix *terminal;
 	struct MatrixParameters *mp;
 	NSFontManager *fontctx;

@@ -1212,7 +1212,12 @@ class Session(Core):
 			v = area.span // 90
 			layout = ((1,) * (max(0, v-1))) + (2,)
 
-		f = Frame(self.device.define, self.theme, self.keyboard, area, index=len(self.frames), title=title)
+		f = Frame(
+			self.device.define, self.theme,
+			self.keyboard, area,
+			index=len(self.frames),
+			title=title
+		)
 		self.frames.append(f)
 
 		f.remodel(area, layout)

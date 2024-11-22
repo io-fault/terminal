@@ -13,27 +13,83 @@
 @end
 
 /**
+	// Terminal Application and API support.
+
 	// Layer-hosting view maintaining an IOSurface for efficiently displaying
 	// large screens.
 */
 @interface CellMatrix : NSView
-	/* Terminal Application and API support. */
+	/**
+		// Connect to configured application.
+	*/
 	- (void) connectApplication;
-	- (void) clientDisconnect;
-	- (void) resizeMatrix: (CGSize) s;
-	- (void) centerBounds: (CGSize) s;
+
+	/**
+		// Set the &ai_session_synchronize event to the application.
+	*/
 	- (void) applicationInitialize;
+
+	/**
+		// Client disconnected signal.
+	*/
+	- (void) clientDisconnect;
+
+	/**
+		// Resize the view using the, presumably, changed &dimensions.
+	*/
+	- (void) resizeMatrix: (CGSize) s;
+
+	/**
+		// Set the bounds origin and size in order to center the view's content
+		// within the frame.
+	*/
+	- (void) centerBounds: (CGSize) s;
+
+	/**
+		// Allocate the memory for the Cells required by the view.
+		// Uses the &MatrixParameters.v_cells to identify the count.
+	*/
 	- (void) configureCellImage;
+
+	/**
+		// Send the &ai_screen_refresh event to the application
+		// requesting that all the cells within the screen to be updated.
+	*/
 	- (void) refreshCellImage;
+
+	/**
+		// Allocate the memory for the pixel image using the configured
+		// &MatrixParameters.
+	*/
 	- (void) configurePixelImage;
+
+	/**
+		// Rewrite the entire pixel image using the current cell image.
+	*/
 	- (void) refreshPixelImage;
+
+	/**
+		// Adjust the font potentially restricting the cell image size.
+		// The cell and pixel image are maintained. If the font size is
+		// increased, portions of the screen may not be visible.
+		// If decreased, portions of the screen may be blank.
+	*/
 	- (void) configureFont: (NSFont *) f withContext: (NSFontManager *) m;
+
+	/**
+		// Send an application instruction with insertion text and quantity.
+	*/
 	- (void)
 		dispatchApplicationInstruction: (enum ApplicationInstruction) ai
 		withText: (NSString *) s
 		quantity: (int32_t) q;
+
 	- (void)
 		dispatchFrameSelect: (uint16_t) nth;
+
+	/**
+		// Initialize the view using the frame and font.
+	*/
 	- (instancetype)
 		initWithFrame: (CGRect) r
 		andFont: (NSFont *) font
