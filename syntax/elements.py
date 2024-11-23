@@ -1364,71 +1364,71 @@ class Session(Core):
 		'(elements/previous)': 'navigation/find/previous',
 	}
 
-	def dispatch(self):
+	def dispatch(self, frame, refraction, view, key):
 		"""
-		# Wait for the next event from the device manager and
-		# execute the associated action.
+		# Dispatch the &key event to the &refraction in the &frame with the &view.
 		"""
+
 		try:
-			self.device.transfer_event()
-			key = self.device.key()
-			frame = self.focus
+			if key in self.intercepts:
+				# Mode independent application Instructions
+				op_int = self.intercepts[key]
+				ev_category, *ev_identifier = op_int.split('/')
+				ev_identifier = tuple(ev_identifier)
+				ev_args = ()
+			else:
+				# Key Translation
+				mode, xev = self.keyboard.interpret(key)
+				ev_category, ev_identifier, ev_args = xev
 
-			try:
-				rf, view = frame.focus, frame.view
+			ev_op = self.events[ev_category](ev_identifier)
+			self.log(f"{key!r} -> {ev_category}/{'/'.join(ev_identifier)} -> {ev_op!r}")
+			ev_op(self, frame, refraction, key, *ev_args) # User Event Operation
+		except Exception as operror:
+			self.keyboard.reset('control')
+			self.error('Operation Failure', operror)
+			del operror
 
-				if key in self.intercepts:
-					# Mode independent application Instructions
-					op_int = self.intercepts[key]
-					ev_category, *ev_identifier = op_int.split('/')
-					ev_identifier = tuple(ev_identifier)
-					ev_args = ()
-				else:
-					# Key Translation
-					mode, xev = self.keyboard.interpret(key)
-					ev_category, ev_identifier, ev_args = xev
-
-				ev_op = self.events[ev_category](ev_identifier)
-				self.log(f"{key!r} -> {ev_category}/{'/'.join(ev_identifier)} -> {ev_op!r}")
-				ev_op(self, frame, rf, key, *ev_args) # User Event Operation
-			except Exception as operror:
-				self.keyboard.reset('control')
-				self.error('Operation Failure', operror)
-				del operror
-
-			yield from frame.reflect(rf.origin, (rf, view))
-			if self.deltas:
-				for drf, dview in self.deltas:
-					yield from frame.reflect(drf.origin, (drf, dview))
-				del self.deltas[:]
-		except Exception as derror:
-			self.error("Rendering Failure", derror)
-			# Try to eliminate the state that caused exception.
-			yield from frame.render(self.device.screen)
-			del derror
+		yield from frame.reflect(refraction.origin, (refraction, view))
+		if self.deltas:
+			for drf, dview in self.deltas:
+				yield from frame.reflect(drf.origin, (drf, dview))
+			del self.deltas[:]
 
 	def cycle(self, *, Method=projection.update):
 		"""
 		# Process user events and execute differential updates.
 		"""
 
-		screen = self.device.screen
 		frame = self.focus
+		device = self.device
+		screen = device.screen
 
 		status = list(frame.indicate(frame.focus, frame.view))
 		restore = [(area, screen.select(area)) for area, _ in status]
 		self.dispatch_delta(status)
-		self.device.render_pixels()
-		self.device.dispatch_frame()
-		self.device.synchronize() # Wait for render queue to clear.
+		device.render_pixels()
+		device.dispatch_frame()
+		device.synchronize() # Wait for render queue to clear.
 
 		for r in restore:
 			screen.rewrite(*r)
-			self.device.invalidate_cells(r[0])
+			device.invalidate_cells(r[0])
+		del restore, status
 
-		for (rf, view) in self.dispatch():
-			current = rf.log.snapshot()
-			voffsets = [view.offset, view.horizontal_offset]
-			if current != view.version or rf.visible != voffsets:
-				self.dispatch_delta(Method(rf, view, rf.log.since(view.version)))
-				view.version = current
+		try:
+			# Synchronize input; this could be a timer or I/O.
+			device.transfer_event()
+
+			# Get the event and the focused frame.
+			key = device.key()
+
+			for (rf, view) in self.dispatch(frame, frame.focus, frame.view, key):
+				current = rf.log.snapshot()
+				voffsets = [view.offset, view.horizontal_offset]
+				if current != view.version or rf.visible != voffsets:
+					self.dispatch_delta(Method(rf, view, rf.log.since(view.version)))
+					view.version = current
+		except Exception as derror:
+			self.error("Rendering Failure", derror)
+			del derror
