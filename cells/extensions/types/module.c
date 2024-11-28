@@ -1079,7 +1079,15 @@ device_transmit(PyObject *self, PyObject *args)
 static PyObject *
 device_transfer_event(PyObject *self)
 {
-	return(PyLong_FromLong((long) Device_TransferEvent(D(self))));
+	long r;
+
+	Py_BEGIN_ALLOW_THREADS;
+	{
+		r = (long) Device_TransferEvent(D(self));
+	}
+	Py_END_ALLOW_THREADS;
+
+	return(PyLong_FromLong(r));
 }
 
 static PyObject *
@@ -1127,6 +1135,13 @@ static PyObject *
 device_synchronize(PyObject *self)
 {
 	Device_Synchronize(D(self));
+	Py_RETURN_NONE;
+}
+
+static PyObject *
+device_synchronize_io(PyObject *self)
+{
+	Device_SynchronizeIO(D(self));
 	Py_RETURN_NONE;
 }
 
@@ -1259,6 +1274,7 @@ static PyMethodDef device_methods[] = {
 	{"render_pixels", (PyCFunction) device_render_pixels, METH_VARARGS, NULL},
 	{"dispatch_frame", (PyCFunction) device_dispatch_frame, METH_NOARGS, NULL},
 	{"synchronize", (PyCFunction) device_synchronize, METH_NOARGS, NULL},
+	{"synchronize_io", (PyCFunction) device_synchronize_io, METH_NOARGS, NULL},
 
 	{"update_frame_status", (PyCFunction) device_update_frame_status, METH_VARARGS, NULL},
 	{"update_frame_list", (PyCFunction) device_update_frame_list, METH_VARARGS, NULL},

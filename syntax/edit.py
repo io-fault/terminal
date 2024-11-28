@@ -19,6 +19,7 @@ process.__signal_exit__ = (lambda x: None)
 
 from . import types
 from . import elements
+from .system import IO
 
 def fkrt(inv:process.Invocation) -> process.Exit:
 	"""
@@ -149,7 +150,8 @@ def main(inv:process.Invocation) -> process.Exit:
 
 	path = identify_executable(inv)
 	wd = configure_working_directory(config)
-	editor = elements.Session(path, types.Device())
+	device = types.Device()
+	editor = elements.Session(IO.allocate(device.synchronize_io), path, device)
 	configure_log_builtin(editor)
 
 	fi = 0
@@ -184,6 +186,9 @@ def main(inv:process.Invocation) -> process.Exit:
 	editor.log("Working Directory: " + str(wd))
 	if sources:
 		editor.log("Path Arguments:", *['\t' + s for s in sources])
+
+	# System I/O loop for command substitution and file I/O.
+	editor.io.dispatch_loop()
 
 	try:
 		while editor.frames:

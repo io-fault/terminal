@@ -26,6 +26,7 @@ static void device_invalidate_cells(void *, struct CellArea);
 static void device_render_pixels(void *);
 static void device_dispatch_frame(void *);
 static void device_synchronize(void *);
+static void device_synchronize_io(void *);
 static void device_frame_status(void *context, uint16_t, uint16_t);
 static void device_frame_list(void *context, uint16_t, const char **titles);
 
@@ -452,6 +453,7 @@ initWithFrame: (CGRect) r
 		.render_pixels = device_render_pixels,
 		.dispatch_frame = device_dispatch_frame,
 		.synchronize = device_synchronize,
+		.synchronize_io = device_synchronize_io,
 		.frame_list = NULL,
 		.frame_status = NULL
 	};
@@ -1548,6 +1550,16 @@ device_synchronize(void *context)
 
 	dispatch_sync(terminal.render_queue, ^(void) {
 		;
+	});
+}
+
+static void
+device_synchronize_io(void *context)
+{
+	CellMatrix *terminal = context;
+
+	dispatch_async(dispatch_get_main_queue(), ^(void) {
+		dispatch_application_instruction(terminal, nil, 0, ai_session_synchronize);
 	});
 }
 

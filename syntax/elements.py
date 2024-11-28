@@ -422,6 +422,25 @@ class Refraction(Core):
 		np, r = phrase.seek(p, quantity, *phrase.m_unit)
 		return phrase.tell(np, *phrase.m_codepoint)
 
+	def vertical_selection_text(self) -> list[str]:
+		"""
+		# Lines of text in the vertical range.
+		"""
+
+		# Vertical Range
+		start, position, stop = self.focus[0].snapshot()
+		return self.elements[start:stop]
+
+	def horizontal_selection_text(self) -> str:
+		"""
+		# Text in the horizontal range of the cursor's line number.
+		"""
+
+		# Horizontal Range
+		ln = self.focus[0].get()
+		start, position, stop = self.focus[1].snapshot()
+		return self.elements[ln][start:stop]
+
 class Frame(Core):
 	"""
 	# Frame implementation for laying out and interacting with a set of refactions.
@@ -874,6 +893,8 @@ class Session(Core):
 	# Root application state.
 
 	# [ Elements ]
+	# /io/
+		# System I/O abstraction for command substitution and file I/O.
 	# /device/
 		# The target display providing context allocation.
 	# /resources/
@@ -894,9 +915,11 @@ class Session(Core):
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	types: Mapping[files.Path, tuple[object, object]]
 
-	def __init__(self, executable, terminal, position=(0,0), dimensions=None):
+	def __init__(self, io, executable, terminal, position=(0,0), dimensions=None):
+		self.io = io
 		self.placement = (position, dimensions)
 
+		self.io = io
 		self.executable = executable.delimit()
 		self.typepath = [home() / '.syntax']
 		self.device = terminal
@@ -1336,6 +1359,7 @@ class Session(Core):
 				d.invalidate_cells(area)
 
 	intercepts = {
+		'(session/synchronize)': 'session/synchronize',
 		'(screen/refresh)': 'session/screen/refresh',
 		'(screen/resize)': 'session/screen/resize',
 
@@ -1363,6 +1387,23 @@ class Session(Core):
 		'(elements/next)': 'navigation/find/next',
 		'(elements/previous)': 'navigation/find/previous',
 	}
+
+	def integrate(self, frame, refraction, key):
+		"""
+		# Process pending I/O events for display representation.
+
+		# Called by (session/synchronize) instructions.
+		"""
+
+		# Acquire events prepared by &.system.IO.loop.
+		events = self.io.take()
+
+		for io_context, io_transfer in events:
+			# Apply the performed transfer using the &io_context.
+			io_context.execute(io_transfer)
+
+			# Presume updates are required.
+			self.deltas.extend(frame.reflect(io_context.target.origin))
 
 	def dispatch(self, frame, refraction, view, key):
 		"""

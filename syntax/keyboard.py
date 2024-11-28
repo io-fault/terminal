@@ -158,6 +158,8 @@ if 'controls':
 	a((0x23CE, km_control), 'meta', ('view', 'refresh'))
 	a((0x23CE, km_shift), 'navigation', ('view', 'return'))
 
+	a((0x23CE, km_meta), 'session', ('elements', 'dispatch'))
+
 	a((0x21E5), 'delta', ('indentation', 'increment'))
 	a((0x2423, km_control), 'navigation', ('horizontal', 'jump', 'string',), ("\x1f",))
 	a((0x21E5, km_shift), 'delta', ('indentation', 'decrement'))

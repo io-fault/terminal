@@ -1,6 +1,9 @@
 """
 # Session and device instructions.
 """
+from fault.system import query
+
+from .. import delta
 from . import types
 event, Index = types.Index.allocate('session')
 
@@ -166,3 +169,60 @@ def transmit_selected_elements(session, frame, rf, event):
 		start, position, stop = rf.focus[1].snapshot()
 		selection = rf.elements[ln][start:stop]
 	session.device.transmit(selection.encode('utf-8'))
+
+def joinlines(decoder, linesep='\n', character=''):
+	# Used in conjunction with an incremental decoder to collapse line ends.
+	data = (yield None)
+	while True:
+		buf = decoder(data)
+		data = (yield buf.replace(linesep, character))
+
+def substitute(session, frame, rf, event):
+	"""
+	# Send the selected elements to the device manager.
+	"""
+
+	from ..system import Completion, Insertion, Invocation, Decode
+
+	if rf.focus[0].magnitude > 0:
+		# Vertical Range
+		ln, co, lines = delta.take_vertical_range(rf)
+		rf.focus[0].magnitude = 0
+		readlines = Decode('utf-8').decode
+	else:
+		# Horizontal Range
+		ln, co, lines = delta.take_horizontal_range(rf)
+		rf.focus[1].magnitude = 0
+		readlines = joinlines(Decode('utf-8').decode)
+		readlines.send(None)
+		readlines = readlines.send
+	(rf.log.apply(rf.elements).commit())
+
+	cmd = '\n'.join(lines).split()
+	for exepath in query.executables(cmd[0]):
+		inv = Invocation(str(exepath), tuple(cmd))
+		break
+	else:
+		# No command found.
+		return
+
+	c = Completion(rf, -1)
+	i = Insertion(rf, (ln, co), readlines)
+	session.io.invoke(c, i, None, inv)
+
+@event('elements', 'dispatch')
+def dispatch_system_command(session, frame, rf, event):
+	"""
+	# Send the selected elements to the device manager.
+	"""
+
+	substitute(session, frame, rf, event)
+
+@event('synchronize')
+def synchronize_io(session, *eventcontext):
+	"""
+	# Respond to an I/O synchronization event for integrating
+	# parallel I/O events into the terminal application.
+	"""
+
+	session.integrate(*eventcontext)

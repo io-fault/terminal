@@ -25,13 +25,15 @@ typedef int (*TerminalApplication)(void *context);
 #define Device_RenderPixels(DS) (DS->render_pixels)(DS->cmd_context)
 #define Device_DispatchFrame(DS) (DS->dispatch_frame)(DS->cmd_context)
 #define Device_Synchronize(DS) (DS->synchronize)(DS->cmd_context)
+#define Device_SynchronizeIO(DS) (DS->synchronize_io)(DS->cmd_context)
 
 /**
 	// Dimensions, image, and update callback for signalling changes.
 
 	// [ Elements ]
 	// /cmd_context/
-		// The device's opaque context.
+		// The device's opaque context passed as the first argument
+		// to every API method.
 	// /cmd_view/
 		// The screen's dimensions and working offset.
 	// /cmd_empty/
@@ -62,6 +64,7 @@ struct Device
 	void (*render_pixels)(void *context);
 	void (*dispatch_frame)(void *context);
 	void (*synchronize)(void *context);
+	void (*synchronize_io)(void *context);
 
 	void (*frame_list)(void *context, uint16_t, const char **);
 	void (*frame_status)(void *context, uint16_t, uint16_t);
