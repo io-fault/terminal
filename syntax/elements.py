@@ -1232,8 +1232,13 @@ class Session(Core):
 				area = screen.area
 
 		if layout is None:
+			layout = []
 			v = area.span // 90
-			layout = ((1,) * (max(0, v-1))) + (2,)
+			available = max(0, v-1)
+			for i in range(available):
+				layout.append((1, i))
+			layout.append((2, layout[-1][1] + 1))
+		divcount = sum(x[0] for x in layout)
 
 		f = Frame(
 			self.device.define, self.theme,
@@ -1244,7 +1249,7 @@ class Session(Core):
 		self.frames.append(f)
 
 		f.remodel(area, layout)
-		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(sum(layout))]))
+		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(divcount)]))
 		f.refresh()
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 		return f.index
@@ -1295,9 +1300,8 @@ class Session(Core):
 		# Allocate and fill the &frames in order to restore a session.
 		"""
 
-		for frame_id, layout, resources, returns in frames:
+		for frame_id, divcount, layout, resources, returns in frames:
 			# Align the resources and returns with the layout.
-			divcount = sum(layout)
 			self.limit_resources(divcount, resources)
 			self.limit_resources(divcount, returns)
 

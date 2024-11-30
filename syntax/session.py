@@ -32,12 +32,22 @@ def structure_frames(session:str, *, Interpret=transport.structure):
 	"""
 
 	for frame_id, lines in Interpret(session):
-		layout = tuple(map(int, lines[0].split()))
-		count = sum(layout)
+		layout = []
+		for i, s in enumerate(lines[0].split()):
+			if '*' in s:
+				x, width = map(int, s.split('*'))
+			else:
+				x = int(s)
+				width = 1
+
+			layout.append((x, width))
+
+		divcount = sum(x[0] for x in layout)
 		files = [fileref(x) for x in lines[1:] if filetest(x)]
-		resources = files[0:count]
-		returns = files[count:None]
-		yield (frame_id.strip() or None, layout, resources, returns)
+		resources = files[0:divcount]
+		returns = files[divcount:None]
+
+		yield (frame_id.strip() or None, divcount, layout, resources, returns)
 
 def sequence_frames(session, *, Render=transport.sequence):
 	return Render(

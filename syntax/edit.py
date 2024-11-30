@@ -66,8 +66,8 @@ def configure_frame(directory, executable, options, sources):
 	position = tuple(x-1 for x in map(int, xy))
 	dimensions = tuple(int(x) if x is not None else None for x in hv)
 
-	model = (tuple(map(int, options['vertical-divisions'])) or (1, 1, 2))
-	ndiv = sum(x or 1 for x in model)
+	model = list(map(int, options['vertical-divisions'])) or [(1, 1), (1, 1), (2, 1)]
+	ndiv = sum(x[0] or 1 for x in model)
 
 	# Sources from command line. Follow with session status views and
 	# a fill of /dev/null refractions between. Transcript is fairly
@@ -168,8 +168,8 @@ def main(inv:process.Invocation) -> process.Exit:
 
 			try:
 				editor.restore(fspecs)
-			except:
-				pass
+			except Exception as restore_error:
+				editor.error("Session restoration", restore_error)
 		else:
 			# Clear source list for fallback case of an empty session.
 			sources = []

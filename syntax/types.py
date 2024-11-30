@@ -789,7 +789,7 @@ class Model(object):
 			)
 		)
 
-	def redistribute(self, allocation=90):
+	def redistribute(self, verticals, allocation=90):
 		"""
 		# Distribute the available vertical area so that each page has at least the
 		# given &width.
@@ -797,19 +797,40 @@ class Model(object):
 
 		height = self.fm_context.lines - (self.fm_border_width * 2)
 		width = self.fm_context.span - (self.fm_border_width * 2)
-		count = max(width // allocation, 1)
-		ralloc = width // count # remainder goes to last pane
+		nverticals = len(verticals)
+		maxverticals = max(width // allocation, 1)
+		units = sum(x[0] for x in verticals)
+		if units < maxverticals:
+			verticals.extend([(2, 1)] * maxverticalss - units)
 
-		offset = ralloc + self.fm_border_width # include initial for addressing.
+		ralloc = width // maxverticals # remainder goes to last pane
+
+		inheritor = nverticals - 1
+		for i, va in enumerate(verticals):
+			if va[1] == 0:
+				# Override the vertical that receives the remaining space.
+				inheritor = i
+				break
+		verticals[inheritor] = (verticals[inheritor][0], 0)
+
 		self.fm_verticals = [
-			((x + 1, 0 + self.fm_border_width), (ralloc, height))
-			for x in map(offset.__mul__, range(count))
+			((None, 0 + self.fm_border_width), (allocation * x[1], height))
+			for x in verticals
 		]
 
+		uwidth = width - sum(x[1][0] for x in self.fm_verticals)
+		uwidth -= (nverticals - 1) * self.fm_border_width
+		vp, vd = self.fm_verticals[inheritor]
+		self.fm_verticals[inheritor] = (vp, (uwidth, vd[1]))
+
+		# Calculate horizontal offsets using the calculated widths.
+		offset = self.fm_border_width
+		for i, v in enumerate(self.fm_verticals):
+			self.fm_verticals[i] = ((offset, v[0][1]), v[1])
+			offset += v[1][0]
+			offset += self.fm_border_width
+
 		# Reconstruct last record with updated width.
-		lwidth = width - (offset * (count-1))
-		lp, ld = self.fm_verticals[-1]
-		self.fm_verticals[-1] = (lp, (lwidth, ld[1]))
 		for i, p in enumerate(self.fm_verticals):
 			if i not in self.fm_divisions:
 				self.fm_divisions[i] = [p + ((2, 0),)]
@@ -836,10 +857,9 @@ class Model(object):
 		"""
 
 		self.fm_context = area
-		alloc = max(0, (self.fm_context.span // len(divisions)) - 1)
-		self.redistribute(alloc)
+		self.redistribute(divisions, 102)
 		for i, vd in enumerate(divisions):
-			self.divide(i, vd)
+			self.divide(i, vd[0])
 		return self
 
 	@property
