@@ -692,6 +692,7 @@ class Model(object):
 		return len(self.fm_divisions[vertical])
 
 	def __init__(self, *, border=1, header=2, footer=0):
+		self.fm_allocation = None
 		self.fm_context = None
 		self.fm_header_size = header
 		self.fm_footer_size = footer
@@ -850,14 +851,15 @@ class Model(object):
 		]
 		self.update_inner_intersections(page)
 
-	def configure(self, area, divisions):
+	def configure(self, area, divisions, allocation=100):
 		"""
 		# Configure the frame to have `len(divisions)` verticals where
 		# each element describes the number of divisions within the vertical.
 		"""
 
 		self.fm_context = area
-		self.redistribute(divisions, 102)
+		self.fm_allocation = allocation
+		self.redistribute(divisions, allocation)
 		for i, vd in enumerate(divisions):
 			self.divide(i, vd[0])
 		return self
