@@ -66,7 +66,12 @@ def configure_frame(directory, executable, options, sources):
 	position = tuple(x-1 for x in map(int, xy))
 	dimensions = tuple(int(x) if x is not None else None for x in hv)
 
-	model = list(map(int, options['vertical-divisions'])) or [(1, 1), (1, 1), (2, 1)]
+	vd = options['vertical-divisions']
+	if vd:
+		model = list(zip(map(int, vd), [1]*len(vd)))
+	else:
+		model = [(1, 1), (1, 1), (2, 1)]
+
 	ndiv = sum(x[0] or 1 for x in model)
 
 	# Sources from command line. Follow with session status views and
