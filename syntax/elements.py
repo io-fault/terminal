@@ -67,6 +67,8 @@ class Refraction(Core):
 		# Action associated with return and enter.
 		# Defaults to &None.
 		# &.keyboard.Selection intercepts will eliminate the need for this.
+	# /system_execution_status/
+		# Status of system processes executed by commands targeting the instance.
 	"""
 
 	origin: Reference
@@ -126,6 +128,7 @@ class Refraction(Core):
 		self.format = format
 		self.render = render
 		self.annotation = None
+		self.system_execution_status = {}
 
 		# State. Document elements, cursor, and camera.
 		self.elements = elements

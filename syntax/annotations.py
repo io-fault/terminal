@@ -481,3 +481,40 @@ class Filesystem(Directory):
 		if self.status != status:
 			# Update &matches.
 			self.select(status)
+
+class ExecutionStatus(object):
+	"""
+	# Directory query annotation.
+
+	# Provides common features for completion support.
+	"""
+
+	from os import kill
+
+	def __init__(self, title, pid, status):
+		self.title = title
+		self.xs_process_id = pid
+		self.xs_data = status
+
+	def close(self):
+		if self.xs_data[self.xs_process_id] is not None:
+			# SIGINT and other signals are not currently accessible.
+			try:
+				self.kill(self.xs_process_id, 9)
+			except ProcessLookupError:
+				pass
+		else:
+			# Exit code already present no clean up necessary.
+			pass
+
+	def update(self, line, structure):
+		# No response to insertions or deletions.
+		pass
+
+	def image(self):
+		yield ('field-annotation-separator', '[')
+		yield ('literal-words', f"{self.xs_process_id}")
+		yield ('field-annotation-separator', ']')
+
+	def insertion(self):
+		return str(self.xs_process_pid)

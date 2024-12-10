@@ -6,6 +6,13 @@ import fcntl
 import sys
 import codecs
 
+try:
+	from os import wait4 as reap
+except AttributeError:
+	# Maintain the invariant by extending the returned tuple with None.
+	def reap(pid, options, *, op=os.waitpid):
+		return op(pid, options) + (None,)
+
 from typing import Callable
 from dataclasses import dataclass
 
@@ -17,6 +24,7 @@ from fault.system.kernel import Scheduler
 from . import types
 from . import elements
 from . import delta
+from . import annotations
 
 Decode = codecs.getincrementaldecoder('utf-8')
 Encode = codecs.getincrementalencoder('utf-8')
@@ -57,7 +65,16 @@ class Completion(object):
 	pid: int
 
 	def execute(self, status):
-		pass
+		pid, exitcode, rusage = status
+		self.target.system_execution_status[pid] = (exitcode, rusage)
+
+		if self.target.annotation is None:
+			return
+		if not isinstance(self.target.annotation, annotations.ExecutionStatus):
+			return
+
+		if pid == self.target.annotation.xs_process_id:
+			self.target.annotate(None)
 
 class IO(object):
 	"""
@@ -115,8 +132,9 @@ class IO(object):
 
 	def enqueue_exit(self, pid, context):
 		def exited(link, pid=pid, log=self.transfers, context=context):
-			status = os.waitpid(pid, os.P_WAIT)[1]
-			log.append((context, status))
+			rpid, status, rusage = reap(pid, 0)
+			code = os.waitstatus_to_exitcode(status)
+			log.append((context, (rpid, code, rusage)))
 		return exited
 
 	def invoke(self, exitcontext, readcontext, writecontext, invocation):
@@ -150,6 +168,8 @@ class IO(object):
 				os.close(ro)
 
 			pid = invocation.spawn(fdmap=[(ri, 0), (wo, 1), (2, 2)])
+			exitcontext.target.system_execution_status[pid] = None
+
 			os.close(wo)
 			os.close(ri)
 
@@ -160,6 +180,8 @@ class IO(object):
 				if l is not None:
 					self.scheduler.cancel(l)
 			raise
+
+		return pid
 
 	def loop(self, delay=16):
 		"""

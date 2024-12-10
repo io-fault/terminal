@@ -4,6 +4,7 @@
 from fault.system import query
 
 from .. import delta
+from .. import annotations
 from . import types
 event, Index = types.Index.allocate('session')
 
@@ -208,7 +209,9 @@ def substitute(session, frame, rf, event):
 
 	c = Completion(rf, -1)
 	i = Insertion(rf, (ln, co), readlines)
-	session.io.invoke(c, i, None, inv)
+	pid = session.io.invoke(c, i, None, inv)
+	ca = annotations.ExecutionStatus("system-process", pid, rf.system_execution_status)
+	rf.annotate(ca)
 
 @event('elements', 'dispatch')
 def dispatch_system_command(session, frame, rf, event):
