@@ -14,7 +14,7 @@ def operation_not_found(session, frame, rf, event):
 	"""
 	pass
 
-@event('session', 'exit')
+@event('session', 'close')
 def application_quit(session, frame, rf, event):
 	"""
 	# Raise SystemExit. Unsaved changes are ignored.
