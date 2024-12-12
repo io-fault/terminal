@@ -254,18 +254,21 @@ class Refraction(Core):
 			adelete=alignment.delete,
 		):
 		"""
-		# Adjust view positioning to compensate for changes in &elements.
+		# Adjust view positioning to compensate for changes in &elements and
+		# propagate to reflections to maintain their views.
 
-		# Must be executed prior to the &change being applied.
+		# Executed on the target refraction after a change is performed.
 		"""
 
 		total = len(self.elements)
 		if change > 0:
 			op = ainsert
 			sign = +1
+			total -= change
 		else:
 			op = adelete
 			sign = -1
+			total += (-change)
 
 		for rf, v in getattr(self, 'parallels', ((self, None),)):
 			position = rf.visible[0]

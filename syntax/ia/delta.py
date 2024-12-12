@@ -79,9 +79,9 @@ def join(rf, lo, count, *, withstring=''):
 		# The character placed between the joined lines.
 		# Defaults to an empty string.
 	"""
+
 	lines = rf.elements[lo:lo+1+count]
 	combined = withstring.join(lines)
-	rf.delta(lo+1, -len(lines))
 
 	(rf.log
 		.write(Update(lo, combined, lines[0], 0))
@@ -89,12 +89,13 @@ def join(rf, lo, count, *, withstring=''):
 		.apply(rf.elements)
 		.collapse()
 		.commit())
+	rf.delta(lo+1, -len(lines))
 
 def split(rf, lo, offset):
 	"""
 	# Split the line identified by &lo at &offset.
 	"""
-	rf.delta(lo+1, 1)
+
 
 	line = rf.elements[lo]
 	nl = line[offset:]
@@ -105,17 +106,18 @@ def split(rf, lo, offset):
 		.apply(rf.elements)
 		.collapse()
 		.commit())
+	rf.delta(lo+1, 1)
 
 def _delete_lines(rf, lo, lines):
 	"""
 	# Remove &count lines from &rf starting at &lo.
 	"""
-	rf.delta(lo, -len(lines))
 
 	(rf.log
 		.write(Lines(lo, [], lines))
 		.apply(rf.elements)
 		.commit())
+	rf.delta(lo, -len(lines))
 
 def delete_lines(rf, lo, count):
 	"""
@@ -123,12 +125,12 @@ def delete_lines(rf, lo, count):
 	"""
 
 	lines = rf.elements[lo:lo+count]
-	rf.delta(lo, -len(lines))
 
 	(rf.log
 		.write(Lines(lo, [], lines))
 		.apply(rf.elements)
 		.commit())
+	rf.delta(lo, -len(lines))
 
 	return lines
 
@@ -137,12 +139,11 @@ def insert_lines(rf, lo, lines):
 	# Remove &count lines from &rf starting at &lo.
 	"""
 
-	rf.delta(lo, len(lines))
-
 	(rf.log
 		.write(Lines(lo, lines, []))
 		.apply(rf.elements)
 		.commit())
+	rf.delta(lo, len(lines))
 
 def insert_lines_into(rf, ln, offset, lines):
 	"""
@@ -163,13 +164,13 @@ def insert_lines_into(rf, ln, offset, lines):
 	lines[0] = prefix + lines[0]
 	lines[-1] = lines[-1] + suffix
 
-	rf.delta(ln+1, len(lines) - 1)
 
 	(rf.log
 		.write(Lines(ln, [], [line]))
 		.write(Lines(ln, lines, []))
 		.apply(rf.elements)
 		.commit())
+	rf.delta(ln+1, len(lines) - 1)
 
 	return len(lines) - 1, len(lines[-1]) - len(suffix) - offset
 
@@ -194,17 +195,17 @@ def move(rf, lo, start, stop):
 		rf.delta(start, -count)
 		_delete_lines(rf, start, lines)
 
-		rf.delta(lo - count, count)
 		insert_lines(rf, lo - count, lines)
+		rf.delta(lo - count, count)
 	else:
 		# Deleted range comes after insertion line.
 		assert lo <= start
 
-		rf.delta(start, -count)
 		_delete_lines(rf, start, lines)
+		rf.delta(start, -count)
 
-		rf.delta(lo, count)
 		insert_lines(rf, lo, lines)
+		rf.delta(lo, count)
 
 @event('insert', 'character')
 def insert_character_units(session, frame, rf, event, quantity=1):
