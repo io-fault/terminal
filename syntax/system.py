@@ -45,10 +45,14 @@ class Insertion(object):
 		ln, co = self.cursor
 
 		dl, dc = delta.insert_lines_into(rf.elements, rf.log, ln, co, lines)
+		rf.delta(ln, dl)
 		self.cursor = (ln + dl, len(lines[-1]))
 
-		rf.focus[0].magnitude += dl
-		rf.delta(ln, len(lines))
+		vp = rf.focus[0]
+		vp.magnitude += dl
+		if vp.get() >= ln:
+			vp.update(dl)
+			rf.scroll(dl.__add__)
 
 @dataclass()
 class Transmission(object):
