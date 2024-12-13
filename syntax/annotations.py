@@ -371,7 +371,7 @@ class Directory(object):
 
 	def select(self, query):
 		self.matches = [
-			y.identifier
+			y.identifier if y.fs_type() != 'directory' else y.identifier + '/'
 			for y in self.snapshot
 			if y.identifier.startswith(query) or not query
 		]
@@ -441,11 +441,15 @@ class Filesystem(Directory):
 		self.snapshot = list(self.location.fs_iterfiles())
 
 	def update(self, line, structure):
+		# Presumes resource location editing.
 		ln = self.vertical.get()
 		if ln == 0:
 			rpath = files.root
 		else:
-			rpath = (files.root@self.elements[0])
+			if self.elements[1].startswith('/'):
+				rpath = files.root
+			else:
+				rpath = (files.root@self.elements[0])
 
 		# Identify field.
 		current = self.horizontal.get()
@@ -471,14 +475,14 @@ class Filesystem(Directory):
 		else:
 			path = rpath
 
+		status = line[self.start:self.stop]
+
 		# Check for leading path changes.
 		if self.location != path:
 			# Update &snapshot.
 			self.chdir(rpath, path)
-
-		# Get the current query string (prefix).
-		status = line[self.start:self.stop]
-		if self.status != status:
+			self.select(status)
+		elif self.status != status:
 			# Update &matches.
 			self.select(status)
 
