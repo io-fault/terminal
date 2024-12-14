@@ -12,6 +12,7 @@ def operation_not_found(session, frame, rf, event):
 
 	# Used when an event could not be mapped to an operation.
 	"""
+
 	pass
 
 @event('session', 'close')
@@ -27,6 +28,7 @@ def application_focused(session, frame, rf, event):
 	"""
 	# Received explicit focus in event.
 	"""
+
 	pass
 
 @event('terminal', 'focus', 'release')
@@ -34,6 +36,7 @@ def application_switched(session, frame, rf, event):
 	"""
 	# Received explicit focus out event.
 	"""
+
 	pass
 
 @event('query')
@@ -213,4 +216,5 @@ def pause(session, frame, rf, event):
 	"""
 	# Place the process in the background.
 	"""
+
 	session.suspend()
