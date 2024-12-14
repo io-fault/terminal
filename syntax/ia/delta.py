@@ -37,6 +37,7 @@ def insert(rf, lo, offset, string):
 	"""
 	# Insert the &string at the given &offset.
 	"""
+
 	(rf.log
 		.write(Update(lo, string, "", offset))
 		.apply(rf.elements)
@@ -50,6 +51,7 @@ def delete(rf, lo, offset, length):
 	# [ Returns ]
 	# The logged deletion.
 	"""
+
 	line = rf.elements[lo]
 	phrase = rf.render(line)
 
@@ -95,7 +97,6 @@ def split(rf, lo, offset):
 	"""
 	# Split the line identified by &lo at &offset.
 	"""
-
 
 	line = rf.elements[lo]
 	nl = line[offset:]
@@ -288,6 +289,7 @@ def insert_string_argument(session, frame, rf, event, string, *, quantity=1):
 	"""
 	# Insert a string at the current cursor position disregarding &event.
 	"""
+
 	v, h = (x.get() for x in rf.focus)
 	string = string * quantity
 
@@ -300,6 +302,7 @@ def delete_characters_behind(session, frame, rf, event, quantity=1):
 	# Remove the codepoints representing the Character Unit
 	# immediately before the cursor.
 	"""
+
 	v, h = (x.get() for x in rf.focus)
 	line = rf.elements[v]
 
@@ -325,6 +328,7 @@ def delete_characters_ahead(session, frame, rf, event, quantity=1):
 	# Remove the codepoints representing the Character Unit
 	# that the cursor is current positioned at.
 	"""
+
 	v, h = (x.get() for x in rf.focus)
 	line = rf.elements[v]
 
@@ -366,6 +370,7 @@ def delete_previous_field(session, frame, rf, event):
 	"""
 	# Remove the field before the cursor's position including any
 	"""
+
 	v, h = (x.get() for x in rf.focus)
 	areas, fields = rf.fields(v)
 
@@ -484,6 +489,7 @@ def delete_to_beginning_of_line(session, frame, rf, event):
 	"""
 	# Delete all characters between the current position and the begining of the line.
 	"""
+
 	v, h = (x.get() for x in rf.focus)
 	delete(rf, v, 0, h)
 	commit(rf)
@@ -494,6 +500,7 @@ def delete_to_end_of_line(session, frame, rf, event):
 	"""
 	# Delete all characters between the current position and the end of the line.
 	"""
+
 	v, h = (x.get() for x in rf.focus)
 	delete(rf, v, h, len(rf.elements[v]))
 	commit(rf)
@@ -503,6 +510,7 @@ def open_newline_behind(session, frame, rf, event, quantity=1):
 	"""
 	# Open a new vertical behind the current vertical position.
 	"""
+
 	ln = max(0, min(len(rf.elements), rf.focus[0].get()))
 
 	area = rf.elements[ln-1:ln+1]
@@ -523,6 +531,7 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 	"""
 	# Open a new vertical ahead of the current vertical position.
 	"""
+
 	ln = max(0, min(len(rf.elements), rf.focus[0].get() + 1))
 
 	area = rf.elements[ln-1:ln+1]
@@ -542,6 +551,7 @@ def atposition_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode.
 	"""
+
 	rf.log.checkpoint()
 	session.keyboard.set('insert')
 	rf.whence = 0
@@ -552,6 +562,7 @@ def fieldend_insert_mode_switch(session, frame, rf, event):
 	# Transition into insert-mode moving the cursor to the start
 	# of the horizontal range.
 	"""
+
 	rf.focus[1].move(0, +1)
 	rf.log.checkpoint()
 	session.keyboard.set('insert')
@@ -563,6 +574,7 @@ def fieldend_insert_mode_switch(session, frame, rf, event):
 	# Transition into insert-mode moving the cursor to the end
 	# of the horizontal range.
 	"""
+
 	rf.focus[1].move(0, -1)
 	rf.log.checkpoint()
 	session.keyboard.set('insert')
@@ -573,6 +585,7 @@ def startofline_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the beginning of the line.
 	"""
+
 	ln = rf.focus[0].get()
 	i = 0
 	for i, x in enumerate(rf.elements[ln]):
@@ -588,6 +601,7 @@ def endofline_insert_mode_switch(session, frame, rf, event):
 	"""
 	# Transition into insert-mode moving the cursor to the end of the line.
 	"""
+
 	ln = rf.focus[0].get()
 	rf.focus[1].set(len(rf.elements[ln]))
 	rf.log.checkpoint()
@@ -599,8 +613,8 @@ def move_vertical_range_ahead(session, frame, rf, event):
 	"""
 	# Relocate the range after the current vertical position.
 	"""
-	v = rf.focus[0]
 
+	v = rf.focus[0]
 	start, position, stop = v.snapshot()
 	vr = stop - start
 	position += 1
@@ -624,8 +638,8 @@ def move_vertical_range_behind(session, frame, rf, event):
 	"""
 	# Relocate the range after the current vertical position.
 	"""
-	v = rf.focus[0]
 
+	v = rf.focus[0]
 	start, position, stop = v.snapshot()
 	vr = stop - start
 	if position >= start:
@@ -705,6 +719,7 @@ def subrange(session, frame, rf, event):
 	"""
 	# Substitute the contents of the cursor's horizontal range.
 	"""
+
 	ln = rf.focus[0].get()
 	start, p, stop = rf.focus[1].snapshot()
 
@@ -719,6 +734,7 @@ def subagain(session, frame, rf, event, *, islice=itertools.islice):
 	"""
 	# Substitute the horizontal selection with previous substitution later.
 	"""
+
 	ln = rf.focus[0].get()
 	start, p, stop = rf.focus[1].snapshot()
 
