@@ -1361,10 +1361,19 @@ class Session(Core):
 		s = d.screen
 		for area, data in ixn:
 			if data.__class__ is area.__class__:
+				# Copy the cell pixels in the frame buffer.
+				# Explicitly synchronizing here is necessary to flush
+				# the screen state so that the replicate instruction may
+				# work with the desired frame.
 				d.replicate_cells(area, data)
-				d.synchronize() # Temporary race fix.
+				d.synchronize()
+
+				# No invalidation necessary here as the cell replication
+				# has been performed directly on the frame buffer.
 				s.replicate(area, data.y_offset, data.x_offset)
 			else:
+				# Update the screen with the given data and signal
+				# the display to refresh the area.
 				s.rewrite(area, data)
 				d.invalidate_cells(area)
 
@@ -1471,7 +1480,7 @@ class Session(Core):
 			# Synchronize input; this could be a timer or I/O.
 			device.transfer_event()
 
-			# Get the event and the focused frame.
+			# Get the next event from the device. Blocking.
 			key = device.key()
 
 			for (rf, view) in self.dispatch(frame, frame.focus, frame.view, key):
