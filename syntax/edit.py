@@ -96,7 +96,10 @@ def configure_frame(directory, executable, options, sources):
 
 	return model, rfq
 
-def configure_log_builtin(session):
+def configure_log_builtin(session, logfile=None):
+	if logfile is not None:
+		session.configure_logfile(open(logfile, 'a'))
+
 	def klog(*lines, depth=[0], elog=session.log):
 		if depth[0] > 0:
 			# No logging while logging.
@@ -135,6 +138,7 @@ def identify_executable(inv):
 	return path
 
 def main(inv:process.Invocation) -> process.Exit:
+	inv.imports(['TERMINAL_LOG'])
 	config = {
 		'interface-device': None,
 		'working-directory': None,
@@ -157,7 +161,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	wd = configure_working_directory(config)
 	device = types.Device()
 	editor = elements.Session(IO.allocate(device.synchronize_io), path, device)
-	configure_log_builtin(editor)
+	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 
 	fi = 0
 	session_file = None

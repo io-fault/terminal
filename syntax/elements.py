@@ -1,5 +1,5 @@
 """
-# Interface element implementations.
+# Implementations for user interface elements.
 """
 from collections.abc import Sequence, Mapping, Iterable
 from typing import Optional
@@ -31,6 +31,8 @@ from .types import Model, View, Reference, Area, Glyph, Device
 class Core(object):
 	"""
 	# Common properties and features.
+
+	# Currently, only used to identify a user interface element.
 	"""
 
 class Refraction(Core):
@@ -899,6 +901,8 @@ class Session(Core):
 	# Root application state.
 
 	# [ Elements ]
+	# /logfile/
+		# Transcript override for logging.
 	# /io/
 		# System I/O abstraction for command substitution and file I/O.
 	# /device/
@@ -922,10 +926,10 @@ class Session(Core):
 	types: Mapping[files.Path, tuple[object, object]]
 
 	def __init__(self, io, executable, terminal, position=(0,0), dimensions=None):
+		self.logfile = None
 		self.io = io
 		self.placement = (position, dimensions)
 
-		self.io = io
 		self.executable = executable.delimit()
 		self.typepath = [home() / '.syntax']
 		self.device = terminal
@@ -957,6 +961,21 @@ class Session(Core):
 		self.focus = None
 		self.frame = 0
 		self.frames = []
+
+	def configure_logfile(self, logfile):
+		"""
+		# Assign the session's logfile and set &log to &write_log_file.
+		"""
+
+		self.logfile = logfile
+		self.log = self.write_log_file
+
+	def configure_transcript(self):
+		"""
+		# Set &log to &extend_transcript for in memory logging.
+		"""
+
+		self.log = self.extend_transcript
 
 	def lookup_type(self, resource:files.Path):
 		"""
@@ -1139,6 +1158,24 @@ class Session(Core):
 	def log(self, *lines):
 		"""
 		# Append the given &lines to the transcript.
+		# Overridden by (system/environ)`TERMINAL_LOG`.
+		"""
+
+		return self.extend_transcript(lines)
+
+	def write_log_file(self, *lines):
+		"""
+		# Append the given &lines to the transcript.
+		"""
+
+		self.logfile.write('\n'.join(lines)+'\n')
+
+	def extend_transcript(self, lines):
+		"""
+		# Open the virtual transcript resource and extend its elements with
+		# the given &lines.
+
+		# The default &log receiver.
 		"""
 
 		transcript = self.executable/'transcript'
