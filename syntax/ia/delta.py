@@ -524,6 +524,7 @@ def open_newline_behind(session, frame, rf, event, quantity=1):
 	insert_lines(rf, ln, ["\t" * il])
 	rf.focus[0].changed(ln, quantity)
 	rf.focus[0].update(-1)
+	rf.focus[1].set(il)
 	session.keyboard.set('insert')
 
 @event('open', 'ahead')
@@ -544,6 +545,7 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 
 	insert_lines(rf, ln, ["\t" * il])
 	rf.focus[0].changed(ln, quantity)
+	rf.focus[1].set(il)
 	session.keyboard.set('insert')
 
 @event('open', 'last')
