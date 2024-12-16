@@ -838,6 +838,7 @@ class Frame(Core):
 		except IndexError:
 			line = ""
 
+		h.limit(0, len(line))
 		# Prepare phrase and cells.
 		lfields = focus.structure(line)
 		if fai is not None:
