@@ -864,11 +864,13 @@ class Frame(Core):
 
 		# Ignore when offscreen.
 		if rln >= 0 and rln < edge:
+			kb_mode = self.keyboard.mapping
 			cells = list(phrase.render(Define=self.define))
 			# Need one empty cell.
 			cells.append(types.text.Glyph(codepoint=ord(' '), cellcolor=0x000000))
+
 			ccount = len(cells)
-			ip = cursor.select_horizontal_position_indicator(self.keyboard.mapping, 'position', inverted, hs)
+			ip = cursor.select_horizontal_position_indicator(kb_mode, 'position', inverted, hs)
 			span = min(hc[1], ccount-1)
 			upc = cells[span].codepoint
 			span += 1
@@ -877,7 +879,7 @@ class Frame(Core):
 			cp = cells[hc[1]:span]
 			cells[hc[1]:span] = map(ip, cp)
 
-			ir = cursor.select_horizontal_range_indicator(self.keyboard.mapping, 'range')
+			ir = cursor.select_horizontal_range_indicator(kb_mode, 'range')
 			cr = cells[hc[0]:hc[2]]
 			cells[hc[0]:hc[2]] = map(ir, cr)
 
