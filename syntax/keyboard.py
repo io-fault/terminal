@@ -122,8 +122,6 @@ if 'controls':
 	a(('p'), 'delta', ('take',))
 	a(('p', km_shift), 'delta', ('place',))
 
-	a(('q', km_control), 'meta', ('session', 'exit'))
-
 	a(('r'), 'meta', ('transition', 'capture', 'replace'))
 	a(('r', km_control), 'navigation', ('session', 'rewrite', 'elements'))
 

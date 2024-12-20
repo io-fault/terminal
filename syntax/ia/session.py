@@ -8,6 +8,14 @@ from .. import annotations
 from . import types
 event, Index = types.Index.allocate('session')
 
+@event('close')
+def close_session(session, frame, rf, event):
+	"""
+	# Exit the process.
+	"""
+
+	raise SystemExit(0)
+
 @event('save')
 def save_session_snapshot(session, frame, rf, event):
 	"""
@@ -156,7 +164,7 @@ def frame_switch_next(session, frame, rf, event):
 
 	session.reframe(session.frame + 1)
 
-@event('frame', 'select')
+@event('frame', 'switch')
 def frame_switch(session, frame, rf, event):
 	"""
 	# Select and focus the next frame in the session.

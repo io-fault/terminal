@@ -246,7 +246,7 @@ inscriptionParameters
 		{
 			struct ControllerStatus *ctl = &(self->_event_status);
 			self.event_text = nil;
-			ctl->st_dispatch = InstructionKey_Identifier(ai_frame_select);
+			ctl->st_dispatch = InstructionKey_Identifier(ai_frame_switch);
 			ctl->st_quantity = nth;
 			ctl->st_text_length = 0;
 			ctl->st_keys = 0;

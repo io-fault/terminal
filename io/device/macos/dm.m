@@ -135,7 +135,7 @@ openResources: (id) sender
 			return;
 
 		files = [op.URLs componentsJoinedByString: @"\n"];
-		dispatch_application_instruction(cm, files, op.URLs.count, ai_resource_open);
+		dispatch_application_instruction(cm, files, op.URLs.count, ai_resource_switch);
 	}];
 }
 
@@ -454,6 +454,8 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 	NSMenuItem *mie = MenuItem("Edit", nil, "");
 	NSMenu *fm = Menu();
 	NSMenuItem *fie = MenuItem("Frames", nil, "");
+	NSMenu *snm = Menu();
+	NSMenuItem *snie = MenuItem("Session", nil, "");
 	NSMenu *sm = Menu();
 	NSMenuItem *sie = MenuItem("Screen", nil, "");
 
@@ -462,10 +464,12 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 	[mie setSubmenu: em];
 	[fie setSubmenu: fm];
 	[sie setSubmenu: sm];
+	[snie setSubmenu: snm];
 	[am setTitle: [NSString stringWithUTF8String: title]];
 	[rm setTitle: @"Resource"];
 	[em setTitle: @"Edit"];
 	[fm setTitle: @"Frames"];
+	[snm setTitle: @"Session"];
 	[sm setTitle: @"Screen"];
 
 	/* Menu Bar */
@@ -474,6 +478,7 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 	[root addItem: rie];
 	[root addItem: mie];
 	[root addItem: fie];
+	[root addItem: snie];
 	[root addItem: sie];
 
 	/* Application Menu */
@@ -489,9 +494,6 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 		savefont.keyEquivalentModifierMask |= NSEventModifierFlagControl;
 		savefont.toolTip = @"Save the current screen font as the system's user fixed pitch font.";
 	}
-	AddSeparator(am);
-	AddMenuItem(am, "Store Session", @selector(relayInstruction:), "")
-		.tag = ai_session_save;
 	AddSeparator(am);
 	AddMenuItem(am, "Quit", @selector(quit:), "q");
 
@@ -571,6 +573,26 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 
 	/* Create frame list separator as one always exists. */
 	AddSeparator(fm);
+
+	/* Session Menu */
+	{
+		NSMenuItem *mi = AddMenuItem(snm, "Switch", @selector(openSession:), "");
+		mi.toolTip = @"Change the session context to work within.";
+	}
+
+	{
+		NSMenuItem *mi = AddMenuItem(snm, "Store", @selector(relayInstruction:), "");
+		mi.tag = ai_session_save;
+		mi.toolTip = @"Update the permanent session snapshot to reflect the current session state.";
+	}
+
+	AddSeparator(snm);
+
+	{
+		NSMenuItem *mi = AddMenuItem(snm, "Reset", @selector(relayInstruction:), "");
+		mi.tag = ai_session_reset;
+		mi.toolTip = @"Discard all session changes and reload the permanent snapshot.";
+	}
 
 	/* Screen Menu */
 	NSMenuItem *resize = AddMenuItem(sm, "Resize Cell Image", @selector(resizeCellImage:), "U");

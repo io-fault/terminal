@@ -198,17 +198,17 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(session, clone) \
 	AI_DEFINE(session, create) \
 	AI_DEFINE(session, close) \
+	AI_DEFINE(session, switch) \
 	AI_DEFINE(session, save) \
 	AI_DEFINE(session, synchronize) \
 	AI_DEFINE(session, interrupt) \
 	AI_DEFINE(session, quit) \
-	AI_DEFINE(session, switch) \
-	AI_DEFINE(session, restore) \
+	AI_DEFINE(session, reset) \
 	AI_DEFINE(frame, status) \
 	AI_DEFINE(frame, clone) \
 	AI_DEFINE(frame, create) \
 	AI_DEFINE(frame, close) \
-	AI_DEFINE(frame, select) \
+	AI_DEFINE(frame, switch) \
 	AI_DEFINE(frame, next) \
 	AI_DEFINE(frame, previous) \
 	AI_DEFINE(frame, transpose) \
@@ -216,13 +216,14 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(resource, clone) \
 	AI_DEFINE(resource, create) \
 	AI_DEFINE(resource, close) \
+	AI_DEFINE(resource, switch) \
 	AI_DEFINE(resource, relocate) \
 	AI_DEFINE(resource, cycle) \
-	AI_DEFINE(resource, open) \
 	AI_DEFINE(resource, save) \
 	AI_DEFINE(resource, reload) \
 	AI_DEFINE(elements, status) \
 	AI_DEFINE(elements, clone) \
+	AI_DEFINE(elements, create) \
 	AI_DEFINE(elements, seek) \
 	AI_DEFINE(elements, find) \
 	AI_DEFINE(elements, next) \

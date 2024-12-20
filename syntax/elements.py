@@ -1270,7 +1270,8 @@ class Session(Core):
 
 		if area is None and layout is None:
 			if self.focus is not None:
-				area, layout = self.focus.structure.configuration
+				area = self.focus.structure.configuration[0]
+				layout = self.focus.structure.fm_layout
 			else:
 				area = screen.area
 		else:
@@ -1279,7 +1280,7 @@ class Session(Core):
 
 		if layout is None:
 			layout = []
-			v = area.span // 90
+			v = area.span // 100
 			available = max(0, v-1)
 			for i in range(available):
 				layout.append((1, i))
@@ -1417,8 +1418,9 @@ class Session(Core):
 				d.invalidate_cells(area)
 
 	intercepts = {
-		'(session/save)': 'session/save',
 		'(session/synchronize)': 'session/synchronize',
+		'(session/close)': 'session/close',
+		'(session/save)': 'session/save',
 		'(screen/refresh)': 'session/screen/refresh',
 		'(screen/resize)': 'session/screen/resize',
 
@@ -1427,7 +1429,7 @@ class Session(Core):
 		'(frame/close)': 'session/frame/close',
 		'(frame/previous)': 'session/frame/previous',
 		'(frame/next)': 'session/frame/next',
-		'(frame/select)': 'session/frame/select',
+		'(frame/switch)': 'session/frame/switch',
 		'(frame/transpose)': 'session/frame/transpose',
 
 		'(resource/relocate)': 'session/resource/relocate',
