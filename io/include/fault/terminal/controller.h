@@ -198,6 +198,7 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(session, clone) \
 	AI_DEFINE(session, create) \
 	AI_DEFINE(session, close) \
+	AI_DEFINE(session, save) \
 	AI_DEFINE(session, synchronize) \
 	AI_DEFINE(session, interrupt) \
 	AI_DEFINE(session, quit) \

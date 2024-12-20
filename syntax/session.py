@@ -49,10 +49,26 @@ def structure_frames(session:str, *, Interpret=transport.structure):
 
 		yield (frame_id.strip() or None, divcount, layout, resources, returns)
 
+def frame_layout_string(layout):
+	"""
+	# Yield the string that represents the given &layout.
+	"""
+
+	prefix = ''
+	for vertical in layout:
+		yield prefix
+		divcount, width = vertical
+
+		if width is not None and width != 1:
+			yield str(divcount) + '*' + str(width)
+		else:
+			yield str(divcount)
+		prefix = ' '
+
 def sequence_frames(session, *, Render=transport.sequence):
 	return Render(
 		(frame_id or '', [
-				' '.join(map(str, layout))
+				''.join(frame_layout_string(layout))
 			] + list(filepath(r) for r in resources + returns)
 		)
 		for (frame_id, layout, resources, returns) in session

@@ -813,6 +813,7 @@ class Model(object):
 				inheritor = i
 				break
 		verticals[inheritor] = (verticals[inheritor][0], 0)
+		self.fm_layout = verticals
 
 		self.fm_verticals = [
 			((None, 0 + self.fm_border_width), (allocation * x[1], height))
@@ -871,6 +872,10 @@ class Model(object):
 		"""
 
 		return self.fm_context, tuple(map(len, self.fm_divisions.values()))
+
+	@property
+	def layout(self):
+		return self.fm_layout
 
 	def iterpanes(self):
 		"""

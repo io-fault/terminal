@@ -1370,11 +1370,10 @@ class Session(Core):
 
 		for f in self.frames:
 			frame_id = f.title
-			layout = f.structure.configuration[1]
 			resources = [rf.origin.ref_path for rf in f.refractions]
 			returns = [rf.origin.ref_path for rf in f.returns if rf is not None]
 
-			yield (frame_id, layout, resources, returns)
+			yield (frame_id, f.structure.layout, resources, returns)
 
 	def chresource(self, frame, path):
 		self.dispatch_delta(frame.chresource((frame.vertical, frame.division), self.refract(path)))
@@ -1418,6 +1417,7 @@ class Session(Core):
 				d.invalidate_cells(area)
 
 	intercepts = {
+		'(session/save)': 'session/save',
 		'(session/synchronize)': 'session/synchronize',
 		'(screen/refresh)': 'session/screen/refresh',
 		'(screen/resize)': 'session/screen/resize',

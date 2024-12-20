@@ -490,6 +490,9 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 		savefont.toolTip = @"Save the current screen font as the system's user fixed pitch font.";
 	}
 	AddSeparator(am);
+	AddMenuItem(am, "Store Session", @selector(relayInstruction:), "")
+		.tag = ai_session_save;
+	AddSeparator(am);
 	AddMenuItem(am, "Quit", @selector(quit:), "q");
 
 	/* Resource Menu */

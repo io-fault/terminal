@@ -163,11 +163,14 @@ def main(inv:process.Invocation) -> process.Exit:
 	editor = elements.Session(IO.allocate(device.synchronize_io), path, device)
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 
+	default_session = str(home()/'.syntax/Frames')
+	editor.fs_snapshot = default_session
+
 	fi = 0
 	session_file = None
 	if config['session-sources']:
 		if not sources:
-			sources.append(str(home()/'.syntax/Frames'))
+			sources.append(default_session)
 		session_file = sources[-1]
 
 		from .session import structure_frames as parse

@@ -21,8 +21,9 @@ def select_horizontal_range_indicator(mode, itype):
 	"""
 	# Underline the given phrase for representing the horizontal range.
 	"""
+
+	# Avoid decorating the range in insert mode.
 	if mode in {'insert'}:
-		# Avoid decorating the range in insert mode.
 		return (lambda x: x)
 
 	return (lambda c: c.update(underline=Line.solid, linecolor=0x66cacaFF))

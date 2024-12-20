@@ -8,6 +8,16 @@ from .. import annotations
 from . import types
 event, Index = types.Index.allocate('session')
 
+@event('save')
+def save_session_snapshot(session, frame, rf, event):
+	"""
+	# Serialize a snapshot of the session to a file on disk.
+	"""
+
+	from ..session import sequence_frames as seq
+	with open(session.fs_snapshot, 'w') as f:
+		f.write(seq(session.snapshot()))
+
 @event('cancel')
 def cancel(session, frame, rf, event):
 	"""
