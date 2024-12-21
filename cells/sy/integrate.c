@@ -52,6 +52,9 @@ python_environment_setup()
 }
 #endif
 
+const char **system_argv = NULL;
+int system_argc = -1;
+
 /* &.io.device */
 int device_manage_terminal(const char *, void *);
 static int coprocess_invocation(void *);
@@ -64,6 +67,11 @@ main(int argc, const char *argv[])
 		// the component that creates it.
 	*/
 	char *locale_selection = setlocale(LC_ALL, "");
+
+	/* Pass through globals and pick up in coprocess_invocation. */
+	system_argc = argc;
+	system_argv = argv;
+
 	return(device_manage_terminal(FACTOR_CONTEXT(".", "syntax.edit"), coprocess_invocation));
 }
 
@@ -82,9 +90,8 @@ coprocess_invocation(void *ctx)
 {
 	int r = 255;
 	PyObject *ob;
-	const char *argv[] = {"terminal", "--session", NULL};
 
-	r = fault_python_initialize(2, argv);
+	r = fault_python_initialize(system_argc, system_argv);
 	if (r != 0)
 		return(r);
 

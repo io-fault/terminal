@@ -34,9 +34,7 @@ def fkrt(inv:process.Invocation) -> process.Exit:
 	system.dispatch(inv, Executable(Session(exe, terminal).setup))
 	system.control()
 
-restricted = {
-	'--session': ('field-replace', True, 'session-sources'),
-}
+restricted = {}
 restricted.update(
 	('-' + str(i), ('sequence-append', i, 'vertical-divisions'))
 	for i in range(1, 10)
@@ -138,7 +136,7 @@ def identify_executable(inv):
 	return path
 
 def main(inv:process.Invocation) -> process.Exit:
-	inv.imports(['TERMINAL_LOG'])
+	inv.imports(['TERMINAL_LOG', 'TERMINAL_SESSION'])
 	config = {
 		'interface-device': None,
 		'working-directory': None,
@@ -150,10 +148,9 @@ def main(inv:process.Invocation) -> process.Exit:
 		'vertical-position': '1',
 		'horizontal-size': None,
 		'vertical-size': None,
-		'session-sources': False,
 	}
 
-	sources = recognition.merge(
+	remainder = recognition.merge(
 		config, recognition.legacy(restricted, required, inv.argv),
 	)
 
@@ -163,32 +160,24 @@ def main(inv:process.Invocation) -> process.Exit:
 	editor = elements.Session(IO.allocate(device.synchronize_io), path, device)
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 
-	default_session = str(home()/'.syntax/Frames')
-	editor.fs_snapshot = default_session
-
 	fi = 0
-	session_file = None
-	if config['session-sources']:
-		if not sources:
-			sources.append(default_session)
-		session_file = sources[-1]
+	if remainder:
+		session_file = (process.fs_pwd()@remainder[-1])
+	else:
+		session_file = (home()/'.syntax/Frames')
+	editor.fs_snapshot = session_file
 
-		from .session import structure_frames as parse
-		for sf in sources:
-			with open(sf) as f:
-				fspecs = parse(f.read())
+	from .session import sequence_frames as seq
+	from .session import structure_frames as parse
+	try:
+		with open(session_file) as f:
+			fspecs = parse(f.read())
+		editor.restore(fspecs)
+	except Exception as restore_error:
+		editor.error("Session restoration", restore_error)
 
-			try:
-				editor.restore(fspecs)
-			except Exception as restore_error:
-				editor.error("Session restoration", restore_error)
-		else:
-			# Clear source list for fallback case of an empty session.
-			sources = []
-
-	# Create frame if not session sourced or the session was empty.
-	if not editor.frames or not config['session-sources']:
-		layout, rfq = configure_frame(wd, path, config, sources)
+	if not editor.frames:
+		layout, rfq = configure_frame(wd, path, config, [])
 		fi = editor.allocate(layout = layout)
 		editor.frames[fi].fill(map(editor.refract, rfq))
 
@@ -196,8 +185,6 @@ def main(inv:process.Invocation) -> process.Exit:
 	editor.log("Factor: " + __name__)
 	editor.log("Device: " + (config.get('interface-device') or "manager default"))
 	editor.log("Working Directory: " + str(wd))
-	if sources:
-		editor.log("Path Arguments:", *['\t' + s for s in sources])
 
 	# System I/O loop for command substitution and file I/O.
 	editor.io.dispatch_loop()
@@ -206,7 +193,5 @@ def main(inv:process.Invocation) -> process.Exit:
 		while editor.frames:
 			editor.cycle()
 	finally:
-		if session_file is not None:
-			from .session import sequence_frames as seq
-			with open(session_file, 'w') as f:
-				f.write(seq(editor.snapshot()))
+		with open(session_file, 'w') as f:
+			f.write(seq(editor.snapshot()))
