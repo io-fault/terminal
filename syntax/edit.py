@@ -167,12 +167,8 @@ def main(inv:process.Invocation) -> process.Exit:
 		session_file = (home()/'.syntax/Frames')
 	editor.fs_snapshot = session_file
 
-	from .session import sequence_frames as seq
-	from .session import structure_frames as parse
 	try:
-		with open(session_file) as f:
-			fspecs = parse(f.read())
-		editor.restore(fspecs)
+		editor.load()
 	except Exception as restore_error:
 		editor.error("Session restoration", restore_error)
 
@@ -193,5 +189,4 @@ def main(inv:process.Invocation) -> process.Exit:
 		while editor.frames:
 			editor.cycle()
 	finally:
-		with open(session_file, 'w') as f:
-			f.write(seq(editor.snapshot()))
+		editor.store()

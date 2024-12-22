@@ -965,6 +965,19 @@ class Session(Core):
 		self.frame = 0
 		self.frames = []
 
+	def load(self):
+		from .session import structure_frames as parse
+		with open(self.fs_snapshot) as f:
+			fspecs = parse(f.read())
+		if self.frames:
+			self.frames = []
+		self.restore(fspecs)
+
+	def store(self):
+		from .session import sequence_frames as seq
+		with open(self.fs_snapshot, 'w') as f:
+			f.write(seq(self.snapshot()))
+
 	def configure_logfile(self, logfile):
 		"""
 		# Assign the session's logfile and set &log to &write_log_file.
@@ -1421,6 +1434,7 @@ class Session(Core):
 		'(session/synchronize)': 'session/synchronize',
 		'(session/close)': 'session/close',
 		'(session/save)': 'session/save',
+		'(session/reset)': 'session/reset',
 		'(screen/refresh)': 'session/screen/refresh',
 		'(screen/resize)': 'session/screen/resize',
 

@@ -22,9 +22,16 @@ def save_session_snapshot(session, frame, rf, event):
 	# Serialize a snapshot of the session to a file on disk.
 	"""
 
-	from ..session import sequence_frames as seq
-	with open(session.fs_snapshot, 'w') as f:
-		f.write(seq(session.snapshot()))
+	session.store()
+
+@event('reset')
+def load_session_snapshot(session, frame, rf, event):
+	"""
+	# Serialize a snapshot of the session to a file on disk.
+	"""
+
+	session.load()
+	session.reframe(0)
 
 @event('cancel')
 def cancel(session, frame, rf, event):
