@@ -61,6 +61,8 @@ annotations = Mode(('meta', ('transition', 'annotation', 'void'), ()))
 if 'controls':
 	mode = control
 
+	a((0x2423, km_control), 'meta', ('prepare', 'command'))
+
 	a(('a'), 'meta', ('transition', 'end-of-field'))
 	a(('a', km_shift), 'meta', ('transition', 'end-of-line'))
 
@@ -160,7 +162,6 @@ if 'controls':
 	a((0x23CE, km_meta), 'session', ('elements', 'dispatch'))
 
 	a((0x21E5), 'delta', ('indentation', 'increment'))
-	a((0x2423, km_control), 'navigation', ('horizontal', 'jump', 'string',), ("\x1f",))
 	a((0x21E5, km_shift), 'delta', ('indentation', 'decrement'))
 
 	a(('[M1]'), 'navigation', ('select', 'absolute'))

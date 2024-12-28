@@ -641,6 +641,11 @@ class Model(object):
 	# [ Patterns ]
 	# - `r_` prefixed methods generate instructions for performing rendering.
 	# - `fm_`, Frame Model, prefixes usually refer to instance state or context.
+
+	# [ Properties ]
+	# /fm_deltas/
+		# Mapping designating the size of a header, footer, or margin for a particular
+		# division. Keyed with the vertical-division index pair.
 	"""
 
 	# Indicator images (characters) and colors.
@@ -698,7 +703,9 @@ class Model(object):
 		self.fm_footer_size = footer
 		self.fm_border_width = border
 		self.fm_verticals = []
+		self.fm_layout = []
 		self.fm_divisions = collections.defaultdict(list)
+		self.fm_deltas = {}
 		self.fm_intersections = dict()
 
 	def sole(self):
@@ -790,10 +797,10 @@ class Model(object):
 			)
 		)
 
-	def redistribute(self, verticals, allocation=90):
+	def redistribute(self, verticals, allocation=100):
 		"""
 		# Distribute the available vertical area so that each page has at least the
-		# given &width.
+		# given &allocation.
 		"""
 
 		height = self.fm_context.lines - (self.fm_border_width * 2)
@@ -840,6 +847,28 @@ class Model(object):
 
 		return len(self.fm_verticals)
 
+	def set_margin_size(self, vertical, division, section, size):
+		"""
+		# Change the size of the header, footer, or left and right margins
+		# for the division identified by &vertical and &division.
+		"""
+
+		key = (vertical, division, section)
+		current = self.fm_deltas.get(key, 0)
+
+		self.fm_deltas[key] = size
+		vp, vd, vm = self.fm_divisions[vertical][division]
+		if section == 1:
+			h = size
+			f = vm[1]
+		elif section == 3:
+			h = vm[0]
+			f = size
+		self.fm_divisions[vertical][division] = (vp, vd, (h, f))
+		self.update_inner_intersections(vertical)
+
+		return size - current
+
 	def divide(self, page, divisions):
 		"""
 		# Split the page (vertical) into divisions
@@ -847,8 +876,8 @@ class Model(object):
 
 		pp, pd = self.fm_verticals[page]
 		self.fm_divisions[page] = [
-			((pp[0], p), (pd[0], height), (2, 0))
-			for (p, height) in self.distribute(pd[1], (pd[1] // divisions)-1)
+			((pp[0], p), (pd[0], height), (2, self.fm_deltas.get((page, di, 3), 0)))
+			for di, (p, height) in enumerate(self.distribute(pd[1], (pd[1] // divisions)-1))
 		]
 		self.update_inner_intersections(page)
 
@@ -871,7 +900,7 @@ class Model(object):
 		# The configured area and divisions.
 		"""
 
-		return self.fm_context, tuple(map(len, self.fm_divisions.values()))
+		return self.fm_context, self.layout
 
 	@property
 	def layout(self):
@@ -911,7 +940,7 @@ class Model(object):
 		if section == 0:
 			# Body.
 			position = (lambda: (rx+left+dl, ry+top+dt))
-			dimensions = (lambda: (width-dl-dr, height-dt-db))
+			dimensions = (lambda: (width-(dl+dr), height-(dt+db)))
 		elif section == 1:
 			# Header, priority over margins.
 			# Left and right margins stop short of header.
@@ -925,7 +954,7 @@ class Model(object):
 			# Footer, priority over margins.
 			# Left and right margins stop short of footer.
 			position = (lambda: (rx+left, ry+top+height-(db-vborder)))
-			dimensions = (lambda: (width, db-vborder))
+			dimensions = (lambda: (width, max(0, db-vborder)))
 		elif section == 4:
 			# Left Margin
 			position = (lambda: (rx+left, ry+top+dt))
@@ -1063,6 +1092,22 @@ class Model(object):
 		yield (position[1], position[0] + 1, 1, size), hl
 		yield (position[1], position[0] + 1 + size, 1, 1), ri
 
+	def r_patch_footer(self, vertical, division):
+		"""
+		# Render the dividing line used to separate the &section from the body.
+
+		# Used when opening a prompt in an already drawn frame.
+		"""
+
+		vp, vd, vx = self.fm_divisions[vertical][division]
+		header, footer = vx
+
+		h = vp[0] - self.fm_border_width
+		v = vp[1]
+
+		yield from self.r_divide_horizontals(False,
+			(h, v + vd[1] - footer - self.fm_border_width), vd[0])
+
 	def r_divide(self, width, height):
 		"""
 		# Render all the divisions necessary to represent the model's configuration.
@@ -1088,7 +1133,7 @@ class Model(object):
 						(h, v + header), vd[0])
 				if footer:
 					yield from self.r_divide_horizontals(False,
-						(h, v + vd[1] - footer), vd[0])
+						(h, v + vd[1] - footer - self.fm_border_width), vd[0])
 
 	@staticmethod
 	def indicate(itype, last, limit, offset, d, i):

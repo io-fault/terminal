@@ -590,6 +590,7 @@ class Frame(Core):
 		# Update the model in response to changes in the size or layout of the frame.
 		"""
 
+		# Default to existing configuration.
 		da, dd = self.structure.configuration
 		if area is None:
 			area = da
@@ -607,10 +608,16 @@ class Frame(Core):
 			for ctx in self.structure.itercontexts(area)
 		)
 
-		# Locations
+		# Resource Locations
 		self.headings = list(
 			View(Area(*ctx), [], [], {'bottom': 'weak'}, self.define)
 			for ctx in self.structure.itercontexts(area, section=1)
+		)
+
+		# Command Prompts, zero heights by default.
+		self.footers = list(
+			View(Area(*ctx), [], [], {'top': 'weak'}, self.define)
+			for ctx in self.structure.itercontexts(area, section=3)
 		)
 
 	def refresh(self):
@@ -650,20 +657,17 @@ class Frame(Core):
 		# Render a complete frame using the current view image state.
 		"""
 
-		border = Glyph(textcolor=0x666666)
-		def rborder(i, BCell=border, ord=ord):
-			for ar, ch in i:
-				a = Area(*ar)
-				yield a, [BCell.inscribe(ord(ch))] * a.volume
+		for p, rf, v, f in zip(self.panes, self.refractions, self.views, self.footers):
+			yield from self.chpath(p, rf.origin)
+			yield from v.render(slice(0, v.height))
+			yield from f.render(slice(0, f.height))
 
 		aw = self.area.span
 		ah = self.area.lines
-		yield from rborder(self.structure.r_enclose(aw, ah))
-		yield from rborder(self.structure.r_divide(aw, ah))
 
-		for p, rf, v in zip(self.panes, self.refractions, self.views):
-			yield from self.chpath(p, rf.origin)
-			yield from v.render(slice(0, None))
+		# Give the frame boundaries higher (display) precedence by rendering last.
+		yield from self.fill_areas(self.structure.r_enclose(aw, ah))
+		yield from self.fill_areas(self.structure.r_divide(aw, ah))
 
 	def select(self, dpath):
 		"""
@@ -695,32 +699,74 @@ class Frame(Core):
 
 		self.focus, self.view = self.select(path)
 
-	def prepare(self, session, type, dpath, *, extension=None):
+	def resize_footer(self, dpath, height):
 		"""
-		# Prepare the heading for performing a query.
-		# Supports find, seek, and rewrite queries.
+		# Adjust the size, &height, of the footer for the given &dpath.
 		"""
 
-		from .query import refract, find, seek, rewrite
+		rf, v = self.select(dpath)
+		f = self.footers[self.paths[dpath]]
+
+		d = self.structure.set_margin_size(dpath[0], dpath[1], 3, height)
+		f.area = f.area.resize(d, 0)
+
+		# Initial opening needs to include the border size.
+		if height - d == 0:
+			# height was zero. Pad with border width.
+			d += self.structure.fm_border_width
+		elif height == 0 and d != 0:
+			# height set to zero. Compensate for border.
+			d -= self.structure.fm_border_width
+
+		v.area = v.area.resize(-d, 0)
+		rf.configure(v.area)
+
+		f.area = f.area.move(-d, 0)
+		# &render will emit the entire image, so make sure the footer is trimmed.
+		f.trim()
+		f.compensate()
+		return d
+
+	@staticmethod
+	def fill_areas(patterns, *, Type=Glyph(textcolor=0x505050), Area=Area, ord=ord):
+		"""
+		# Generate the display instructions for rendering the given &patterns.
+
+		# [ Parameters ]
+		# /patterns/
+			# Iterator producing area and fill character pairs.
+		"""
+
+		for avalues, fill_char in patterns:
+			a = Area(*avalues)
+			yield a, [Type.inscribe(ord(fill_char))] * a.volume
+
+	def prepare(self, session, type, dpath, *, extension=None):
+		"""
+		# Shift the focus to the prompt of the focused refraction.
+		# If no prompt is open, initialize it.
+		"""
+
+		from .query import refract, issue
 		vi = self.paths[dpath]
-		ref = self.refractions[vi].origin
 		state = self.focus.query.get(type, None) or ''
 
 		# Update session state.
-		view = self.headings[vi]
+		view = self.footers[vi]
 		if extension is not None:
 			context = type + ' ' + extension
 		else:
 			context = type
 
+		# Make footer visible if the view is empty.
+		if view.height == 0:
+			self.resize_footer(dpath, 1)
+			session.dispatch_delta(
+				self.fill_areas(self.structure.r_patch_footer(dpath[0], dpath[1]))
+			)
+
 		self.focus, self.view = (
-			refract(session, self, view, context, state,
-				{
-					'search': find,
-					'seek': seek,
-					'rewrite': rewrite,
-				}[type]
-			),
+			refract(session, self, view, context, state, issue),
 			view,
 		)
 
@@ -778,6 +824,23 @@ class Frame(Core):
 		view = self.view
 		dpath = (self.vertical, self.division)
 
+		if self.footers[self.paths[dpath]] is view:
+			# Overwrite the prompt.
+			d = self.close_prompt(dpath)
+			assert d < 0
+			vo = self.view.offset
+			vh = self.view.height
+			end = vo + vh
+			start = end + d
+			vrange = slice(vh + d, vh)
+			self.view.update(vrange, [
+				self.focus.render(element)
+				for element in self.focus.elements[start:end]
+			])
+			yield from self.view.render(vrange)
+			yield from self.view.compensate()
+			return
+
 		self.refocus()
 		if rf is self.focus:
 			# Not a location or command; check annotation.
@@ -792,6 +855,28 @@ class Frame(Core):
 		rf.visibility[1].datum = view.horizontal_offset
 		rf.visible[:] = (view.offset, view.horizontal_offset)
 		yield from self.chpath(dpath, self.focus.origin, snapshot=rf.log.snapshot())
+
+	def close_prompt(self, dpath):
+		"""
+		# Set the footer size of the division identified by &dpath to zero
+		# and refocus the division if the prompt was focused by the frame.
+		"""
+
+		d = 0
+		index = self.paths[dpath]
+		f = self.footers[index]
+
+		rf = self.focus
+		fv = self.view
+
+		if f.height > 0:
+			d = self.resize_footer(dpath, 0)
+
+		# Prompt was focused.
+		if fv is f:
+			self.refocus()
+
+		return d
 
 	def target(self, top, left):
 		"""
@@ -1472,13 +1557,16 @@ class Session(Core):
 
 		# Acquire events prepared by &.system.IO.loop.
 		events = self.io.take()
+		rd = set()
 
 		for io_context, io_transfer in events:
 			# Apply the performed transfer using the &io_context.
 			io_context.execute(io_transfer)
+			rd.add(io_context.target.origin)
 
-			# Presume updates are required.
-			self.deltas.extend(frame.reflect(io_context.target.origin))
+		# Presume updates are required.
+		for resource_ref in rd:
+			self.deltas.extend(frame.reflect(resource_ref))
 
 	def dispatch(self, frame, refraction, view, key):
 		"""

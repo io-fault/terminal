@@ -210,3 +210,11 @@ def pause(session, frame, rf, event):
 	"""
 
 	session.suspend()
+
+@event('prepare', 'command')
+def prompt(session, frame, rf, event):
+	"""
+	# Prepare the prompt for performing a system command.
+	"""
+
+	frame.prepare(session, "system", (frame.vertical, frame.division))
