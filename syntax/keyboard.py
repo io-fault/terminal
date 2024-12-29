@@ -129,6 +129,7 @@ if 'controls':
 
 	a(('o'), 'delta', ('open', 'ahead'))
 	a(('o', km_shift), 'delta', ('open', 'behind'))
+	a(('o', km_control, km_shift), 'delta', ('open', 'first'))
 	a(('o', km_control), 'delta', ('open', 'last'))
 
 	a(('p'), 'delta', ('take',))

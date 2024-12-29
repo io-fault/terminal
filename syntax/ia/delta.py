@@ -548,6 +548,17 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 	rf.focus[1].set(il)
 	session.keyboard.set('insert')
 
+@event('open', 'first')
+def open_first(session, frame, rf, event, quantity=1):
+	"""
+	# Open a new line at the end of the document.
+	"""
+
+	insert_lines(rf, 0, [""])
+	rf.focus[0].set(0)
+	rf.vertical_changed(0)
+	session.keyboard.set('insert')
+
 @event('open', 'last')
 def open_last(session, frame, rf, event, quantity=1):
 	"""
