@@ -85,7 +85,6 @@ def find(session, frame, rf, string):
 	# Perform a find operation against the subject's elements.
 	"""
 
-	session.dispatch_delta(frame.cancel())
 	v, h = rf.focus
 	rf.query['search'] = string
 	ctl = rf.forward(len(rf.elements), v.get(), h.maximum)
@@ -95,8 +94,6 @@ def seek(session, frame, rf, string):
 	"""
 	# Perform a seek operation on the refraction.
 	"""
-
-	session.dispatch_delta(frame.cancel())
 
 	try:
 		whence, target = string.split()
@@ -153,8 +150,6 @@ def rewrite(session, frame, rf, command):
 	"""
 	# Rewrite the lines or fields of a vertical range.
 	"""
-
-	session.dispatch_delta(frame.cancel())
 
 	s, d = prepare(rf, command)
 	v, h = rf.focus

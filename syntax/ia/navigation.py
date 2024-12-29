@@ -9,14 +9,6 @@ lil = Whitespace.il
 from . import types
 event, Index = types.Index.allocate('navigation')
 
-@event('activate')
-def execute(session, frame, rf, event):
-	if rf.activate is not None:
-		session.keyboard.set('control')
-		return rf.activate(session, frame, rf, event)
-	elif session.keyboard.mapping == 'insert':
-		session.events['delta'](('open', 'ahead'))(session, frame, rf, event)
-
 @event('session', 'view', 'forward')
 def sv_forward(session, frame, rf, event, *, quantity=1):
 	frame.division += 1

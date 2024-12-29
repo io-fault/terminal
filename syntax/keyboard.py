@@ -58,9 +58,19 @@ control = Mode(('navigation', ('horizontal', 'jump', 'unit'), ()))
 insert = Mode(('delta', ('insert', 'character'), ()))
 annotations = Mode(('meta', ('transition', 'annotation', 'void'), ()))
 
+k_return = 0x23CE
+
+# Return Keystrokes
+for mode in (control, insert):
+	a((k_return), 'meta', ('activate',))
+	a((k_return, km_control), 'meta', ('activate', 'continue'))
+	a((k_return, km_meta), 'meta', ('elements', 'dispatch'))
+	a((k_return, km_shift), 'navigation', ('view', 'return'))
+
 if 'controls':
 	mode = control
 
+	a(('r', km_meta), 'meta', ('view', 'refresh'))
 	a((0x2423, km_control), 'meta', ('prepare', 'command'))
 
 	a(('a'), 'meta', ('transition', 'end-of-field'))
@@ -150,16 +160,11 @@ if 'controls':
 	a(('z'), 'navigation', ('vertical', 'place', 'stop',))
 	a(('z', km_shift), 'navigation', ('vertical', 'place', 'start',))
 
-	a((0x23CE), 'navigation', ('activate',))
 	a((0x2423), 'navigation', ('horizontal', 'forward', 'unit'))
 	a((0x2326), 'navigation', ('horizontal', 'backward', 'unit')) # Delete
 	a((0x232B), 'navigation', ('horizontal', 'backward', 'unit')) # Backsapce
 	a((0x21E5, km_meta), 'navigation', ('session', 'view', 'forward'))
 	a((0x21E5, km_shift, km_meta), 'navigation', ('session', 'view', 'backward'))
-	a((0x23CE, km_control), 'meta', ('view', 'refresh'))
-	a((0x23CE, km_shift), 'navigation', ('view', 'return'))
-
-	a((0x23CE, km_meta), 'session', ('elements', 'dispatch'))
 
 	a((0x21E5), 'delta', ('indentation', 'increment'))
 	a((0x21E5, km_shift), 'delta', ('indentation', 'decrement'))
@@ -192,7 +197,6 @@ if 'annotations':
 	a(('u'), 'meta', ('integer', 'select', 'glyph'))
 	a(('x'), 'meta', ('integer', 'select', 'hexadecimal'))
 
-# Cursor range controls.
 if 'inserts':
 	mode = insert
 
@@ -222,8 +226,6 @@ if 'inserts':
 
 	a((0x21E5), 'delta', ('indentation', 'increment'))
 	a((0x21E5, km_shift), 'delta', ('indentation', 'decrement'))
-
-	a((0x23CE), 'navigation', ('activate',))
 
 del a
 
