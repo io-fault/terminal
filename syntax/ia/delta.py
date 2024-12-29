@@ -513,7 +513,7 @@ def open_newline_behind(session, frame, rf, event, quantity=1):
 
 	ln = max(0, min(len(rf.elements), rf.focus[0].get()))
 
-	area = rf.elements[ln-1:ln+1]
+	area = reversed(rf.elements[ln-2:ln+1])
 	for line in area:
 		il = line.count('\t')
 		if il:
@@ -533,9 +533,9 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 	# Open a new vertical ahead of the current vertical position.
 	"""
 
-	ln = max(0, min(len(rf.elements), rf.focus[0].get() + 1))
+	ln = max(0, min(len(rf.elements), rf.focus[0].get()))
 
-	area = rf.elements[ln-1:ln+1]
+	area = rf.elements[ln:ln+3]
 	for line in area:
 		il = line.count('\t')
 		if il:
@@ -543,7 +543,7 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 	else:
 		il = 0
 
-	insert_lines(rf, ln, ["\t" * il])
+	insert_lines(rf, ln+1, ["\t" * il])
 	rf.focus[0].changed(ln, quantity)
 	rf.focus[1].set(il)
 	session.keyboard.set('insert')
