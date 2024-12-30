@@ -46,10 +46,9 @@ palette = {
 	'teal': 0x209090,
 	'midnight': 0x191970,
 	'indigo': 0x4b0082,
-	'purple': 0xC38FF4, #0x800080,
+	'purple': 0xC38FF4,
 	'violet': 0xee82ee,
 
-	# Brights
 	'absolute-red': 0xff0000,
 	'absolute-green': 0x00ff00,
 	'absolute-yellow': 0xffff00,
@@ -57,11 +56,10 @@ palette = {
 	'absolute-magenta': 0xff00ff,
 	'absolute-cyan': 0x00ffff,
 
-	# Hard references to the sixteen color palette.
-	'foreground-limit': 0xffffff, # The "bright white" slot.
-	'background-limit': 0x000000, # The "black" slot.
-	'foreground-adjacent': 0xe0e0e0, # The "white" slot.
-	'background-adjacent': 0x222222, # The "bright black" slot.
+	'foreground-limit': 0xffffff,
+	'background-limit': 0x000000,
+	'foreground-adjacent': 0xe0e0e0,
+	'background-adjacent': 0x222222,
 }
 
 @struct()
