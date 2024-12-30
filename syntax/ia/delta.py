@@ -518,7 +518,7 @@ def open_newline_behind(session, frame, rf, event, quantity=1):
 
 	# Detect the indentation level preferring the current line's
 	# and falling back to the preceeding lines if zero.
-	area = reversed(rf.elements[ln-2:ln+1])
+	area = reversed(rf.elements[ln-1:ln+1])
 	for line in area:
 		il = line.count('\t')
 		if il:
@@ -547,7 +547,7 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 
 	# Detect the indentation level preferring the current line's
 	# and falling back to the following lines if zero.
-	area = rf.elements[ln:ln+3]
+	area = rf.elements[ln:ln+2]
 	for line in area:
 		il = line.count('\t')
 		if il:
