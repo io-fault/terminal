@@ -694,7 +694,6 @@ def move_vertical_range_behind(session, frame, rf, event):
 	v.restore((position, position, position + vr))
 	rf.vertical_changed(position)
 
-
 @event('delete', 'vertical', 'column')
 def delete_element_v(session, frame, rf, event):
 	"""
