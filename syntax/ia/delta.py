@@ -511,8 +511,13 @@ def open_newline_behind(session, frame, rf, event, quantity=1):
 	# Open a new vertical behind the current vertical position.
 	"""
 
-	ln = max(0, min(len(rf.elements), rf.focus[0].get()))
+	nlines = len(rf.elements)
+	current_line = rf.focus[0].get()
 
+	ln = max(0, min(nlines, current_line))
+
+	# Detect the indentation level preferring the current line's
+	# and falling back to the preceeding lines if zero.
 	area = reversed(rf.elements[ln-2:ln+1])
 	for line in area:
 		il = line.count('\t')
@@ -521,7 +526,7 @@ def open_newline_behind(session, frame, rf, event, quantity=1):
 	else:
 		il = 0
 
-	insert_lines(rf, ln, ["\t" * il])
+	insert_lines(rf, ln, ["\t" * il] * quantity)
 	rf.focus[0].changed(ln, quantity)
 	rf.focus[0].update(-1)
 	rf.focus[1].set(il)
@@ -533,8 +538,15 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 	# Open a new vertical ahead of the current vertical position.
 	"""
 
-	ln = max(0, min(len(rf.elements), rf.focus[0].get()))
+	nlines = len(rf.elements)
+	current_line = rf.focus[0].get()
+	if current_line == nlines:
+		return open_newline_behind(session, frame, rf, event, quantity=quantity)
 
+	ln = max(0, min(nlines, current_line))
+
+	# Detect the indentation level preferring the current line's
+	# and falling back to the following lines if zero.
 	area = rf.elements[ln:ln+3]
 	for line in area:
 		il = line.count('\t')
@@ -543,7 +555,7 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 	else:
 		il = 0
 
-	insert_lines(rf, ln+1, ["\t" * il])
+	insert_lines(rf, ln+1, ["\t" * il] * quantity)
 	rf.focus[0].changed(ln, quantity)
 	rf.focus[1].set(il)
 	session.keyboard.set('insert')
