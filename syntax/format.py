@@ -88,6 +88,7 @@ class Whitespace(object):
 	def format(self, il, line):
 		return (self.indentation * il, line, self.termination)
 
+	# Symbolic terms for common whitespace characters.
 	symbols = {
 		'lf': '\n',
 		'nl': '\n',
@@ -99,9 +100,9 @@ class Whitespace(object):
 	}
 
 	@classmethod
-	def structure(term):
+	def structure(Class, term):
 		"""
-		# Construct a whitespace &Protocol instance from the
+		# Construct a &Whitespace instance from the
 		# arrow term designating the line breaks and indentation type.
 		"""
 
@@ -113,7 +114,7 @@ class Whitespace(object):
 		t = symbols[termspec.lower()]
 		i = symbols[ilchar] * ilc
 
-		return Protocol(t, i)
+		return Class(t, i)
 
 # Syntax profile used when a file extension could not be matched.
 Lambda = {
