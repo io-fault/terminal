@@ -13,9 +13,12 @@ except AttributeError:
 	def reap(pid, options, *, op=os.waitpid):
 		return op(pid, options) + (None,)
 
-from typing import Callable
+from collections.abc import Mapping, Sequence
+from typing import Callable, Iterator
 from dataclasses import dataclass
 
+from fault.context.tools import partial
+from fault.system import files
 from fault.system.kernel import Event
 from fault.system.kernel import Link
 from fault.system.kernel import Invocation
@@ -31,9 +34,16 @@ Encode = codecs.getincrementalencoder('utf-8')
 
 @dataclass()
 class Insertion(object):
+	"""
+	# IO state managing reads into a refraction.
+	"""
+
 	target: elements.Refraction
 	cursor: object
 	state: Callable
+
+	system_operation = os.read
+	read_size = 512
 
 	def execute(self, transfer):
 		rf = self.target
@@ -46,7 +56,7 @@ class Insertion(object):
 
 		dl, dc = delta.insert_lines_into(rf.elements, rf.log, ln, co, lines)
 		rf.delta(ln, dl)
-		self.cursor = (ln + dl, len(lines[-1]))
+		self.cursor = (ln + dl, co + dc)
 
 		vp = rf.focus[0]
 		vp.magnitude += dl
@@ -54,14 +64,88 @@ class Insertion(object):
 			vp.update(dl)
 			rf.scroll(dl.__add__)
 
+	def final(self, xfer):
+		rf = self.target
+		rf.log.checkpoint()
+
+	def interrupt(self):
+		self.system_operation = (lambda fd, rs: b'')
+
+	def transition(self, scheduler, log, link):
+		xfer = self.system_operation(link.event.port, self.read_size)
+		while len(xfer) == self.read_size:
+			log.append((self, xfer))
+			xfer = self.system_operation(link.event.port, self.read_size)
+
+		if not xfer:
+			# EOF
+			scheduler.cancel(link)
+
+			# Workaround to trigger ev_clear to release the file descriptor.
+			scheduler.enqueue(lambda: None)
+		else:
+			log.append((self, xfer))
+
+	def reference(self, scheduler, log):
+		return partial(self.transition, scheduler, log)
+
 @dataclass()
 class Transmission(object):
+	"""
+	# IO state managing writes from an arbitrary iterator.
+	"""
+
 	target: elements.Refraction
+	state: Iterator
 	data: bytes
 	total: int
 
+	write_size = 512
+	system_operation = os.write
+
 	def execute(self, written):
-		self.total += written
+		"""
+		# Note the local delta and communicate the transfer status to the Refraction.
+		"""
+
+		self.total += len(written)
+		rf = self.target
+
+	def final(self, transfer):
+		pass
+
+	def transferred(self, transfer):
+		"""
+		# Trim the data buffer and retrieve more from the state.
+		"""
+
+		if len(self.data) > len(transfer):
+			self.data = self.data[len(transfer):]
+		else:
+			try:
+				self.data = memoryview(next(self.state))
+			except StopIteration:
+				return True
+
+		return False
+
+	def interrupt(self):
+		self.state = iter(())
+		self.data = b''
+
+	def transition(self, scheduler, log, link):
+		byteswritten = self.system_operation(link.event.port, self.data[:self.write_size])
+		xfer = self.data[:byteswritten]
+		log.append((self, xfer))
+
+		if self.transferred(xfer):
+			scheduler.cancel(link)
+
+			# Workaround to trigger ev_clear to release the file descriptor.
+			scheduler.enqueue(lambda: None)
+
+	def reference(self, scheduler, log):
+		return partial(self.transition, scheduler, log)
 
 @dataclass()
 class Completion(object):
@@ -116,24 +200,6 @@ class IO(object):
 		from fault.system import thread
 		self._thread_id = thread.create(self.loop, ())
 
-	def enqueue_write(self, fileno, context):
-		def written(link, fileno=fileno, log=self.transfers, context=context):
-			byteswritten = os.write(fileno, context.data)
-			if not context.data:
-				self.scheduler.cancel(link)
-			context.data = context.data[nbytes:]
-			log.append((context, byteswritten))
-		return written
-
-	def enqueue_read(self, fileno, context: Insertion):
-		def read(link, fileno=fileno, log=self.transfers, context=context):
-			xfer = os.read(fileno, 4096)
-			if not xfer:
-				self.scheduler.cancel(link)
-			else:
-				log.append((context, xfer))
-		return read
-
 	def enqueue_exit(self, pid, context):
 		def exited(link, pid=pid, log=self.transfers, context=context):
 			rpid, status, rusage = reap(pid, 0)
@@ -158,14 +224,18 @@ class IO(object):
 		input = output = exit = None
 		try:
 			if writecontext is not None:
-				input = Link(Event.io_transmit(None, wi), self.enqueue_write(wi, writecontext))
+				evw = Event.io_transmit(None, wi)
+				input = Link(evw, writecontext.reference(self.scheduler, self.transfers))
+				del evw
 				self.scheduler.dispatch(input)
 			else:
 				# No input.
 				os.close(wi)
 
 			if readcontext is not None:
-				output = Link(Event.io_receive(None, ro), self.enqueue_read(ro, readcontext))
+				evr = Event.io_receive(None, ro)
+				output = Link(evr, readcontext.reference(self.scheduler, self.transfers))
+				del evr
 				self.scheduler.dispatch(output)
 			else:
 				# No output.

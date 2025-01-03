@@ -70,6 +70,54 @@ def execute(session, frame, rf, system):
 	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
 	rf.annotate(ca)
 
+def sendlines(encoder, limit, lines):
+	buffer = b''
+	for l in lines:
+		buffer += encoder(l + '\n')
+		if len(buffer) > limit:
+			yield buffer
+			buffer = b''
+
+	if buffer:
+		yield buffer
+
+def transform(session, frame, rf, system):
+	"""
+	# Send the selected elements to the device manager.
+	"""
+
+	from .system import Completion, Insertion, Transmission, Invocation, Decode, Encode
+	from .delta import take_vertical_range
+	from .annotations import ExecutionStatus
+	from fault.system import query
+
+	cmd = system.split()
+	for exepath in query.executables(cmd[0]):
+		inv = Invocation(str(exepath), tuple(cmd))
+		break
+	else:
+		# No command found.
+		return
+
+	c = Completion(rf, -1)
+	start, co, lines = take_vertical_range(rf)
+	rf.log.apply(rf.elements).commit()
+	rf.focus[0].magnitude = 0
+	rf.delta(start, start + len(lines))
+
+	readlines = Decode('utf-8').decode
+	i = Insertion(rf, (start, co), readlines)
+	x = Transmission(rf, sendlines(Encode().encode, 2048, lines), b'', 0)
+
+	# Trigger first buffer.
+	x.transferred(b'')
+
+	pid = session.io.invoke(c, i, x, inv)
+
+	# Report status via annotation.
+	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+	rf.annotate(ca)
+
 def issue(session, frame, rf, event):
 	"""
 	# Select and execute the target action.
@@ -180,4 +228,5 @@ index = {
 	'search': find,
 	'rewrite': rewrite,
 	'system': execute,
+	'system-map': transform,
 }
