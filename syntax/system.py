@@ -6,13 +6,6 @@ import fcntl
 import sys
 import codecs
 
-try:
-	from os import wait4 as reap
-except AttributeError:
-	# Maintain the invariant by extending the returned tuple with None.
-	def reap(pid, options, *, op=os.waitpid):
-		return op(pid, options) + (None,)
-
 from collections.abc import Mapping, Sequence
 from typing import Callable, Iterator
 from dataclasses import dataclass
@@ -152,6 +145,14 @@ class Completion(object):
 	target: elements.Refraction
 	pid: int
 
+	try:
+		system_operation = os.wait4
+	except AttributeError:
+		# Maintain the invariant by extending the returned tuple with None.
+		@staticmethod
+		def system_operation(pid, options, *, op=os.waitpid):
+			return op(pid, options) + (None,)
+
 	def execute(self, status):
 		pid, exitcode, rusage = status
 		self.target.system_execution_status[pid] = (exitcode, rusage)
@@ -164,9 +165,17 @@ class Completion(object):
 		if pid == self.target.annotation.xs_process_id:
 			self.target.annotate(None)
 
+	def transition(self, scheduler, log, link):
+		rpid, status, rusage = self.system_operation(self.pid, 0)
+		code = os.waitstatus_to_exitcode(status)
+		log.append((self, (rpid, code, rusage)))
+
+	def reference(self, scheduler, log):
+		return partial(self.transition, scheduler, log)
+
 class IO(object):
 	"""
-	# System dispath for I/O jobs.
+	# System dispatch for I/O jobs.
 	"""
 
 	@classmethod
@@ -199,13 +208,6 @@ class IO(object):
 	def dispatch_loop(self):
 		from fault.system import thread
 		self._thread_id = thread.create(self.loop, ())
-
-	def enqueue_exit(self, pid, context):
-		def exited(link, pid=pid, log=self.transfers, context=context):
-			rpid, status, rusage = reap(pid, 0)
-			code = os.waitstatus_to_exitcode(status)
-			log.append((context, (rpid, code, rusage)))
-		return exited
 
 	def invoke(self, exitcontext, readcontext, writecontext, invocation):
 		"""
@@ -247,7 +249,8 @@ class IO(object):
 			os.close(wo)
 			os.close(ri)
 
-			exit = Link(Event.process_exit(pid), self.enqueue_exit(pid, exitcontext))
+			evx = Event.process_exit(pid)
+			exit = Link(evx, exitcontext.reference(self.scheduler, self.transfers))
 			self.scheduler.dispatch(exit)
 		except:
 			for l in [input, output, exit]:
