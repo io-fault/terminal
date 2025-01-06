@@ -19,7 +19,7 @@ process.__signal_exit__ = (lambda x: None)
 
 from . import types
 from . import elements
-from .system import IO
+from .system import IOManager
 
 def fkrt(inv:process.Invocation) -> process.Exit:
 	"""
@@ -157,7 +157,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	path = identify_executable(inv)
 	wd = configure_working_directory(config)
 	device = types.Device()
-	editor = elements.Session(IO.allocate(device.synchronize_io), path, device)
+	editor = elements.Session(IOManager.allocate(device.synchronize_io), path, device)
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 
 	fi = 0

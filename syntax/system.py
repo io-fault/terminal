@@ -25,8 +25,25 @@ from . import annotations
 Decode = codecs.getincrementaldecoder('utf-8')
 Encode = codecs.getincrementalencoder('utf-8')
 
+class IO(object):
+	"""
+	# Common IO context fields and operations.
+	"""
+
+	system_operation: Callable = None
+	event_type: Callable = None
+
+	def reference(self, scheduler, log):
+		return partial(self.transition, scheduler, log)
+
+	def connect(self, reference, *args):
+		ev = self.event_type(*args)
+		l = Link(ev, reference)
+		del ev
+		return l
+
 @dataclass()
-class Insertion(object):
+class Insertion(IO):
 	"""
 	# IO state managing reads into a refraction.
 	"""
@@ -35,9 +52,9 @@ class Insertion(object):
 	cursor: object
 	state: Callable
 
+	read_size = 512
 	system_operation = os.read
 	event_type = Event.io_receive
-	read_size = 512
 
 	def execute(self, transfer):
 		rf = self.target
@@ -80,17 +97,8 @@ class Insertion(object):
 		else:
 			log.append((self, xfer))
 
-	def reference(self, scheduler, log):
-		return partial(self.transition, scheduler, log)
-
-	def connect(self, reference, source, fd):
-		evr = self.event_type(source, fd)
-		l = Link(evr, reference)
-		del evr
-		return l
-
 @dataclass()
-class Transmission(object):
+class Transmission(IO):
 	"""
 	# IO state managing writes from an arbitrary iterator.
 	"""
@@ -145,19 +153,10 @@ class Transmission(object):
 			# Workaround to trigger ev_clear to release the file descriptor.
 			scheduler.enqueue(lambda: None)
 
-	def reference(self, scheduler, log):
-		return partial(self.transition, scheduler, log)
-
-	def connect(self, reference, source, fd):
-		evw = self.event_type(source, fd)
-		l = Link(evw, reference)
-		del evw
-		return l
-
 @dataclass()
-class Completion(object):
+class Completion(IO):
 	target: elements.Refraction
-	pid: int
+	pid: int = None
 
 	try:
 		system_operation = os.wait4
@@ -185,15 +184,6 @@ class Completion(object):
 		code = os.waitstatus_to_exitcode(status)
 		log.append((self, (rpid, code, rusage)))
 
-	def reference(self, scheduler, log):
-		return partial(self.transition, scheduler, log)
-
-	def connect(self, reference, pid):
-		evx = self.event_type(pid)
-		l = Link(evx, reference)
-		del evx
-		return l
-
 def loop(scheduler, pending, signal, *, delay=16, limit=16):
 	"""
 	# Event loop for system I/O.
@@ -210,7 +200,7 @@ def loop(scheduler, pending, signal, *, delay=16, limit=16):
 			# &delay timeout.
 			pass
 
-class IO(object):
+class IOManager(object):
 	"""
 	# System dispatch for I/O jobs.
 	"""
@@ -227,14 +217,6 @@ class IO(object):
 		"""
 
 		return Class(signal, Scheduler())
-
-	@property
-	def pending(self):
-		"""
-		# Whether there are transfer to be &taken for processing.
-		"""
-
-		return len(self.transfers) > 0
 
 	def take(self):
 		"""
