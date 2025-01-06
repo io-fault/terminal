@@ -183,7 +183,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	editor.log("Working Directory: " + str(wd))
 
 	# System I/O loop for command substitution and file I/O.
-	editor.io.dispatch_loop()
+	editor.io.service()
 
 	try:
 		while editor.frames:

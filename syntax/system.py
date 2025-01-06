@@ -36,6 +36,7 @@ class Insertion(object):
 	state: Callable
 
 	system_operation = os.read
+	event_type = Event.io_receive
 	read_size = 512
 
 	def execute(self, transfer):
@@ -82,6 +83,12 @@ class Insertion(object):
 	def reference(self, scheduler, log):
 		return partial(self.transition, scheduler, log)
 
+	def connect(self, reference, source, fd):
+		evr = self.event_type(source, fd)
+		l = Link(evr, reference)
+		del evr
+		return l
+
 @dataclass()
 class Transmission(object):
 	"""
@@ -95,6 +102,7 @@ class Transmission(object):
 
 	write_size = 512
 	system_operation = os.write
+	event_type = Event.io_transmit
 
 	def execute(self, written):
 		"""
@@ -140,6 +148,12 @@ class Transmission(object):
 	def reference(self, scheduler, log):
 		return partial(self.transition, scheduler, log)
 
+	def connect(self, reference, source, fd):
+		evw = self.event_type(source, fd)
+		l = Link(evw, reference)
+		del evw
+		return l
+
 @dataclass()
 class Completion(object):
 	target: elements.Refraction
@@ -152,6 +166,7 @@ class Completion(object):
 		@staticmethod
 		def system_operation(pid, options, *, op=os.waitpid):
 			return op(pid, options) + (None,)
+	event_type = Event.process_exit
 
 	def execute(self, status):
 		pid, exitcode, rusage = status
@@ -173,13 +188,44 @@ class Completion(object):
 	def reference(self, scheduler, log):
 		return partial(self.transition, scheduler, log)
 
+	def connect(self, reference, pid):
+		evx = self.event_type(pid)
+		l = Link(evx, reference)
+		del evx
+		return l
+
+def loop(scheduler, pending, signal, *, delay=16, limit=16):
+	"""
+	# Event loop for system I/O.
+	"""
+
+	while True:
+		scheduler.wait(delay)
+		scheduler.execute()
+
+		if pending():
+			# Cause the (session/synchronize) event to be issued.
+			signal()
+		else:
+			# &delay timeout.
+			pass
+
 class IO(object):
 	"""
 	# System dispatch for I/O jobs.
 	"""
 
 	@classmethod
-	def allocate(Class, signal):
+	def allocate(Class, signal, *, Scheduler=Scheduler):
+		"""
+		# Instantiate an I/O instance with the default &Scheduler.
+
+		# [ Parameters ]
+		# /signal/
+			# The callback to perform to signal the primary event loop
+			# that &transfer synchronization should be performed.
+		"""
+
 		return Class(signal, Scheduler())
 
 	@property
@@ -201,13 +247,28 @@ class IO(object):
 		return r
 
 	def __init__(self, signal, scheduler):
+		self._thread_id = None
 		self.signal = signal
 		self.scheduler = scheduler
 		self.transfers = []
 
-	def dispatch_loop(self):
+	def service(self, *, loop=loop):
+		"""
+		# Dispatch the thread running the given &loop for servicing I/O events.
+		"""
+
+		if self._thread_id is not None:
+			return
+
 		from fault.system import thread
-		self._thread_id = thread.create(self.loop, ())
+		largs = (self.scheduler, self.transfers.__len__, self.signal)
+		self._thread_id = thread.create(loop, largs)
+
+	def dispatch(self, context, *args):
+		ref = context.reference(self.scheduler, self.transfers)
+		l = context.connect(ref, *args)
+		self.scheduler.dispatch(l)
+		return l
 
 	def invoke(self, exitcontext, readcontext, writecontext, invocation):
 		"""
@@ -223,58 +284,30 @@ class IO(object):
 			flags = fcntl.fcntl(x, fcntl.F_GETFL)
 			fcntl.fcntl(x, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-		input = output = exit = None
+		wl = rl = xl = None
 		try:
 			if writecontext is not None:
-				evw = Event.io_transmit(None, wi)
-				input = Link(evw, writecontext.reference(self.scheduler, self.transfers))
-				del evw
-				self.scheduler.dispatch(input)
+				wl = self.dispatch(writecontext, None, wi)
 			else:
 				# No input.
 				os.close(wi)
 
 			if readcontext is not None:
-				evr = Event.io_receive(None, ro)
-				output = Link(evr, readcontext.reference(self.scheduler, self.transfers))
-				del evr
-				self.scheduler.dispatch(output)
+				rl = self.dispatch(readcontext, None, ro)
 			else:
 				# No output.
 				os.close(ro)
 
 			pid = invocation.spawn(fdmap=[(ri, 0), (wo, 1), (2, 2)])
 			exitcontext.target.system_execution_status[pid] = None
+			xl = self.dispatch(exitcontext, pid)
 
 			os.close(wo)
 			os.close(ri)
-
-			evx = Event.process_exit(pid)
-			exit = Link(evx, exitcontext.reference(self.scheduler, self.transfers))
-			self.scheduler.dispatch(exit)
 		except:
-			for l in [input, output, exit]:
+			for l in [wl, rl, xl]:
 				if l is not None:
 					self.scheduler.cancel(l)
 			raise
 
 		return pid
-
-	def loop(self, delay=16):
-		"""
-		# Event loop for system I/O.
-		"""
-
-		try:
-			while True:
-				self.scheduler.wait(delay)
-				self.scheduler.execute()
-
-				if self.pending:
-					# Cause the (session/synchronize) event to be issued.
-					self.signal()
-				else:
-					# &delay timeout.
-					pass
-		finally:
-			self.scheduler = None
