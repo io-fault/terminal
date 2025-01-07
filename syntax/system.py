@@ -5,6 +5,7 @@ import os
 import fcntl
 import sys
 import codecs
+import signal
 
 from collections.abc import Mapping, Sequence
 from typing import Callable, Iterator
@@ -158,6 +159,8 @@ class Completion(IO):
 	target: elements.Refraction
 	pid: int = None
 
+	interrupt_signal = signal.SIGKILL
+
 	try:
 		system_operation = os.wait4
 	except AttributeError:
@@ -166,6 +169,9 @@ class Completion(IO):
 		def system_operation(pid, options, *, op=os.waitpid):
 			return op(pid, options) + (None,)
 	event_type = Event.process_exit
+
+	def interrupt(self):
+		os.kill(self.pid, self.interrupt_signal)
 
 	def execute(self, status):
 		pid, exitcode, rusage = status
