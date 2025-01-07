@@ -34,6 +34,28 @@ class IO(object):
 	system_operation: Callable = None
 	event_type: Callable = None
 
+	def interrupt(self):
+		"""
+		# Attempt to stop the IO context from further processing.
+		"""
+
+		pass
+
+	def transition(self, scheduler, log, link):
+		"""
+		# Perform the necessary system operations to collect the data needed by &execute.
+		"""
+
+		pass
+
+	def execute(self, transfer):
+		"""
+		# Interpret the &transfer data collected by &transition and forward it to
+		# the target's interface.
+		"""
+
+		pass
+
 	def reference(self, scheduler, log):
 		return partial(self.transition, scheduler, log)
 
