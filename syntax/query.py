@@ -118,6 +118,36 @@ def transform(session, frame, rf, system):
 	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
 	rf.annotate(ca)
 
+def transmit(session, frame, rf, system):
+	"""
+	# Send the selected elements to the system command.
+	"""
+
+	from .system import Completion, Transmission, Invocation, Encode
+	from .annotations import ExecutionStatus
+	from fault.system import query
+
+	cmd = system.split()
+	for exepath in query.executables(cmd[0]):
+		inv = Invocation(str(exepath), tuple(cmd))
+		break
+	else:
+		# No command found.
+		return
+
+	c = Completion(rf, -1)
+	lines = rf.elements[rf.focus[0].slice()]
+	x = Transmission(rf, sendlines(Encode().encode, 2048, lines), b'', 0)
+
+	# Trigger first buffer.
+	x.transferred(b'')
+
+	pid = session.io.invoke(c, None, x, inv)
+
+	# Report status via annotation.
+	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+	rf.annotate(ca)
+
 def issue(session, frame, rf, event):
 	"""
 	# Select and execute the target action.
@@ -229,4 +259,5 @@ index = {
 	'rewrite': rewrite,
 	'system': execute,
 	'system-map': transform,
+	'transmit': transmit,
 }
