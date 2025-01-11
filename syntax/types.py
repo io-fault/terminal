@@ -1273,3 +1273,122 @@ class Model(object):
 				re = iis['reset-'+rtypes.get(pv, 'solid')]
 
 			yield (position, ic, ii, re)
+
+class System(object):
+	"""
+	# System context descriptor for dispatching operations in UNIX systems.
+
+	# [ Elements ]
+	# /sys_method/
+		# Identifier for the method used to communicate with the system.
+		# When using the local system APIs, this is `'system'`.
+	# /sys_credentials/
+		# Identifier for the entity that is dispatching operations in the system.
+		# Empty string indicates that none are used.
+	# /sys_authorization/
+		# Supplemental identifier of authorization for dispatching system commands.
+		# Usually an empty string. Formats as the password field when representing
+		# the system context as a string.
+	# /sys_identity/
+		# Usually, the host name of the system's machine, real or virtual.
+	# /sys_encoding/
+		# The encoding to use for environment variables and argument vectors.
+		# This may *not* be consistent with the preferred filesystem encoding.
+	# /sys_environment/
+		# The set of environment variables needed when performing operations
+		# in the system context.
+	# /sys_executable/
+		# The host local, absolute, filesystem path to the executable
+		# used by &sys_interface.
+	# /sys_interface/
+		# The local system command to use to dispatch operations in the system context.
+	"""
+
+	sys_method: str
+	sys_credentials: str
+	sys_authorization: str
+	sys_identity: str
+
+	sys_encoding: str
+	sys_environment: Mapping[str, str]
+
+	sys_executable: str
+	sys_interface: Sequence[str]
+
+	def __str__(self):
+		return ''.join(x[1] for x in self.i_format())
+
+	def i_format(self, path:str|None=''):
+		"""
+		# Type qualified fields used to construct a string representing the system context.
+
+		# [ Parameters ]
+		# /path/
+			# Override for the &sys_environment `'PWD'` value.
+			# When &None, disable the path portion of the indicator.
+		"""
+
+		yield ('system-context', '')
+		yield ('system-method', self.sys_method)
+		yield ('delimiter', '://')
+
+		if self.sys_credentials:
+			yield ('system-credentials', self.sys_credentials)
+			if self.sys_authorization:
+				yield ('delimiter', ':')
+				yield ('system-authorization', self.sys_authorization)
+			yield ('delimiter', '@')
+
+		yield ('system-identity', self.sys_identity)
+
+		if path is None:
+			return
+
+		if not path:
+			path = self.sys_environment.get('PWD', '') or '/'
+
+		if path[:1] == '/':
+			yield ('delimiter', '/')
+			path = path[1:]
+
+		yield ('system-path', path)
+
+	def getenv(self, name) -> str:
+		"""
+		# Return the locally configured environment variable identified by &name.
+		"""
+
+		return self.sys_environment[name]
+
+	def setenv(self, name, value):
+		"""
+		# Locally configure the environment variable identified by &name to &value.
+		"""
+
+		self.sys_environment[name] = value
+
+	def pwd(self):
+		"""
+		# Return the value of the locally configured (system/environ)`PWD`.
+		"""
+
+		return self.sys_environment['PWD']
+
+	def chdir(self, path: str, *, default=None) -> str|None:
+		"""
+		# Locally set (system/environ)`PWD` and return the old value or &default if unset.
+		"""
+
+		current = self.sys_environment.get('PWD', default)
+		self.sys_environment['PWD'] = path
+		return current
+
+	def __init__(self, method, user, auth, machine_id, encoding, ifpath, argv):
+		self.sys_method = method
+		self.sys_credentials = user
+		self.sys_authorization = auth
+		self.sys_identity = machine_id
+		self.sys_encoding = encoding
+		self.sys_environment = {}
+		self.sys_executable = ifpath
+		self.sys_interface = argv

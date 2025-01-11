@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence, Iterable
 from fault.vector import recognition
 from fault.system import process
 from fault.system import files
-from fault.system.query import home
+from fault.system import query
 
 # Disable signal exits for multiple interpreter cases.
 process.__signal_exit__ = (lambda x: None)
@@ -120,11 +120,9 @@ def configure_working_directory(config):
 	return wd
 
 def identify_executable(inv):
-	from fault.system.query import executables as qexe
-
 	exepath = str(inv.parameters['system']['name'])
 	if exepath[:1] != '/':
-		for executable in qexe(exepath):
+		for executable in query.executables(exepath):
 			path = executable
 			break
 		else:
@@ -156,15 +154,28 @@ def main(inv:process.Invocation) -> process.Exit:
 
 	path = identify_executable(inv)
 	wd = configure_working_directory(config)
+
+	host = types.System(
+		'system',
+		query.username(),
+		'',
+		query.hostname(),
+		'utf-8',
+		str(next(query.executables('env'))),
+		['env'],
+	)
+	host.sys_environment.update(os.environ)
+	host.chdir(str(wd))
+
 	device = types.Device()
-	editor = elements.Session(IOManager.allocate(device.synchronize_io), path, device)
+	editor = elements.Session(host, IOManager.allocate(device.synchronize_io), path, device)
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 
 	fi = 0
 	if remainder:
 		session_file = (process.fs_pwd()@remainder[-1])
 	else:
-		session_file = (home()/'.syntax/Frames')
+		session_file = (query.home()/'.syntax/Frames')
 	editor.fs_snapshot = session_file
 
 	try:
@@ -178,9 +189,10 @@ def main(inv:process.Invocation) -> process.Exit:
 		editor.frames[fi].fill(map(editor.refract, rfq))
 
 	editor.reframe(fi)
+	editor.log("Host: " + str(editor.host))
 	editor.log("Factor: " + __name__)
 	editor.log("Device: " + (config.get('interface-device') or "manager default"))
-	editor.log("Working Directory: " + str(wd))
+	editor.log("Environment:", *('\t'+k+'='+v for k,v in host.sys_environment.items()))
 
 	# System I/O loop for command substitution and file I/O.
 	editor.io.service()

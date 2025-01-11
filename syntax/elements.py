@@ -989,12 +989,14 @@ class Session(Core):
 	# Root application state.
 
 	# [ Elements ]
+	# /host/
+		# The system context of the host machine.
 	# /logfile/
 		# Transcript override for logging.
 	# /io/
 		# System I/O abstraction for command substitution and file I/O.
 	# /device/
-		# The target display providing context allocation.
+		# The target display and source events.
 	# /resources/
 		# Mapping of file paths to loaded lines.
 	# /refractions/
@@ -1006,6 +1008,7 @@ class Session(Core):
 		# Mapping of file paths to loaded syntax (profile) types.
 	"""
 
+	host: types.System
 	typepath: Sequence[files.Path]
 	executable: files.Path
 	resources: Mapping[files.Path, sequence.Segments]
@@ -1013,7 +1016,8 @@ class Session(Core):
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	types: Mapping[files.Path, tuple[object, object]]
 
-	def __init__(self, io, executable, terminal, position=(0,0), dimensions=None):
+	def __init__(self, system, io, executable, terminal, position=(0,0), dimensions=None):
+		self.host = system
 		self.logfile = None
 		self.io = io
 		self.placement = (position, dimensions)
