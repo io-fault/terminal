@@ -51,9 +51,9 @@ required = {
 	'-Y': ('field-replace', 'vertical-size'),
 }
 
-def configure_frame(directory, executable, options, sources):
+def configure_frame(directory, executable, options):
 	"""
-	# Apply configuration &options and load initial &sources for the &editor &Session.
+	# Apply configuration &options for the session.
 	"""
 
 	excluding = options['excluded-session-status']
@@ -72,11 +72,6 @@ def configure_frame(directory, executable, options, sources):
 
 	ndiv = sum(x[0] or 1 for x in model)
 
-	# Sources from command line. Follow with session status views and
-	# a fill of /dev/null refractions between. Transcript is fairly
-	# important right now, so force it in if there is space.
-	init = [directory@x for x in sources]
-
 	end = [
 		executable/x
 		for x in ('transcript',)
@@ -85,9 +80,8 @@ def configure_frame(directory, executable, options, sources):
 	# Exclude if there's only one division.
 	end = end[:max(0, ndiv - 1)]
 
-	nullcount = max(0, (ndiv - len(init) - len(end)))
+	nullcount = max(0, (ndiv - len(end)))
 	rfq = itertools.chain(
-		init[:ndiv-len(end)],
 		itertools.repeat(files.root@'/dev/null', nullcount),
 		end,
 	)
@@ -184,7 +178,7 @@ def main(inv:process.Invocation) -> process.Exit:
 		editor.error("Session restoration", restore_error)
 
 	if not editor.frames:
-		layout, rfq = configure_frame(wd, path, config, [])
+		layout, rfq = configure_frame(wd, path, config)
 		fi = editor.allocate(layout = layout)
 		editor.frames[fi].fill(map(editor.refract, rfq))
 
