@@ -124,8 +124,8 @@ if 'controls':
 
 	a(('n'), 'navigation', ('find', 'next'))
 	a(('n', km_shift), 'navigation', ('find', 'previous'))
-	a(('n', km_control), 'navigation', ('session', 'search', 'resource'))
-	a(('n', km_shift, km_control), 'navigation', ('find', 'selected'))
+	a(('n', km_control), 'navigation', ('find', 'configure'))
+	a(('n', km_shift, km_control), 'navigation', ('find', 'configure', 'selected'))
 
 	a(('o'), 'delta', ('open', 'ahead'))
 	a(('o', km_shift), 'delta', ('open', 'behind'))
@@ -200,7 +200,6 @@ if 'annotations':
 
 if 'inserts':
 	mode = insert
-
 	a(('a', km_control), 'navigation', ('horizontal', 'backward', 'beginning'))
 	a(('c', km_control), 'transaction', ('abort',)) # Default SIGINT.
 	a(('d', km_control), 'transaction', ('commit',)) # Default EOF.

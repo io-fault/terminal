@@ -35,14 +35,6 @@ def s_rq_rewrite(session, frame, rf, event):
 	ext = "field " + str(i)
 	frame.prepare(session, "rewrite", (frame.vertical, frame.division), extension=ext)
 
-@event('session', 'search', 'resource')
-def s_rq_find(session, frame, rf, event):
-	"""
-	# Search the resource's elements.
-	"""
-
-	frame.prepare(session, "search", (frame.vertical, frame.division))
-
 @event('session', 'seek', 'element', 'absolute')
 def s_rq_aseek(session, frame, rf, event):
 	"""
@@ -652,27 +644,21 @@ def scroll_last(session, frame, rf, event, *, quantity=1):
 	rf.scroll(lambda x: offset)
 	session.deltas.append((rf, view))
 
-@event('operation', 'find')
-def query_find(session, frame, rf, event):
+@event('find', 'configure')
+def s_rq_find(session, frame, rf, event):
 	"""
-	# Find the next occurrence of the horizontal range in &rf.elements.
-	"""
-
-	frame.prepare(session, "find", rf.search)
-
-@event('find', 'selected')
-def find_string(session, frame, rf, event):
-	"""
-	# Find the next occurrence of the horizontal range in &rf.elements.
+	# Set the search term.
 	"""
 
-	v, h = rf.focus
-	ln = v.get()
-	line = rf.elements[v.get()]
-	w = h.slice()
-	term = line[w]
-	rf.query['search'] = term
-	rf.find(rf.forward(len(rf.elements), ln, w.stop), term)
+	frame.prepare(session, "search", (frame.vertical, frame.division))
+
+@event('find', 'configure', 'selected')
+def find_set_search_term(session, frame, rf, event):
+	"""
+	# Set the search term as the horizontal selection.
+	"""
+
+	rf.query['search'] = rf.horizontal_selection_text()
 
 @event('find', 'previous')
 def find_previous_string(session, frame, rf, event):
@@ -681,7 +667,8 @@ def find_previous_string(session, frame, rf, event):
 	"""
 
 	v, h = rf.focus
-	rf.find(rf.backward(len(rf.elements), v.get(), h.minimum), rf.query.get('search') or '')
+	term = rf.query.get('search') or rf.horizontal_selection_text()
+	rf.find(rf.backward(len(rf.elements), v.get(), h.minimum), term)
 
 @event('find', 'next')
 def find_next_string(session, frame, rf, event):
@@ -690,4 +677,5 @@ def find_next_string(session, frame, rf, event):
 	"""
 
 	v, h = rf.focus
-	rf.find(rf.forward(len(rf.elements), v.get(), h.maximum), rf.query.get('search') or '')
+	term = rf.query.get('search') or rf.horizontal_selection_text()
+	rf.find(rf.forward(len(rf.elements), v.get(), h.maximum), term)
