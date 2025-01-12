@@ -121,6 +121,8 @@ if 'controls':
 
 	a(('m'), 'delta', ('move', 'range', 'ahead'))
 	a(('m', km_shift), 'delta', ('move', 'range', 'behind'))
+	a(('m', km_control), 'delta', ('copy', 'range', 'ahead'))
+	a(('m', km_control, km_shift), 'delta', ('copy', 'range', 'behind'))
 
 	a(('n'), 'navigation', ('find', 'next'))
 	a(('n', km_shift), 'navigation', ('find', 'previous'))

@@ -694,6 +694,40 @@ def move_vertical_range_behind(session, frame, rf, event):
 	v.restore((position, position, position + vr))
 	rf.vertical_changed(position)
 
+def replicate_vertical_range(session, frame, rf, event, offset, quantity=1):
+	"""
+	# Copy the elements in the vertical range to position after the cursor.
+	"""
+
+	v = rf.focus[0]
+	start, ln, stop = v.snapshot()
+	lines = rf.elements[start:stop]
+	lines.append("")
+	ln += offset
+	from .. import delta
+	dl, du = delta.insert_lines_into(rf.elements, rf.log, ln, 0, lines)
+	v.changed(ln, dl)
+	rf.delta(ln, dl)
+	rf.vertical_changed(ln)
+
+@event('copy', 'range', 'ahead')
+def copy_vertical_range_ahead(session, frame, rf, event, quantity=1):
+	"""
+	# Copy the elements in the vertical range to position after the cursor.
+	"""
+
+	replicate_vertical_range(session, frame, rf, event, +1, quantity)
+	rf.log.checkpoint()
+
+@event('copy', 'range', 'behind')
+def copy_vertical_range_behind(session, frame, rf, event, quantity=1):
+	"""
+	# Copy the elements in the vertical range to position before the cursor.
+	"""
+
+	replicate_vertical_range(session, frame, rf, event, +0, quantity)
+	rf.log.checkpoint()
+
 @event('delete', 'vertical', 'column')
 def delete_element_v(session, frame, rf, event):
 	"""
