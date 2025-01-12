@@ -179,6 +179,68 @@ def transition_last_mode(session, frame, rf, event):
 
 	session.keyboard.revert()
 
+@event('transition', 'insert', 'cursor')
+def atposition_insert_mode_switch(session, frame, rf, event):
+	"""
+	# Transition into insert-mode.
+	"""
+
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = 0
+
+@event('transition', 'insert', 'start-of-field')
+def fieldend_insert_mode_switch(session, frame, rf, event):
+	"""
+	# Transition into insert-mode moving the cursor to the start
+	# of the horizontal range.
+	"""
+
+	rf.focus[1].move(0, +1)
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = -1
+
+@event('transition', 'insert', 'end-of-field')
+def fieldend_insert_mode_switch(session, frame, rf, event):
+	"""
+	# Transition into insert-mode moving the cursor to the end
+	# of the horizontal range.
+	"""
+
+	rf.focus[1].move(0, -1)
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = +1
+
+@event('transition', 'insert', 'start-of-line')
+def startofline_insert_mode_switch(session, frame, rf, event):
+	"""
+	# Transition into insert-mode moving the cursor to the beginning of the line.
+	"""
+
+	ln = rf.focus[0].get()
+	i = 0
+	for i, x in enumerate(rf.elements[ln]):
+		if x != '\t':
+			break
+	rf.focus[1].set(i)
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = -2
+
+@event('transition', 'insert', 'end-of-line')
+def endofline_insert_mode_switch(session, frame, rf, event):
+	"""
+	# Transition into insert-mode moving the cursor to the end of the line.
+	"""
+
+	ln = rf.focus[0].get()
+	rf.focus[1].set(len(rf.elements[ln]))
+	rf.log.checkpoint()
+	session.keyboard.set('insert')
+	rf.whence = +2
+
 @event('transition', 'capture', 'replace')
 def transition_capture_replace(session, frame, rf, event):
 	"""
@@ -226,58 +288,6 @@ def set_distributing(session, frame, rf, event):
 	"""
 
 	session.keyboard.qualify('distributed')
-
-@event('transition')
-def atposition_insert_mode_switch(session, frame, rf, event):
-	"""
-	# Transition into insert-mode.
-	"""
-
-	session.keyboard.set('insert')
-
-@event('transition', 'start-of-field')
-def fieldend_insert_mode_switch(session, frame, rf, event):
-	"""
-	# Transition into insert-mode moving the cursor to the start
-	# of the horizontal range.
-	"""
-
-	rf.focus[1].move(0, +1)
-	session.keyboard.set('insert')
-
-@event('transition', 'end-of-field')
-def fieldend_insert_mode_switch(session, frame, rf, event):
-	"""
-	# Transition into insert-mode moving the cursor to the end
-	# of the horizontal range.
-	"""
-
-	rf.focus[1].move(0, -1)
-	session.keyboard.set('insert')
-
-@event('transition', 'start-of-line')
-def startofline_insert_mode_switch(session, frame, rf, event):
-	"""
-	# Transition into insert-mode moving the cursor to the beginning of the line.
-	"""
-
-	ln = rf.focus[0].get()
-	i = 0
-	for i, x in enumerate(rf.elements[ln]):
-		if x != '\t':
-			break
-	rf.focus[1].set(i)
-	session.keyboard.set('insert')
-
-@event('transition', 'end-of-line')
-def endofline_insert_mode_switch(session, frame, rf, event):
-	"""
-	# Transition into insert-mode moving the cursor to the end of the line.
-	"""
-
-	ln = rf.focus[0].get()
-	rf.focus[1].set(len(rf.elements[ln]))
-	session.keyboard.set('insert')
 
 @event('session', 'suspend')
 def pause(session, frame, rf, event):

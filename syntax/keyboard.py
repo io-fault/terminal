@@ -73,8 +73,8 @@ if 'controls':
 	a(('r', km_meta), 'meta', ('view', 'refresh'))
 	a((0x2423, km_control), 'meta', ('prepare', 'command'))
 
-	a(('a'), 'meta', ('transition', 'end-of-field'))
-	a(('a', km_shift), 'meta', ('transition', 'end-of-line'))
+	a(('a'), 'meta', ('transition', 'insert', 'end-of-field'))
+	a(('a', km_shift), 'meta', ('transition', 'insert', 'end-of-line'))
 
 	a(('b'), 'delta', ('line', 'break',))
 	a(('b', km_shift), 'delta', ('line', 'join',))
@@ -102,8 +102,8 @@ if 'controls':
 	a(('h'), 'navigation', ('vertical', 'select', 'line'))
 	a(('h', km_shift), 'navigation', ('vertical', 'place', 'center'))
 
-	a(('i'), 'meta', ('transition',))
-	a(('i', km_shift), 'meta', ('transition', 'start-of-line'))
+	a(('i'), 'meta', ('transition', 'insert', 'cursor'))
+	a(('i', km_shift), 'meta', ('transition', 'insert', 'start-of-line'))
 
 	a(('j'), 'navigation', ('vertical', 'forward', 'unit'))
 	a(('j', km_shift), 'navigation', ('vertical', 'stop'))
