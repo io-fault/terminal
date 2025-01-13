@@ -284,6 +284,49 @@ def replace_captured_character_unit(session, frame, rf, event, quantity=1):
 	delete_characters_ahead(session, frame, rf, event, quantity)
 	insert_captured_control_character_unit(session, frame, rf, event, quantity)
 
+def swap_case(rf, ln, start, stop):
+	"""
+	# Swap the case of the character unit under the cursor.
+	"""
+
+	line = rf.elements[ln]
+
+	removed = line[start:stop]
+	(rf.log
+		.write(Update(ln, removed.swapcase(), removed, start))
+		.apply(rf.elements)
+		.collapse()
+		.commit())
+
+@event('character', 'swap', 'case')
+def swap_case_cu(session, frame, rf, event, quantity=1):
+	"""
+	# Swap the case of the character unit under the cursor.
+	"""
+
+	v, h = (x.get() for x in rf.focus)
+	line = rf.elements[v]
+
+	phrase = rf.render(line)
+	p, r = phrase.seek((0, 0), h, *phrase.m_codepoint)
+	assert r == 0
+	n, r = phrase.seek(p, quantity, *phrase.m_unit)
+	assert r == 0
+	offset = phrase.tell(n, *phrase.m_codepoint)
+
+	swap_case(rf, v, h, offset)
+	rf.focus[1].set(offset)
+
+@event('horizontal', 'swap', 'case')
+def swap_case_hr(session, frame, rf, event):
+	"""
+	# Swap the case of the horizontal range.
+	"""
+
+	start, position, stop = rf.focus[1].snapshot()
+	line = rf.elements[rf.focus[0].get()]
+	swap_case(rf, rf.focus[0].get(), start, stop)
+
 @event('insert', 'string')
 def insert_string_argument(session, frame, rf, event, string, *, quantity=1):
 	"""

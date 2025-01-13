@@ -138,6 +138,7 @@ if 'controls':
 	a(('p', km_shift), 'delta', ('place',))
 
 	a(('r'), 'meta', ('transition', 'capture', 'replace'))
+	a(('r', km_shift), 'delta', ('character', 'swap', 'case'))
 	a(('r', km_control), 'navigation', ('session', 'rewrite', 'elements'))
 
 	a(('s'), 'navigation', ('horizontal', 'select', 'series',))
@@ -202,6 +203,7 @@ if 'annotations':
 
 if 'inserts':
 	mode = insert
+
 	a(('a', km_control), 'navigation', ('horizontal', 'backward', 'beginning'))
 	a(('c', km_control), 'transaction', ('abort',)) # Default SIGINT.
 	a(('d', km_control), 'transaction', ('commit',)) # Default EOF.
@@ -245,6 +247,7 @@ default = {
 distributions = {
 	('delta', x): ('delta', y)
 	for x, y in [
+		(('character', 'swap', 'case'), ('horizontal', 'swap', 'case')),
 		(('delete', 'unit', 'current'), ('delete', 'horizontal', 'range')),
 		(('delete', 'unit', 'former'), ('delete', 'vertical', 'column')),
 		(('delete', 'element', 'current'), ('delete', 'vertical', 'range')),
