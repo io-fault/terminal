@@ -282,7 +282,7 @@ def replace_captured_character_unit(session, frame, rf, event, quantity=1):
 	"""
 
 	delete_characters_ahead(session, frame, rf, event, quantity)
-	insert_captured_character_unit(session, frame, rf, event, quantity)
+	insert_captured_control_character_unit(session, frame, rf, event, quantity)
 
 @event('insert', 'string')
 def insert_string_argument(session, frame, rf, event, string, *, quantity=1):
