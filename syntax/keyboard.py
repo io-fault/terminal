@@ -59,6 +59,7 @@ insert = Mode(('delta', ('insert', 'character'), ()))
 annotations = Mode(('meta', ('transition', 'annotation', 'void'), ()))
 
 k_return = 0x23CE
+k_space = 0x2423
 
 # Return Keystrokes
 for mode in (control, insert):
@@ -71,7 +72,7 @@ if 'controls':
 	mode = control
 
 	a(('r', km_meta), 'meta', ('view', 'refresh'))
-	a((0x2423, km_control), 'meta', ('prepare', 'command'))
+	a((k_space, km_control), 'meta', ('prepare', 'command'))
 
 	a(('a'), 'meta', ('transition', 'insert', 'end-of-field'))
 	a(('a', km_shift), 'meta', ('transition', 'insert', 'end-of-line'))
@@ -164,7 +165,7 @@ if 'controls':
 	a(('z'), 'navigation', ('vertical', 'place', 'stop',))
 	a(('z', km_shift), 'navigation', ('vertical', 'place', 'start',))
 
-	a((0x2423), 'navigation', ('horizontal', 'forward', 'unit'))
+	a((k_space), 'navigation', ('horizontal', 'forward', 'unit'))
 	a((0x2326), 'navigation', ('horizontal', 'backward', 'unit')) # Delete
 	a((0x232B), 'navigation', ('horizontal', 'backward', 'unit')) # Backsapce
 	a((0x21E5, km_meta), 'navigation', ('session', 'view', 'forward'))
@@ -226,7 +227,7 @@ if 'inserts':
 	a((0x2192), 'navigation', ('horizontal', 'forward', 'unit'))
 	a((0x2193), 'navigation', ('horizontal', 'forward', 'end'))
 
-	a((0x2423, km_control), 'delta', ('insert', 'string',), ("\x1f",))
+	a((k_space, km_control), 'delta', ('insert', 'string',), ("\x1f",))
 
 	a((0x21E5), 'delta', ('indentation', 'increment'))
 	a((0x21E5, km_shift), 'delta', ('indentation', 'decrement'))
