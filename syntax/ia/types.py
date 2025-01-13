@@ -155,40 +155,6 @@ class Selection(object):
 		# Route the event to the target given the current processing state.
 		"""
 
-		if False in {'focus', 'mouse', 'scroll', 'data', 'paste'}:
-			if event.type == 'mouse':
-				point, key_id, delay = event.identity
-				return (None, ('navigation', ('select', 'absolute'), ()))
-			elif event.type == 'scroll':
-				sq, sd = event.identity[1:]
-				if sd == 0:
-					a = 'vertical'
-				elif sd == 2:
-					a = 'horizontal'
-				if sq < 0:
-					d = 'backward'
-				else:
-					d = 'forward'
-				return (None, ('navigation', ('view', a, d), (abs(sq),)))
-			elif event.type == 'data':
-				self.data.append(event.string)
-				return (None, ('meta', ('ineffective',), ()))
-			elif event.type == 'paste':
-				if event.identity == 'start':
-					self.data = list()
-					return (None, ('meta', ('ineffective',), ()))
-				elif event.identity == 'stop':
-					op = (None, ('delta', ('insert', 'data'), (self.data,)))
-					self.data = None
-					return op
-				else:
-					assert False # Unknown paste event.
-			elif event.type == 'focus':
-				if event.identity == 'in':
-					return (None, ('meta', ('terminal', 'focus', 'acquire'), ()))
-				elif event.identity == 'out':
-					return (None, ('meta', ('terminal', 'focus', 'release'), ()))
-
 		mapping, operation = self.event(event)
 		if operation is None:
 			return (None, ('meta', ('ineffective',), ()))
