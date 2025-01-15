@@ -161,7 +161,7 @@ def open(session, frame, rf, event):
 
 	# Construct reference and load dependencies.
 	dpath = (frame.vertical, frame.division)
-	new = session.refract(compose(rf.elements))
+	new = session.refract(compose(rf.source.elements))
 
 	session.dispatch_delta(frame.attach(dpath, new).refresh())
 	session.keyboard.set('control')
@@ -169,7 +169,7 @@ def open(session, frame, rf, event):
 
 	del rf.elements[:]
 	rf.visible[0] = 0
-	session.dispatch_delta(frame.chpath(dpath, new.origin, snapshot=rf.log.snapshot()))
+	session.dispatch_delta(frame.chpath(dpath, new.source.origin, snapshot=rf.log.snapshot()))
 
 def save(session, frame, rf, event):
 	"""
@@ -186,13 +186,13 @@ def save(session, frame, rf, event):
 
 	frame.refocus()
 	target = frame.focus
-	session.save_resource(path, target.elements)
+	session.save_resource(target.source.origin.ref_path)
 	session.keyboard.set('control')
 
 	# Location heading.
 	del rf.elements[:]
 	rf.visible[0] = 0
-	session.dispatch_delta(frame.chpath(dpath, target.origin, snapshot=rf.log.snapshot()))
+	session.dispatch_delta(frame.chpath(dpath, target.source.origin, snapshot=rf.log.snapshot()))
 
 def refract(theme, view, pathcontext, path, action):
 	"""
@@ -207,6 +207,7 @@ def refract(theme, view, pathcontext, path, action):
 	# Repeat Session.relocate operations will result in reconstructing
 	# the location refraction.
 	meta = types.Reference(
+		None,
 		'/../resource-indicator',
 		'resource-location',
 		files.root@'/dev',
@@ -214,13 +215,10 @@ def refract(theme, view, pathcontext, path, action):
 		None,
 	)
 
-	from .elements import Refraction
-	lrf = Refraction(
-		meta,
-		*type(theme, pathcontext, view.area),
-		list(map(str, determine(pathcontext, path))),
-		delta.Log(),
-	)
+	from .elements import Resource, Refraction
+	rsrc = Resource(meta, type(theme, pathcontext, view.area))
+	rsrc.elements = list(map(str, determine(pathcontext, path)))
+	lrf = Refraction(rsrc)
 	lrf.configure(view.area)
 	lrf.activate = action # location.open or location.save
 	view.version = lrf.log.snapshot()

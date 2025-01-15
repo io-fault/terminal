@@ -4,6 +4,16 @@
 from . import types
 event, Index = types.Index.allocate('session')
 
+@event('log')
+def open_session_log(session, frame, rf, event):
+	"""
+	# Attach the session transcript to the selected division.
+	"""
+
+	from ..elements import Refraction
+	sd = frame.chresource((frame.vertical, frame.division), Refraction(session.transcript))
+	session.dispatch_delta(sd)
+
 @event('close')
 def close_session(session, frame, rf, event):
 	"""
@@ -72,7 +82,7 @@ def s_write_resource(session, frame, rf, event):
 	# without confirmation.
 	"""
 
-	session.save_resource(rf.origin.ref_path, rf.elements)
+	session.save_resource(rf.resource)
 
 @event('resource', 'clone')
 def s_clone_resource(session, frame, rf, event):
@@ -83,7 +93,7 @@ def s_clone_resource(session, frame, rf, event):
 
 	url = session.device.transfer_text()
 	if url.startswith('/'):
-		re = rf.origin.ref_path@url
+		re = rf.source.origin.ref_path@url
 	else:
 		raise ValueError("not a filesystem path: " + url)
 
@@ -95,8 +105,8 @@ def s_close_resource(session, frame, rf, event):
 	# Remove the resource from the session releasing any associated memory.
 	"""
 
-	session.close_resource(rf.origin.ref_path)
-	session.chresource(frame, rf.origin.ref_path@'/dev/null')
+	session.close_resource(rf.source.origin.ref_path)
+	session.chresource(frame, rf.source.origin.ref_path@'/dev/null')
 	session.keyboard.set('control')
 	frame.refocus()
 
@@ -106,8 +116,8 @@ def s_reload_resource(session, frame, rf, event):
 	# Remove the resource from the session releasing any associated memory.
 	"""
 
-	session.close_resource(rf.origin.ref_path)
-	session.chresource(frame, rf.origin.ref_path)
+	session.close_resource(rf.source.origin.ref_path)
+	session.chresource(frame, rf.source.origin.ref_path)
 	session.keyboard.set('control')
 	frame.refocus()
 
@@ -119,7 +129,7 @@ def s_open_resource(session, frame, rf, event):
 
 	url = session.device.transfer_text()
 	empty, path = url.split('file://')
-	session.chresource(frame, rf.origin.ref_path@(path.strip()))
+	session.chresource(frame, rf.source.origin.ref_path@(path.strip()))
 	session.keyboard.set('control')
 	frame.refocus()
 

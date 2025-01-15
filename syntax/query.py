@@ -15,7 +15,8 @@ def refract(session, frame, view, qtype, state, action):
 	# Construct a Refraction for representing a query.
 	"""
 
-	meta = types.Reference(
+	ref = types.Reference(
+		session.host,
 		'/../',
 		'query-instructions',
 		format.files.root@'/dev',
@@ -23,13 +24,10 @@ def refract(session, frame, view, qtype, state, action):
 		None,
 	)
 
-	from .elements import Refraction
-	lrf = Refraction(
-		meta,
-		*session.open_type(format.files.root),
-		list(map(str, [qtype + ' ' + state])),
-		delta.Log(),
-	)
+	from .elements import Resource, Refraction
+	meta = Resource(ref, session.open_type(format.files.root))
+	meta.elements = list(map(str, [qtype + ' ' + state]))
+	lrf = Refraction(meta)
 	lrf.configure(view.area)
 	lrf.activate = action # location.open or location.save
 	view.version = lrf.log.snapshot()

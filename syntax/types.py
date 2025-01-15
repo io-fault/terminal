@@ -360,46 +360,6 @@ class Position(object):
 		start, pos, stop = map(adjustment.__add__, self.snapshot())
 		return Slice(start, stop, step)
 
-@tools.struct()
-class Reference(object):
-	"""
-	# Resource identification and information.
-
-	# [ Elements ]
-	# /ref_type/
-		# The source of the selector used to read the syntax type.
-	# /ref_identity/
-		# The source of the selector used to read the resource's elements.
-	# /ref_context/
-		# The context of the resource. Often current working directory or project directory.
-	# /ref_path/
-		# The &ref_context relative path to the resource.
-	# /ref_icons/
-		# Mapping of &Reference field names, without the `ref_` prefix, to
-		# phrases that represent the associated symbolism within a two-cell
-		# area.
-	"""
-
-	ref_type: str
-	ref_identity: str
-
-	ref_context: object
-	ref_path: object
-
-	ref_icons: Mapping[str, text.Phrase]|None
-
-	def retype(self, ref_type):
-		"""
-		# Reconstruct the reference with an updated type path.
-		"""
-		self.__class__(
-			ref_type,
-			self.ref_identity,
-			self.ref_context,
-			self.ref_path,
-			self.ref_icons,
-		)
-
 @dataclass(match_args=False, eq=False)
 class View(object):
 	"""
@@ -1392,3 +1352,57 @@ class System(object):
 		self.sys_environment = {}
 		self.sys_executable = ifpath
 		self.sys_interface = argv
+
+@tools.struct()
+class Reference(object):
+	"""
+	# Resource identification and information.
+
+	# [ Elements ]
+	# /ref_system/
+		# The system context that should be used to interact with the resource.
+	# /ref_type/
+		# The source of the selector used to read the syntax type.
+	# /ref_identity/
+		# The source of the selector used to read the resource's elements.
+	# /ref_context/
+		# The context of the resource. Often current working directory or project directory.
+	# /ref_path/
+		# The &ref_context relative path to the resource.
+	# /ref_icons/
+		# Mapping of &Reference field names, without the `ref_` prefix, to
+		# phrases that represent the associated symbolism within a two-cell
+		# area.
+	"""
+
+	ref_system: System
+	ref_type: str
+	ref_identity: str
+
+	ref_context: object
+	ref_path: object
+
+	ref_icons: Mapping[str, text.Phrase]|None
+
+	def i_format(self):
+		"""
+		# Type qualified fields used to construct a string representing the reference.
+		"""
+
+		yield from self.ref_system.i_format(str(self.ref_path))
+
+	def __str__(self):
+		return ''.join(x[1] for x in self.i_format())
+
+	def retype(self, ref_type):
+		"""
+		# Reconstruct the reference with an updated type path.
+		"""
+		self.__class__(
+			self.ref_system,
+			ref_type,
+			self.ref_identity,
+			self.ref_context,
+			self.ref_path,
+			self.ref_icons,
+		)

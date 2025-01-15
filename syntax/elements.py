@@ -26,7 +26,7 @@ from . import keyboard
 from . import ia
 from . import types
 
-from .types import Model, View, Reference, Area, Glyph, Device
+from .types import Model, View, Reference, Area, Glyph, Device, System
 
 class Core(object):
 	"""
@@ -34,6 +34,92 @@ class Core(object):
 
 	# Currently, only used to identify a user interface element.
 	"""
+
+class Resource(Core):
+	"""
+	# The representation of a stored resource.
+
+	# [ Elements ]
+	# /origin/
+		# Reference identifying the resource being refracted.
+	# /type/
+		# Type identifier used to select the &structure.
+	# /structure/
+		# The field sequence constructor.
+		# Processes line content into typed fields for analysis or display.
+	# /format/
+		# The structured line processor formatting a series of fields
+		# into a &..cells.text.Phrase instance.
+	# /elements/
+		# The contents of the connected resource.
+		# The sequence of lines being refracted.
+	# /modifications/
+		# The log of changes applied to &elements.
+	# /cursors/
+		# The collection of cursors tracking changes to the resource.
+	"""
+
+	origin: Reference
+	encoding: str
+
+	elements: Sequence[object]
+	modifications: delta.Log
+
+	status: object
+	structure: object
+
+	cursors: Mapping[types.Position, types.Position]
+
+	def __init__(self, origin, types, encoding='utf-8'):
+		self.origin = origin
+		self.encoding = encoding
+		self.elements = sequence.Segments([])
+		self.modifications = delta.Log()
+		self.snapshot = self.modifications.snapshot()
+		self.status = None
+		self.type, self.structure, self.format, self.render = types
+		self.cursors = {}
+
+	@staticmethod
+	def since(start, stop, *, precision='millisecond'):
+		m = start.measure(stop).truncate(precision)
+
+		D = m.select('day')
+		m = m.decrease(day=D)
+		H = m.select('hour')
+		m = m.decrease(hour=H)
+		M = m.select('minute')
+		m = m.decrease(minute=M)
+		S = m.select('second')
+		P = m.decrease(second=S).select(precision)
+
+		return (D, H, M, S, P)
+
+	@property
+	def last_modified(self):
+		"""
+		# When the resource was last modified.
+		"""
+
+		return self.status.last_modified
+
+	def age(self, when) -> str:
+		"""
+		# Format a string identifying how long it has been since the resource was last changed.
+		"""
+
+		D, H, M, S, MS = self.since(self.last_modified, when)
+
+		fmt = [
+			f"{c} {unit}" for (c, unit) in zip(
+				[D, H, M],
+				['days', 'hours', 'minutes']
+			)
+			if c > 0
+		]
+		fmt.append(f"{S}.{MS:03} seconds")
+
+		return ' '.join(fmt)
 
 class Refraction(Core):
 	"""
@@ -73,7 +159,7 @@ class Refraction(Core):
 		# Status of system processes executed by commands targeting the instance.
 	"""
 
-	origin: Reference
+	source: Resource
 	structure: object
 	format: object
 	render: object
@@ -122,19 +208,18 @@ class Refraction(Core):
 
 		return new
 
-	def __init__(self, origin, type, structure, format, render, elements, log):
-		# Context, but with caching layers.
-		self.origin = origin
-		self.type = type
-		self.structure = structure
-		self.format = format
-		self.render = render
+	def __init__(self, resource):
+		self.source = resource
+		self.type = resource.type
+		self.structure = resource.structure
+		self.format = resource.format
+		self.render = resource.render
 		self.annotation = None
 		self.system_execution_status = {}
 
 		# State. Document elements, cursor, and camera.
-		self.elements = elements
-		self.log = log
+		self.elements = resource.elements
+		self.log = resource.modifications
 
 		self.focus = (types.Position(), types.Position())
 		self.visibility = (types.Position(), types.Position())
@@ -518,10 +603,10 @@ class Frame(Core):
 		current = self.refractions[vi]
 		self.returns[vi] = current
 		view = self.views[vi]
-		self.reflections[current.origin.ref_path].discard((current, view))
+		self.reflections[current.source.origin.ref_path].discard((current, view))
 
 		self.refractions[vi] = refraction
-		mirrors = self.reflections[refraction.origin.ref_path]
+		mirrors = self.reflections[refraction.source.origin.ref_path]
 		mirrors.add((refraction, view))
 		refraction.parallels = weakref.proxy(mirrors)
 
@@ -565,7 +650,7 @@ class Frame(Core):
 		"""
 
 		yield from self.attach(path, refraction).refresh()
-		yield from self.chpath(path, refraction.origin)
+		yield from self.chpath(path, refraction.source.origin)
 
 	def fill(self, refractions):
 		"""
@@ -583,7 +668,7 @@ class Frame(Core):
 
 		for ((v, d), rf, view) in zip(self.panes, self.refractions, self.views):
 			rf.configure(view.area)
-			self.reflections[rf.origin.ref_path].add((rf, view))
+			self.reflections[rf.source.origin.ref_path].add((rf, view))
 
 	def remodel(self, area=None, divisions=None):
 		"""
@@ -650,7 +735,7 @@ class Frame(Core):
 		previous = self.returns[self.paths[dpath]]
 		if previous is not None:
 			yield from self.attach(dpath, previous).refresh()
-			yield from self.chpath(dpath, previous.origin)
+			yield from self.chpath(dpath, previous.source.origin)
 
 	def render(self, screen):
 		"""
@@ -658,7 +743,7 @@ class Frame(Core):
 		"""
 
 		for p, rf, v, f in zip(self.panes, self.refractions, self.views, self.footers):
-			yield from self.chpath(p, rf.origin)
+			yield from self.chpath(p, rf.source.origin)
 			yield from v.render(slice(0, v.height))
 			yield from f.render(slice(0, f.height))
 
@@ -777,7 +862,7 @@ class Frame(Core):
 		"""
 
 		vi = self.paths[dpath]
-		ref = self.refractions[vi].origin
+		ref = self.refractions[vi].source.origin
 
 		# Update session state.
 		view = self.headings[vi]
@@ -799,7 +884,7 @@ class Frame(Core):
 		"""
 
 		vi = self.paths[dpath]
-		ref = self.refractions[vi].origin
+		ref = self.refractions[vi].source.origin
 
 		# Update session state.
 		view = self.headings[vi]
@@ -854,7 +939,7 @@ class Frame(Core):
 		rf.visibility[0].datum = view.offset
 		rf.visibility[1].datum = view.horizontal_offset
 		rf.visible[:] = (view.offset, view.horizontal_offset)
-		yield from self.chpath(dpath, self.focus.origin, snapshot=rf.log.snapshot())
+		yield from self.chpath(dpath, self.focus.source.origin, snapshot=rf.log.snapshot())
 
 	def close_prompt(self, dpath):
 		"""
@@ -996,9 +1081,9 @@ class Session(Core):
 	# /io/
 		# System I/O abstraction for command substitution and file I/O.
 	# /device/
-		# The target display and source events.
+		# The target display and event source.
 	# /resources/
-		# Mapping of file paths to loaded lines.
+		# Mapping of file paths to &Resource instances.
 	# /refractions/
 		# The list of connected &Refraction instances.
 	# /placement/
@@ -1011,7 +1096,7 @@ class Session(Core):
 	host: types.System
 	typepath: Sequence[files.Path]
 	executable: files.Path
-	resources: Mapping[files.Path, sequence.Segments]
+	resources: Mapping[files.Path, Resource]
 
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	types: Mapping[files.Path, tuple[object, object]]
@@ -1029,18 +1114,14 @@ class Session(Core):
 		self.theme = format.integrate(format.cell, format.theme, format.palette)
 		self.theme['title'] = self.theme['field-annotation-title']
 		self.cache = [] # Lines
-
-		# Path -> (Sequence[Element], Log, Snapshot)
-		tlog = delta.Log()
-		self.resources = {
-			self.executable/'transcript': (
-				sequence.Immutable([]),
-				tlog, tlog.snapshot(),
-				None, # System status.
-			)
-		}
-		# Path -> SyntaxType
 		self.types = dict()
+
+		exepath = self.executable/'transcript'
+		editor_log = Reference(self.host, 'filepath', str(exepath), self.executable, exepath, None)
+		self.transcript = Resource(editor_log, self.open_type(files.root))
+		self.resources = {
+			self.executable/'transcript': self.transcript
+		}
 
 		self.keyboard = ia.types.Selection(keyboard.default)
 		self.keyboard.set('control')
@@ -1099,27 +1180,34 @@ class Session(Core):
 			# format.Lambda
 			return files.root
 
+	def create_resource(self, reference):
+		rsrc = self.load_resource(reference)
+		self.resources[reference.ref_path] = rsrc
+		return rsrc
+
 	def open_resource(self, path:files.Path):
 		"""
 		# Return &sequence.Segments associated with &path if already available.
 		# Otherwise, &load_resource and return the loaded sequence.
 		"""
-		if path not in self.resources:
-			self.load_resource(path)
-		return self.resources[path]
 
-	def load_resource(self, path:files.Path, encoding='utf-8'):
+		if path in self.resources:
+			return self.resources[path]
+
+		return self.create_resource(self.reference(path))
+
+	def load_resource(self, ref:Reference):
 		"""
 		# Load and retain the lines of the resource identified by &path.
 		"""
-		d = delta.Log()
-		shot = d.snapshot()
+
+		rsrc = Resource(ref, self.open_type(ref.ref_type))
+		path = ref.ref_path
+
 		try:
-			with path.fs_open('r', encoding=encoding) as f:
-				self.resources[path] = (
-					sequence.Segments(x[:-1] for x in f.readlines()),
-					d, shot, path.fs_status()
-				)
+			with path.fs_open('r', encoding=rsrc.encoding) as f:
+				rsrc.status = path.fs_status()
+				rsrc.elements = sequence.Segments(x[:-1] for x in f.readlines())
 		except FileNotFoundError:
 			self.log("Resource does not exist: " + str(path))
 			st = None
@@ -1128,23 +1216,23 @@ class Session(Core):
 			st = None
 		else:
 			# Initialized.
-			return
+			return rsrc
 
 		self.log("Writing will attempt to create the file and any leading paths.")
-		self.resources[path] = (sequence.Segments(), d, shot, st)
+		return rsrc
 
-	def save_resource(self, path:files.Path, elements:list[str]):
+	def save_resource(self, path:files.Path):
 		"""
 		# Write the &elements to the resource identified by &path.
 		"""
 
-		encoding = 'utf-8'
 		size = 0
-		self.log(f"Writing {len(elements)} {encoding!r} lines: {str(path)}")
+		rsrc = self.resources[path]
+		self.log(f"Writing {len(rsrc.elements)} {rsrc.encoding!r} lines: {str(rsrc.origin)}")
 
 		# iter(elements) is critical here; repeating the running iterator
 		# as islice continues to take processing units to be buffered.
-		ielements = itertools.repeat(iter(elements))
+		ielements = itertools.repeat(iter(rsrc.elements))
 		ilines = (itertools.islice(i, 512) for i in ielements)
 
 		if (path ** 1).fs_type() == 'void':
@@ -1156,7 +1244,7 @@ class Session(Core):
 			for lines in ilines:
 				bl = len(buf)
 				for line in lines:
-					buf += line.encode('utf-8')
+					buf += line.encode(rsrc.encoding)
 					buf += b'\n'
 
 				if bl == len(buf):
@@ -1174,45 +1262,20 @@ class Session(Core):
 		if st.size != size:
 			self.log(f"Calculated write size differs from system reported size: {st.size}")
 
-		if path in self.resources:
-			# It's possible to save a document to another path,
-			# but only update the snapshot if it's the same.
-			eseq, log, shot, last_st = self.resources[path]
-			if last_st is not None:
-				m = last_st.last_modified.measure(st.last_modified).truncate('millisecond')
+		eseq = rsrc.elements
 
-				D = m.select('day')
-				m = m.decrease(day=D)
-				H = m.select('hour')
-				m = m.decrease(hour=H)
-				M = m.select('minute')
-				m = m.decrease(minute=M)
-				S = m.select('second')
-				MS = m.decrease(second=S).select('millisecond')
+		age = rsrc.age(st.last_modified)
+		if age is not None:
+			self.log("Last modification was " + age + " ago.")
 
-				fmt = [
-					f"{c} {unit}" for (c, unit) in zip(
-						[D, H, M],
-						['days', 'hours', 'minutes']
-					)
-					if c > 0
-				]
-				fmt.append(f"{S}.{MS:03} seconds")
-
-				self.log("Last modification was " + ' '.join(fmt) + " ago.")
-
-			# last_st is unconditionally discarded here.
-			if elements is eseq:
-				# If it's not the resource's elements, don't update the snapshot identifier.
-				self.resources[path] = (eseq, log, log.snapshot(), st)
-			else:
-				self.log("Resource overwritten with unassociated buffer: " + str(path))
-				self.resources[path] = (eseq, log, shot, st)
+		rsrc.saved = rsrc.modifications.snapshot()
+		rsrc.status = st
 
 	def close_resource(self, path:files.Path):
 		"""
 		# Destroy the retained lines identified by the &path.
 		"""
+
 		del self.resources[path]
 
 	def load_type(self, path:files.Path):
@@ -1236,18 +1299,20 @@ class Session(Core):
 		# Get the type context, structure, and formatter for processing
 		# (line) elements into fields.
 		"""
+
 		if path not in self.types:
 			self.load_type(path)
 
 		return self.types[path]
 
-	def refract(self, path):
+	def reference(self, path):
 		"""
-		# Construct a &Refraction for the resource identified by &path.
+		# Construct a &Reference instance from &path resolving types according to
+		# the session's configuration.
 		"""
 
-		# Construct reference and load dependencies.
-		ref = Reference(
+		return Reference(
+			self.host,
 			self.lookup_type(path),
 			str(path),
 			path.context or path ** 1,
@@ -1255,10 +1320,13 @@ class Session(Core):
 			None,
 		)
 
-		rsrc, rlog, shot, st = self.open_resource(ref.ref_path)
-		ftyp = self.open_type(ref.ref_type)
+	def refract(self, path):
+		"""
+		# Construct a &Refraction for the resource identified by &path.
+		# A &Resource instance is created if the path has not been loaded.
+		"""
 
-		return Refraction(ref, *ftyp, rsrc, rlog)
+		return Refraction(self.open_resource(path))
 
 	def log(self, *lines):
 		"""
@@ -1283,12 +1351,11 @@ class Session(Core):
 		# The default &log receiver.
 		"""
 
-		transcript = self.executable/'transcript'
-		rsrc, rlog, shot, st = self.open_resource(transcript)
-
-		(rlog
-			.write(delta.Lines(len(rsrc), lines, []))
-			.apply(rsrc._constant)
+		rsrc = self.transcript
+		log = rsrc.modifications
+		(log
+			.write(delta.Lines(len(rsrc.elements), lines, []))
+			.apply(rsrc.elements)
 			.commit()
 		)
 
@@ -1297,14 +1364,13 @@ class Session(Core):
 		if frame is None:
 			return
 
-		ref = Reference(None, None, None, transcript, None)
-		for trf, v in frame.reflect(ref):
+		for trf, v in frame.reflect(rsrc.origin):
 			if trf == frame.focus:
 				# Update handled by main loop.
 				continue
 
-			trf.seek(len(rsrc), 0)
-			changes = trf.log.since(v.version)
+			trf.seek(len(rsrc.elements), 0)
+			changes = log.since(v.version)
 			tupdate = projection.update(trf, v, changes)
 			#tupdate = projection.refresh(trf, v, 0)
 			v.version = trf.log.snapshot()
@@ -1473,8 +1539,8 @@ class Session(Core):
 
 		for f in self.frames:
 			frame_id = f.title
-			resources = [rf.origin.ref_path for rf in f.refractions]
-			returns = [rf.origin.ref_path for rf in f.returns if rf is not None]
+			resources = [rf.source.origin.ref_path for rf in f.refractions]
+			returns = [rf.source.origin.ref_path for rf in f.returns if rf is not None]
 
 			yield (frame_id, f.structure.layout, resources, returns)
 
@@ -1566,7 +1632,7 @@ class Session(Core):
 		for io_context, io_transfer in events:
 			# Apply the performed transfer using the &io_context.
 			io_context.execute(io_transfer)
-			rd.add(io_context.target.origin)
+			rd.add(io_context.target.source.origin)
 
 		# Presume updates are required.
 		for resource_ref in rd:
@@ -1597,10 +1663,10 @@ class Session(Core):
 			self.error('Operation Failure', operror)
 			del operror
 
-		yield from frame.reflect(refraction.origin, (refraction, view))
+		yield from frame.reflect(refraction.source.origin, (refraction, view))
 		if self.deltas:
 			for drf, dview in self.deltas:
-				yield from frame.reflect(drf.origin, (drf, dview))
+				yield from frame.reflect(drf.source.origin, (drf, dview))
 			del self.deltas[:]
 
 	def cycle(self, *, Method=projection.update):

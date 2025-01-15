@@ -71,7 +71,6 @@ for mode in (control, insert):
 if 'controls':
 	mode = control
 
-	a(('r', km_meta), 'meta', ('view', 'refresh'))
 	a((k_space, km_control), 'meta', ('prepare', 'command'))
 
 	a(('a'), 'meta', ('transition', 'insert', 'end-of-field'))
@@ -119,6 +118,7 @@ if 'controls':
 	a(('l'), 'navigation', ('vertical', 'select', 'indentation'))
 	a(('l', km_shift), 'navigation', ('vertical', 'select', 'indentation', 'level'))
 	a(('l', km_control), 'session', ('resource', 'relocate'))
+	a(('l', km_meta, km_control), 'session', ('log',))
 
 	a(('m'), 'delta', ('move', 'range', 'ahead'))
 	a(('m', km_shift), 'delta', ('move', 'range', 'behind'))
@@ -141,6 +141,7 @@ if 'controls':
 	a(('r'), 'meta', ('transition', 'capture', 'replace'))
 	a(('r', km_shift), 'delta', ('character', 'swap', 'case'))
 	a(('r', km_control), 'navigation', ('session', 'rewrite', 'elements'))
+	a(('r', km_meta), 'meta', ('view', 'refresh'))
 
 	a(('s'), 'navigation', ('horizontal', 'select', 'series',))
 	a(('s', km_shift), 'navigation', ('horizontal', 'select', 'line'))
