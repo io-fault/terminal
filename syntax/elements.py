@@ -1203,7 +1203,7 @@ class Session(Core):
 		self.types = dict()
 
 		exepath = self.executable/'transcript'
-		editor_log = Reference(self.host.identity, 'filepath', str(exepath), self.executable, exepath, None)
+		editor_log = Reference(self.host.identity, 'filepath', str(exepath), self.executable, exepath)
 		self.transcript = Resource(editor_log, self.open_type(files.root))
 		self.resources = {
 			self.executable/'transcript': self.transcript
@@ -1435,7 +1435,6 @@ class Session(Core):
 			str(path),
 			path.context or path ** 1,
 			path,
-			None,
 		)
 
 	def refract(self, path):

@@ -1342,17 +1342,13 @@ class Reference(object):
 	# /ref_system/
 		# The system context that should be used to interact with the resource.
 	# /ref_type/
-		# The source of the selector used to read the syntax type.
+		# The source of the selector used to get the syntax type from the session.
 	# /ref_identity/
-		# The source of the selector used to read the resource's elements.
+		# The source of the selector used to read and write the resource's elements.
 	# /ref_context/
-		# The context of the resource. Often current working directory or project directory.
+		# The filesystem context of the resource.
 	# /ref_path/
 		# The &ref_context relative path to the resource.
-	# /ref_icons/
-		# Mapping of &Reference field names, without the `ref_` prefix, to
-		# phrases that represent the associated symbolism within a two-cell
-		# area.
 	"""
 
 	ref_system: System
@@ -1361,8 +1357,6 @@ class Reference(object):
 
 	ref_context: object
 	ref_path: object
-
-	ref_icons: Mapping[str, text.Phrase]|None
 
 	def i_format(self):
 		"""

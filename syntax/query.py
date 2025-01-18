@@ -21,7 +21,6 @@ def refract(session, frame, view, qtype, state, action):
 		'query-instructions',
 		format.files.root@'/dev',
 		format.files.root@'/dev/void',
-		None,
 	)
 
 	from .elements import Resource, Refraction

@@ -212,7 +212,6 @@ def refract(theme, view, pathcontext, path, action):
 		'resource-location',
 		files.root@'/dev',
 		files.root@'/dev/void',
-		None,
 	)
 
 	from .elements import Resource, Refraction
