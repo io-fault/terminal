@@ -186,7 +186,7 @@ def save(session, frame, rf, event):
 
 	frame.refocus()
 	target = frame.focus
-	session.save_resource(target.source.origin.ref_path)
+	session.store_resource(target.source)
 	session.keyboard.set('control')
 
 	# Location heading.

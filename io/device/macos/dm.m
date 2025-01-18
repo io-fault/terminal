@@ -144,7 +144,7 @@ openResources: (id) sender
 	// to the location selected by the user.
 */
 - (void)
-cloneResource: (id) sender
+copyResource: (id) sender
 {
 	CellMatrix *cm = self.root.contentView;
 	NSSavePanel *op = [NSSavePanel savePanel];
@@ -161,9 +161,9 @@ cloneResource: (id) sender
 				return;
 
 			if (op.URL.fileURL == YES)
-				dispatch_application_instruction(cm, op.URL.path, -1, ai_resource_clone);
+				dispatch_application_instruction(cm, op.URL.path, -1, ai_resource_copy);
 			else
-				dispatch_application_instruction(cm, op.URL.absoluteString, -1, ai_resource_clone);
+				dispatch_application_instruction(cm, op.URL.absoluteString, -1, ai_resource_copy);
 		}
 	];
 }
@@ -509,7 +509,7 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 		.tag = ai_resource_close;
 	AddMenuItem(rm, "Save", @selector(relayInstruction:), "s")
 		.tag = ai_resource_save;
-	AddMenuItem(rm, "Duplicate", @selector(cloneResource:), "S")
+	AddMenuItem(rm, "Duplicate", @selector(copyResource:), "S")
 		.tag = ai_resource_save;
 	AddMenuItem(rm, "Reload", @selector(relayInstruction:), "")
 		.tag = ai_resource_reload;
@@ -549,9 +549,9 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 	AddMenuItem(fm, "New", @selector(relayInstruction:), "N")
 		.tag = ai_frame_create;
 	{
-		NSMenuItem *mi = AddMenuItem(fm, "Clone", @selector(relayInstruction:), "n");
+		NSMenuItem *mi = AddMenuItem(fm, "Copy", @selector(relayInstruction:), "n");
 		mi.keyEquivalentModifierMask |= NSEventModifierFlagControl;
-		mi.tag = ai_frame_clone;
+		mi.tag = ai_frame_copy;
 		mi.toolTip = @"Duplicate the frame maintaining layout and attached resources.";
 	}
 	AddMenuItem(fm, "Close", @selector(relayInstruction:), "W")

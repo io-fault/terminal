@@ -35,13 +35,99 @@ class Core(object):
 	# Currently, only used to identify a user interface element.
 	"""
 
+class Execution(Core):
+	"""
+	# System process execution status and interface.
+
+	# [ Elements ]
+	# /identity/
+		# The identity of the system that operations are dispatched on.
+		# The object that is used to identify an &Execution instance within a &Session.
+	# /encoding/
+		# The encoding to use for environment variables and argument vectors.
+		# This may *not* be consistent with the preferred filesystem encoding.
+	# /environment/
+		# The set of environment variables needed when performing operations
+		# *within* the system context.
+		# Only when host execution is being performed will this be the set of
+		# environment variables passed into the Invocation.
+	# /executable/
+		# The host local, absolute, filesystem path to the executable
+		# used by &interface.
+	# /interface/
+		# The local system command, argument vector, to use to dispatch
+		# operations in the system context.
+	"""
+
+	identity: System
+
+	encoding: str
+	executable: str
+	interface: Sequence[str]
+	environment: Mapping[str, str]
+
+	def __str__(self):
+		return ''.join(x[1] for x in self.i_status())
+
+	def i_status(self):
+		yield from self.identity.i_format(self.pwd())
+
+	def export(self, kv_iter:Iterable[tuple[str,str]]):
+		"""
+		# Update the environment variables present when execution is performed.
+		"""
+
+		self.environment.update(kv_iter)
+
+	def getenv(self, name) -> str:
+		"""
+		# Return the locally configured environment variable identified by &name.
+		"""
+
+		return self.environment[name]
+
+	def setenv(self, name, value):
+		"""
+		# Locally configure the environment variable identified by &name to &value.
+		"""
+
+		self.environment[name] = value
+
+	def pwd(self):
+		"""
+		# Return the value of the locally configured (system/environ)`PWD`.
+		"""
+
+		return self.environment['PWD']
+
+	def chdir(self, path: str, *, default=None) -> str|None:
+		"""
+		# Locally set (system/environ)`PWD` and return the old value or &default if unset.
+		"""
+
+		current = self.environment.get('PWD', default)
+		self.environment['PWD'] = path
+		return current
+
+	def __init__(self, identity:System, encoding, ifpath, argv):
+		self.identity = identity
+		self.environment = {}
+		self.encoding = encoding
+		self.executable = ifpath
+		self.interface = argv
+
 class Resource(Core):
 	"""
-	# The representation of a stored resource.
+	# The representation of a stored resource and its modifications.
+
+	# This is not intended to be a projection of the resource identified by &origin.
+	# It is the record set that represents the content of the resource read
+	# from the system. Interfaces for loading and storing the resource on disk are managed
+	# primarily by the session.
 
 	# [ Elements ]
 	# /origin/
-		# Reference identifying the resource being refracted.
+		# Reference identifying the resource being modified and refracted.
 	# /type/
 		# Type identifier used to select the &structure.
 	# /structure/
@@ -51,8 +137,7 @@ class Resource(Core):
 		# The structured line processor formatting a series of fields
 		# into a &..cells.text.Phrase instance.
 	# /elements/
-		# The contents of the connected resource.
-		# The sequence of lines being refracted.
+		# The sequence of lines being modified.
 	# /modifications/
 		# The log of changes applied to &elements.
 	# /cursors/
@@ -62,7 +147,7 @@ class Resource(Core):
 	origin: Reference
 	encoding: str
 
-	elements: Sequence[object]
+	elements: Sequence[str]
 	modifications: delta.Log
 
 	status: object
@@ -1075,33 +1160,34 @@ class Session(Core):
 
 	# [ Elements ]
 	# /host/
-		# The system context of the host machine.
+		# The system execution context of the host machine.
 	# /logfile/
 		# Transcript override for logging.
 	# /io/
 		# System I/O abstraction for command substitution and file I/O.
 	# /device/
 		# The target display and event source.
+	# /types/
+		# Mapping of file paths to loaded syntax (profile) types.
 	# /resources/
 		# Mapping of file paths to &Resource instances.
-	# /refractions/
-		# The list of connected &Refraction instances.
+	# /systems/
+		# System contexts currently available for use within the session.
 	# /placement/
 		# Invocation defined position and dimensions as a tuple pair.
 		# Defined by &__init__.Parameters.position and &__init__.Parameters.dimensions.
-	# /types/
-		# Mapping of file paths to loaded syntax (profile) types.
 	"""
 
 	host: types.System
 	typepath: Sequence[files.Path]
 	executable: files.Path
 	resources: Mapping[files.Path, Resource]
+	systems: Mapping[System, Execution]
 
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	types: Mapping[files.Path, tuple[object, object]]
 
-	def __init__(self, system, io, executable, terminal, position=(0,0), dimensions=None):
+	def __init__(self, system, io, executable, terminal:Device, position=(0,0), dimensions=None):
 		self.host = system
 		self.logfile = None
 		self.io = io
@@ -1117,10 +1203,27 @@ class Session(Core):
 		self.types = dict()
 
 		exepath = self.executable/'transcript'
-		editor_log = Reference(self.host, 'filepath', str(exepath), self.executable, exepath, None)
+		editor_log = Reference(self.host.identity, 'filepath', str(exepath), self.executable, exepath, None)
 		self.transcript = Resource(editor_log, self.open_type(files.root))
 		self.resources = {
 			self.executable/'transcript': self.transcript
+		}
+
+		self.process = Execution(
+			types.System(
+				'process',
+				system.identity.sys_credentials,
+				'',
+				system.identity.sys_identity,
+			),
+			'utf-8',
+			None,
+			[],
+		)
+
+		self.systems = {
+			self.host.identity: self.host,
+			self.process.identity: self.process,
 		}
 
 		self.keyboard = ia.types.Selection(keyboard.default)
@@ -1167,6 +1270,7 @@ class Session(Core):
 		"""
 		# Find the type that should be used for the given &resource.
 		"""
+
 		return self.type_by_extension(resource.extension or 'default')
 
 	@functools.lru_cache(4)
@@ -1180,81 +1284,94 @@ class Session(Core):
 			# format.Lambda
 			return files.root
 
-	def create_resource(self, reference):
-		rsrc = self.load_resource(reference)
-		self.resources[reference.ref_path] = rsrc
-		return rsrc
-
-	def open_resource(self, path:files.Path):
+	def allocate_resource(self, ref:Reference) -> Resource:
 		"""
-		# Return &sequence.Segments associated with &path if already available.
-		# Otherwise, &load_resource and return the loaded sequence.
+		# Create a &Resource instance using the given reference as it's origin.
 		"""
 
-		if path in self.resources:
-			return self.resources[path]
+		return Resource(ref, self.open_type(ref.ref_type))
 
-		return self.create_resource(self.reference(path))
-
-	def load_resource(self, ref:Reference):
+	def import_resource(self, ref:Reference) -> Resource:
 		"""
-		# Load and retain the lines of the resource identified by &path.
+		# Return a &Resource associated with the contents of &path and
+		# add it to the resource set managed by &self.
 		"""
 
-		rsrc = Resource(ref, self.open_type(ref.ref_type))
-		path = ref.ref_path
+		if ref.ref_path in self.resources:
+			return self.resources[ref.ref_path]
+
+		rs = self.allocate_resource(ref)
+		self.load_resource(rs)
+		self.resources[ref.ref_path] = rs
+
+		return rs
+
+	def load_resource(self, rs:Resource):
+		"""
+		# Load and retain the lines of the resource identified by &rs.origin.
+		"""
+
+		path = rs.origin.ref_path
 
 		try:
-			with path.fs_open('r', encoding=rsrc.encoding) as f:
-				rsrc.status = path.fs_status()
-				rsrc.elements = sequence.Segments(x[:-1] for x in f.readlines())
+			with path.fs_open('r', encoding=rs.encoding) as f:
+				rs.status = path.fs_status()
+				rs.elements = sequence.Segments(x[:-1] for x in f.readlines())
 		except FileNotFoundError:
 			self.log("Resource does not exist: " + str(path))
-			st = None
 		except Exception as load_error:
 			self.error("Exception during load. Continuing with empty document.", load_error)
-			st = None
 		else:
 			# Initialized.
-			return rsrc
+			return
 
 		self.log("Writing will attempt to create the file and any leading paths.")
-		return rsrc
 
-	def save_resource(self, path:files.Path):
-		"""
-		# Write the &elements to the resource identified by &path.
-		"""
-
-		size = 0
-		rsrc = self.resources[path]
-		self.log(f"Writing {len(rsrc.elements)} {rsrc.encoding!r} lines: {str(rsrc.origin)}")
-
+	@staticmethod
+	def buffer_lines(encoding, ilines):
 		# iter(elements) is critical here; repeating the running iterator
 		# as islice continues to take processing units to be buffered.
-		ielements = itertools.repeat(iter(rsrc.elements))
-		ilines = (itertools.islice(i, 512) for i in ielements)
+		ielements = itertools.repeat(iter(ilines))
+		ilinesets = (itertools.islice(i, 512) for i in ielements)
 
-		if (path ** 1).fs_type() == 'void':
-			self.log(f"Allocating directories: " + str(path ** 1))
-			path.fs_alloc() # Leading path not present on save.
+		buf = bytearray()
+		for lines in ilinesets:
+			bl = len(buf)
+			for line in lines:
+				buf += line.encode(encoding)
+				buf += b'\n'
 
-		with path.fs_open('wb') as file:
-			buf = bytearray()
-			for lines in ilines:
-				bl = len(buf)
-				for line in lines:
-					buf += line.encode(rsrc.encoding)
-					buf += b'\n'
+			if bl == len(buf):
+				yield buf
+				break
+			elif len(buf) > 0xffff:
+				yield buf
+				buf = bytearray()
 
-				if bl == len(buf):
-					file.write(buf)
-					size += len(buf)
-					break
-				elif len(buf) > 0xffff:
-					file.write(buf)
-					size += len(buf)
-					buf = bytearray()
+	def store_resource(self, rs:Resource):
+		"""
+		# Write the elements of the process local resource, &rs, to the file
+		# identified by &rs.origin using the origin's system context.
+		"""
+
+		ref = rs.origin
+		exectx = self.systems[ref.ref_system]
+		self.log(f"Writing {len(rs.elements)} {rs.encoding!r} lines to [{ref}]")
+
+		path = ref.ref_path
+		if path.fs_type() == 'void':
+			leading = (path ** 1)
+			if leading.fs_type() == 'void':
+				self.log(f"Allocating directories: " + str(leading))
+				path.fs_alloc() # Leading path not present on save.
+
+		idata = self.buffer_lines(rs.encoding, rs.elements)
+		size = 0
+
+		with open(ref.ref_identity, 'wb') as file:
+			for data in idata:
+				size += len(data)
+				file.write(data)
 
 		st = path.fs_status()
 		self.log(f"Finished writing {size!r} bytes.")
@@ -1262,21 +1379,22 @@ class Session(Core):
 		if st.size != size:
 			self.log(f"Calculated write size differs from system reported size: {st.size}")
 
-		eseq = rsrc.elements
+		if rs.status is None:
+			self.log("No previous modification time, file is new.")
+		else:
+			age = rs.age(st.last_modified)
+			if age is not None:
+				self.log("Last modification was " + age + " ago.")
 
-		age = rsrc.age(st.last_modified)
-		if age is not None:
-			self.log("Last modification was " + age + " ago.")
+		rs.saved = rs.modifications.snapshot()
+		rs.status = st
 
-		rsrc.saved = rsrc.modifications.snapshot()
-		rsrc.status = st
-
-	def close_resource(self, path:files.Path):
+	def delete_resource(self, rs:Resource):
 		"""
-		# Destroy the retained lines identified by the &path.
+		# Remove the process local resource, &rs, from the session's list.
 		"""
 
-		del self.resources[path]
+		del self.resources[rs.origin.ref_path]
 
 	def load_type(self, path:files.Path):
 		"""
@@ -1312,7 +1430,7 @@ class Session(Core):
 		"""
 
 		return Reference(
-			self.host,
+			self.host.identity,
 			self.lookup_type(path),
 			str(path),
 			path.context or path ** 1,
@@ -1326,7 +1444,7 @@ class Session(Core):
 		# A &Resource instance is created if the path has not been loaded.
 		"""
 
-		return Refraction(self.open_resource(path))
+		return Refraction(self.import_resource(self.reference(path)))
 
 	def log(self, *lines):
 		"""
@@ -1601,11 +1719,12 @@ class Session(Core):
 		'(frame/switch)': 'session/frame/switch',
 		'(frame/transpose)': 'session/frame/transpose',
 
+		'(resource/switch)': 'session/resource/switch',
 		'(resource/relocate)': 'session/resource/relocate',
 		'(resource/open)': 'session/resource/open',
 		'(resource/reload)': 'session/resource/reload',
 		'(resource/save)': 'session/resource/write',
-		'(resource/clone)': 'session/resource/clone',
+		'(resource/copy)': 'session/resource/copy',
 		'(resource/close)': 'session/resource/close',
 
 		'(elements/undo)': 'transaction/undo',

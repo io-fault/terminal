@@ -149,16 +149,18 @@ def main(inv:process.Invocation) -> process.Exit:
 	path = identify_executable(inv)
 	wd = configure_working_directory(config)
 
-	host = types.System(
-		'system',
-		query.username(),
-		'',
-		query.hostname(),
+	host = elements.Execution(
+		types.System(
+			'system',
+			query.username(),
+			'',
+			query.hostname(),
+		),
 		'utf-8',
 		str(next(query.executables('env'))),
 		['env'],
 	)
-	host.sys_environment.update(os.environ)
+	host.export(os.environ.items())
 	host.chdir(str(wd))
 
 	device = types.Device()
@@ -186,7 +188,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	editor.log("Host: " + str(editor.host))
 	editor.log("Factor: " + __name__)
 	editor.log("Device: " + (config.get('interface-device') or "manager default"))
-	editor.log("Environment:", *('\t'+k+'='+v for k,v in host.sys_environment.items()))
+	editor.log("Environment:", *('\t'+k+'='+v for k,v in host.environment.items()))
 
 	# System I/O loop for command substitution and file I/O.
 	editor.io.service()

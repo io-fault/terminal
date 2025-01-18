@@ -78,26 +78,33 @@ def s_update_resource(session, frame, rf, event):
 @event('resource', 'write')
 def s_write_resource(session, frame, rf, event):
 	"""
-	# Update the resource to reflect the refraction's element state
-	# without confirmation.
+	# Update the origin's content to reflect the element state of &rf.source.
 	"""
 
-	session.save_resource(rf.resource)
+	session.store_resource(rf.source)
 
-@event('resource', 'clone')
-def s_clone_resource(session, frame, rf, event):
+@event('resource', 'copy')
+def copy_resource(session, frame, rf, event):
 	"""
 	# Write the elements to the resource identified by the absolute path in
-	# device's text.
+	# device's transferred text.
+
+	# Used when the device manager passes the path in after the user selects
+	# a destination path.
 	"""
 
 	url = session.device.transfer_text()
-	if url.startswith('/'):
-		re = rf.source.origin.ref_path@url
-	else:
-		raise ValueError("not a filesystem path: " + url)
+	if not url.startswith('/'):
+		raise ValueError("not a filesystem path: " + url) # Expects an absolute path.
 
-	session.save_resource(re, rf.elements)
+	re = rf.source.origin.ref_path@url
+	rs = session.allocate_resource(session.reference(re))
+	rs.elements = rf.source.elements
+	rs.encoding = rf.source.encoding
+	if rs.origin.ref_path.fs_type() != 'void':
+		rs.status = rs.origin.ref_path.fs_status()
+
+	session.store_resource(rs)
 
 @event('resource', 'close')
 def s_close_resource(session, frame, rf, event):
@@ -105,7 +112,7 @@ def s_close_resource(session, frame, rf, event):
 	# Remove the resource from the session releasing any associated memory.
 	"""
 
-	session.close_resource(rf.source.origin.ref_path)
+	session.delete_resource(rf.source)
 	session.chresource(frame, rf.source.origin.ref_path@'/dev/null')
 	session.keyboard.set('control')
 	frame.refocus()
@@ -116,12 +123,12 @@ def s_reload_resource(session, frame, rf, event):
 	# Remove the resource from the session releasing any associated memory.
 	"""
 
-	session.close_resource(rf.source.origin.ref_path)
+	session.delete_resource(rf.source)
 	session.chresource(frame, rf.source.origin.ref_path)
 	session.keyboard.set('control')
 	frame.refocus()
 
-@event('resource', 'open')
+@event('resource', 'switch')
 def s_open_resource(session, frame, rf, event):
 	"""
 	# Open the resource identified by the transferred text.

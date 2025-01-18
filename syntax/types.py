@@ -1234,6 +1234,7 @@ class Model(object):
 
 			yield (position, ic, ii, re)
 
+@tools.struct()
 class System(object):
 	"""
 	# System context descriptor for dispatching operations in UNIX systems.
@@ -1251,29 +1252,33 @@ class System(object):
 		# the system context as a string.
 	# /sys_identity/
 		# Usually, the host name of the system's machine, real or virtual.
-	# /sys_encoding/
-		# The encoding to use for environment variables and argument vectors.
-		# This may *not* be consistent with the preferred filesystem encoding.
-	# /sys_environment/
-		# The set of environment variables needed when performing operations
-		# in the system context.
-	# /sys_executable/
-		# The host local, absolute, filesystem path to the executable
-		# used by &sys_interface.
-	# /sys_interface/
-		# The local system command to use to dispatch operations in the system context.
+	# /sys_title/
+		# An optional, user defined, label used to distinguish a system.
+
+		# Sessions use &System instances to select &.element.Execution instances.
+		# In cases where isolation or variation is desired by a user, the title
+		# can be used to force a distinction to be made so that process sets can
+		# be isolated without compromising one of the other fields.
 	"""
 
 	sys_method: str
 	sys_credentials: str
 	sys_authorization: str
 	sys_identity: str
+	sys_title: str = ''
 
-	sys_encoding: str
-	sys_environment: Mapping[str, str]
+	from dataclasses import replace as _replace
 
-	sys_executable: str
-	sys_interface: Sequence[str]
+	def variant(self, system, *, Exceptions=set(['sys_title'])):
+		"""
+		# Whether &self is considered a variant of &system.
+		"""
+
+		return all([
+			getattr(self, field) == getattr(system, field)
+			for field in self.__dataclass_fields__.keys()
+			if field not in Exceptions
+		])
 
 	def __str__(self):
 		return ''.join(x[1] for x in self.i_format())
@@ -1301,11 +1306,13 @@ class System(object):
 
 		yield ('system-identity', self.sys_identity)
 
+		if self.sys_title:
+			yield ('delimiter', '[')
+			yield ('system-title', self.sys_title)
+			yield ('delimiter', ']')
+
 		if path is None:
 			return
-
-		if not path:
-			path = self.sys_environment.get('PWD', '') or '/'
 
 		if path[:1] == '/':
 			yield ('delimiter', '/')
@@ -1313,45 +1320,18 @@ class System(object):
 
 		yield ('system-path', path)
 
-	def getenv(self, name) -> str:
+	def retitle(self, title:str):
 		"""
-		# Return the locally configured environment variable identified by &name.
-		"""
+		# Construct an instance of the system, &self, with &title set as &sys_title.
 
-		return self.sys_environment[name]
-
-	def setenv(self, name, value):
-		"""
-		# Locally configure the environment variable identified by &name to &value.
+		# [ Returns ]
+		# New instance or &self when &self.sys_title equals &title.
 		"""
 
-		self.sys_environment[name] = value
-
-	def pwd(self):
-		"""
-		# Return the value of the locally configured (system/environ)`PWD`.
-		"""
-
-		return self.sys_environment['PWD']
-
-	def chdir(self, path: str, *, default=None) -> str|None:
-		"""
-		# Locally set (system/environ)`PWD` and return the old value or &default if unset.
-		"""
-
-		current = self.sys_environment.get('PWD', default)
-		self.sys_environment['PWD'] = path
-		return current
-
-	def __init__(self, method, user, auth, machine_id, encoding, ifpath, argv):
-		self.sys_method = method
-		self.sys_credentials = user
-		self.sys_authorization = auth
-		self.sys_identity = machine_id
-		self.sys_encoding = encoding
-		self.sys_environment = {}
-		self.sys_executable = ifpath
-		self.sys_interface = argv
+		if self.sys_title == title:
+			return self
+		else:
+			return self._replace(sys_title=title)
 
 @tools.struct()
 class Reference(object):
@@ -1398,7 +1378,8 @@ class Reference(object):
 		"""
 		# Reconstruct the reference with an updated type path.
 		"""
-		self.__class__(
+
+		return self.__class__(
 			self.ref_system,
 			ref_type,
 			self.ref_identity,
