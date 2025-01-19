@@ -3,16 +3,18 @@
 """
 import json
 import itertools
-import functools
 import collections
+
+from fault.context.tools import cachedcalls
+from fault.context.tools import partial
+from fault.context.tools import struct
 
 from fault.system import files
 from fault.system.text import cells as syscellcount
-from fault.context.tools import struct
 from fault.syntax import keywords as kos
 
 from ..cells.text import Phrase, Redirect, Words, Unit, graphemes, words
-graphemes = functools.partial(graphemes, syscellcount)
+graphemes = partial(graphemes, syscellcount)
 
 from ..cells.types import Glyph
 
@@ -268,7 +270,7 @@ def integrate(cell, theme, palette):
 		for k, v in theme.items()
 	}
 
-@functools.lru_cache(128)
+@cachedcalls(128)
 def segmentation(field, *, words=words, graphemes=graphemes):
 	"""
 	# Construct a sequence of &words grouped graphemes with associated cell counts.
@@ -363,7 +365,7 @@ def redirects(phrasewords, *, Unit=Unit, isinstance=isinstance):
 		yield i
 
 def compose(theme, sline, *,
-		partial=functools.partial,
+		partial=partial,
 		chain=itertools.chain,
 		islice=itertools.islice,
 		map=map,
