@@ -1400,15 +1400,16 @@ class Session(Core):
 		"""
 		# Load and cache the syntax profile identified by &path.
 		"""
+
 		ft = format.prepare(path)
 
-		def structure_line(line, *, Type=ft, SI=format.structure, list=list):
-			return list(SI(Type, line))
+		def structure_line(line, *, TL=ft.process_line, SI=format.structure, list=list):
+			return list(SI(TL, line))
 
 		format_line = functools.partial(format.compose, self.theme)
 
-		def render_line(line, *, Type=ft, SI=format.structure, FMT=format_line):
-			return FMT(list(SI(Type, line)))
+		def render_line(line, *, TL=ft.process_line, SI=format.structure, FMT=format_line):
+			return FMT(list(SI(TL, line)))
 
 		self.types[path] = (ft, structure_line, format_line, render_line)
 

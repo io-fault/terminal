@@ -293,7 +293,7 @@ def prepare(profile):
 	language = kos.Profile.from_keywords_v1(**data)
 	return kos.Parser.from_profile(language)
 
-def structure(plt, line):
+def structure(tokenize, line):
 	"""
 	# Structure the given &line into typeds fields using the &plt tokenizer.
 	"""
@@ -304,11 +304,10 @@ def structure(plt, line):
 	else:
 		ind_type = 'indentation'
 
-	for tokens in plt.process_lines((l,)):
-		yield (ind_type, leading)
-		yield from qualify(tokens)
-		# Enable special casing trailing whitespace.
-		yield ('trailing-whitespace', trailing)
+	yield (ind_type, leading)
+	yield from qualify(tokenize(l))
+	# Enable special casing trailing whitespace.
+	yield ('trailing-whitespace', trailing)
 
 def control(theme, ftype, field):
 	"""
