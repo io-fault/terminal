@@ -1,7 +1,6 @@
 """
 # Support functions for refraction query commands.
 """
-from . import format
 from . import projection
 from . import delta
 from . import types
