@@ -1,7 +1,6 @@
 """
 # Session retention and restoration functions.
 """
-from fault.context.tools import interlace
 from fault.status import transport
 from fault.system import process, files
 
@@ -39,7 +38,7 @@ def filepath(fp, Separator='/', Root='/'):
 
 def structure_frames(session:str, *, Interpret=transport.structure):
 	"""
-	# Structure the sequenced session text into a form accepted
+	# Structure the lfht image into a form that can be read by
 	# by &.elements.Session.restore.
 	"""
 
@@ -78,6 +77,10 @@ def frame_layout_string(layout):
 		prefix = ' '
 
 def sequence_frames(session, *, Render=transport.sequence):
+	"""
+	# Construct the lfht image representing the frames.
+	"""
+
 	return Render(
 		(frame_id or '', [
 				''.join(frame_layout_string(layout))
