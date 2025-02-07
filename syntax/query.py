@@ -149,7 +149,7 @@ def issue(session, frame, rf, event):
 	target, view = frame.select((frame.vertical, frame.division))
 	command, string = ' '.join(rf.elements).split(' ', 1)
 	index[command](session, frame, target, string)
-	session.deltas.append((target, view))
+	frame.deltas.append((target, view))
 
 def find(session, frame, rf, string):
 	"""

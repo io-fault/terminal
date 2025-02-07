@@ -605,6 +605,8 @@ class Frame(Core):
 		# The position of the frame in the session's frame set.
 	# /title/
 		# User assigned identifier for a frame.
+	# /deltas/
+		# Enqueued display deltas.
 	"""
 
 	area: Area
@@ -641,6 +643,7 @@ class Frame(Core):
 		self.refractions = []
 		self.returns = []
 		self.reflections = {}
+		self.deltas = []
 
 	def reflect(self, ref:Reference, *sole) -> Iterable[Refraction]:
 		"""
@@ -1280,7 +1283,6 @@ class Session(Core):
 
 		self.executable = executable.delimit()
 		self.device = terminal
-		self.deltas = []
 		self.cache = [] # Lines
 
 		ltype = self.integrate_types(self.configuration.types, self.theme)
@@ -1835,11 +1837,11 @@ class Session(Core):
 
 		# Presume updates are required.
 		for resource_ref in rd:
-			self.deltas.extend(frame.reflect(resource_ref))
+			frame.deltas.extend(frame.reflect(resource_ref))
 
 	def dispatch(self, frame, refraction, view, key):
 		"""
-		# Dispatch the &key event to the &refraction in the &frame with the &view.
+		# Perform the application instruction identified by &key.
 		"""
 
 		try:
@@ -1862,11 +1864,12 @@ class Session(Core):
 			self.error('Operation Failure', operror)
 			del operror
 
+		# Find parallel refractions that may require updates.
 		yield from frame.reflect(refraction.source.origin, (refraction, view))
-		if self.deltas:
-			for drf, dview in self.deltas:
+		if frame.deltas:
+			for drf, dview in frame.deltas:
 				yield from frame.reflect(drf.source.origin, (drf, dview))
-			del self.deltas[:]
+			del frame.deltas[:]
 
 	def cycle(self, *, Method=projection.update):
 		"""

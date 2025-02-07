@@ -576,7 +576,7 @@ def pan(session, frame, rf, event):
 	cursor_target, view = frame.target(ay, ax)[1:3]
 	quantity = session.device.quantity()
 
-	session.deltas.append((cursor_target, view))
+	frame.deltas.append((cursor_target, view))
 	if quantity < 0:
 		return pan_forward_cells(session, frame, rf, event, -quantity, target=cursor_target)
 	else:
@@ -588,7 +588,7 @@ def scroll(session, frame, rf, event):
 	cursor_target, view = frame.target(ay, ax)[1:3]
 	quantity = session.device.quantity()
 
-	session.deltas.append((cursor_target, view))
+	frame.deltas.append((cursor_target, view))
 	if quantity < 0:
 		return scroll_forward_unit(session, frame, rf, event, -quantity, target=cursor_target)
 	else:
@@ -605,7 +605,7 @@ def scroll_forward_many(session, frame, rf, event, quantity=1, target=None):
 	fi, rf, view = frame.target(ay, ax)
 	q = ((view.area.lines // 3) or 1) * quantity
 	rf.scroll(q.__add__)
-	session.deltas.append((rf, view))
+	frame.deltas.append((rf, view))
 
 @event('view', 'vertical', 'backward', 'third')
 def scroll_backward_many(session, frame, rf, event, quantity=1, target=None):
@@ -618,7 +618,7 @@ def scroll_backward_many(session, frame, rf, event, quantity=1, target=None):
 	fi, rf, view = frame.target(ay, ax)
 	q = ((view.area.lines // 3) or 1) * quantity
 	rf.scroll((-q).__add__)
-	session.deltas.append((rf, view))
+	frame.deltas.append((rf, view))
 
 @event('view', 'vertical', 'start')
 def scroll_first(session, frame, rf, event, *, quantity=1):
@@ -629,7 +629,7 @@ def scroll_first(session, frame, rf, event, *, quantity=1):
 	ay, ax = session.device.cursor_cell_status()
 	fi, rf, view = frame.target(ay, ax)
 	rf.scroll((0).__mul__)
-	session.deltas.append((rf, view))
+	frame.deltas.append((rf, view))
 
 @event('view', 'vertical', 'stop')
 def scroll_last(session, frame, rf, event, *, quantity=1):
@@ -641,7 +641,7 @@ def scroll_last(session, frame, rf, event, *, quantity=1):
 	fi, rf, view = frame.target(ay, ax)
 	offset = len(rf.elements)
 	rf.scroll(lambda x: offset)
-	session.deltas.append((rf, view))
+	frame.deltas.append((rf, view))
 
 @event('find', 'configure')
 def s_rq_find(session, frame, rf, event):
