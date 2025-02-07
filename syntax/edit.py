@@ -23,19 +23,6 @@ from . import types
 from . import elements
 from .system import IOManager
 
-def fkrt(inv:process.Invocation) -> process.Exit:
-	"""
-	# &fault.kernel runtime entry point.
-	"""
-	import signal
-	from fault.kernel import system
-
-	# Block terminal stops as kqueue or signalfd will need to hear them.
-	signal.signal(signal.SIGTSTP, signal.SIG_IGN)
-
-	system.dispatch(inv, Executable(Session(exe, terminal).setup))
-	system.control()
-
 restricted = {}
 restricted.update(
 	('-' + str(i), ('sequence-append', i, 'vertical-divisions'))
