@@ -2,29 +2,26 @@
 # Support functions for refraction query commands.
 """
 from . import format
-from . import types
 from . import projection
 from . import delta
-
-def type():
-	# Currently, just &format.Lambda.
-	return format.prepare(format.files.root)
+from . import types
 
 def refract(session, frame, view, qtype, state, action):
 	"""
 	# Construct a Refraction for representing a query.
 	"""
 
+	from .elements import Resource, Refraction
+	from fault.system import files
 	ref = types.Reference(
 		session.host,
 		'/../',
 		'query-instructions',
-		format.files.root@'/dev',
-		format.files.root@'/dev/void',
+		files.root@'/dev',
+		files.root@'/dev/void',
 	)
 
-	from .elements import Resource, Refraction
-	meta = Resource(ref, session.open_type(format.files.root))
+	meta = Resource(ref, session.load_type('lambda'))
 	meta.elements = list(map(str, [qtype + ' ' + state]))
 	lrf = Refraction(meta)
 	lrf.configure(view.area)
@@ -232,7 +229,7 @@ def rewrite(session, frame, rf, command):
 
 	# Identify first IL.
 	elements = rf.elements
-	lil = format.Whitespace.il
+	lil = types.Line.il
 	il = lil(elements[lspan.start])
 
 	rf.log.checkpoint()

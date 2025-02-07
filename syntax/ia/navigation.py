@@ -2,9 +2,8 @@
 # Navigation methods controlling cursor vectors.
 """
 import itertools
-
-from ..format import Whitespace
-lil = Whitespace.il
+from ..types import Line
+lil = Line.il
 
 from . import types
 event, Index = types.Index.allocate('navigation')

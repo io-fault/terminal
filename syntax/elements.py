@@ -5,13 +5,12 @@ from collections.abc import Sequence, Mapping, Iterable
 from typing import Optional
 import collections
 import itertools
-import functools
 import weakref
 
+from fault.context import tools
 from fault.system import files
 from fault.system.query import home
 
-from . import palette
 from . import symbols
 from . import location
 from . import projection
@@ -21,10 +20,9 @@ from . import alignment
 from . import types
 from . import sequence
 from . import delta
-from . import format
-from . import keyboard
 from . import ia
 from . import types
+from . import fields
 
 from .types import Model, View, Reference, Area, Glyph, Device, System
 
@@ -128,14 +126,8 @@ class Resource(Core):
 	# [ Elements ]
 	# /origin/
 		# Reference identifying the resource being modified and refracted.
-	# /type/
-		# Type identifier used to select the &structure.
-	# /structure/
-		# The field sequence constructor.
-		# Processes line content into typed fields for analysis or display.
-	# /format/
-		# The structured line processor formatting a series of fields
-		# into a &..cells.text.Phrase instance.
+	# /forms/
+		# The line reformulations.
 	# /elements/
 		# The sequence of lines being modified.
 	# /modifications/
@@ -144,26 +136,33 @@ class Resource(Core):
 		# The collection of cursors tracking changes to the resource.
 	"""
 
-	origin: Reference
-	encoding: str
+	origin: types.Reference
+	forms: types.Reformulations
 
 	elements: Sequence[str]
 	modifications: delta.Log
 
 	status: object
-	structure: object
-
 	cursors: Mapping[types.Position, types.Position]
 
-	def __init__(self, origin, types, encoding='utf-8'):
+	def __init__(self, origin, forms):
 		self.origin = origin
-		self.encoding = encoding
+		self.forms = forms
+
 		self.elements = sequence.Segments([])
 		self.modifications = delta.Log()
 		self.snapshot = self.modifications.snapshot()
 		self.status = None
-		self.type, self.structure, self.format, self.render = types
 		self.cursors = {}
+
+	def select(self, start, stop, *, enum=enumerate) -> Iterable[types.Line]:
+		"""
+		# Retrieve &types.Line instances in the given range defined
+		# by &start and &stop.
+		"""
+
+		for i, v in enum(self.elements.select(start, stop)):
+			yield self.forms.mkline(v, ln_offset=start+i)
 
 	@staticmethod
 	def since(start, stop, *, precision='millisecond'):
@@ -211,23 +210,10 @@ class Refraction(Core):
 	# The elements and status of a selected resource.
 
 	# [ Elements ]
-	# /origin/
-		# Reference identifying the resource being refracted.
-	# /type/
-		# Type identifier used to select the &structure.
-	# /structure/
-		# The field sequence constructor for identifying how
-		# the &elements should be represented on within a &View.
-	# /format/
-		# The structured line processor formatting the fields
-		# into a &..cells.text.Phrase.
+	# /source/
+		# The resource providing the lines to display and manipulate.
 	# /annotation/
-		# Field annotation state.
-	# /elements/
-		# The contents of the connected resource.
-		# The sequence of lines being refracted.
-	# /log/
-		# The changes applied to &elements.
+		# Cursor annotation state.
 	# /focus/
 		# The cursor selecting an element.
 		# A path identifying the ranges and targets of each dimension.
@@ -239,18 +225,13 @@ class Refraction(Core):
 	# /activate/
 		# Action associated with return and enter.
 		# Defaults to &None.
-		# &.keyboard.Selection intercepts will eliminate the need for this.
+		# &.ia.types.Selection intercepts will eliminate the need for this.
 	# /system_execution_status/
 		# Status of system processes executed by commands targeting the instance.
 	"""
 
 	source: Resource
-	structure: object
-	format: object
-	render: object
 	annotation: Optional[types.Annotation]
-	elements: Sequence[object]
-	log: object
 	focus: Sequence[object]
 	limits: Sequence[int]
 	visible: Sequence[int]
@@ -279,30 +260,27 @@ class Refraction(Core):
 
 		self.annotation = annotation
 
-	def retype(self, type, structure, format, render):
+	def retype(self, lf:types.Reformulations):
 		"""
 		# Reconstruct &self with a new syntax type.
 		"""
 
 		new = object.__new__(self.__class__)
 		new.__dict__.update(self.__dict__.items())
-		new.type = type
-		new.structure = structure
-		new.format = format
-		new.render = render
+		new.forms = lf
+		new.structure = lf.rf_structure
+		new.render = lf.rf_structure
 
 		return new
 
 	def __init__(self, resource):
 		self.source = resource
-		self.type = resource.type
-		self.structure = resource.structure
-		self.format = resource.format
-		self.render = resource.render
+		self.forms = resource.forms
+		self.structure = self.forms.rf_structure
+		self.render = self.forms.rf_render
 		self.annotation = None
 		self.system_execution_status = {}
 
-		# State. Document elements, cursor, and camera.
 		self.elements = resource.elements
 		self.log = resource.modifications
 
@@ -449,8 +427,7 @@ class Refraction(Core):
 
 		return self
 
-	from . format import Whitespace
-	def vertical_changed(self, ln, *, lil=Whitespace.il,
+	def vertical_changed(self, ln, *, lil=types.Line.il,
 			backward=alignment.backward,
 			forward=alignment.forward,
 		):
@@ -502,8 +479,6 @@ class Refraction(Core):
 					self.visible[0] = min(total - edge, ln - (edge // 2))
 				else:
 					self.visible[0] = position
-
-	del Whitespace
 
 	def field_areas(self, element):
 		"""
@@ -643,9 +618,11 @@ class Frame(Core):
 	refractions: Sequence[Refraction]
 	returns: Sequence[Refraction|None]
 
-	def __init__(self, define, theme, keyboard, area, index=None, title=None):
+	def __init__(self, define, theme, fs, keyboard, area, index=None, title=None):
 		self.define = define
 		self.theme = theme
+		self.border = theme['frame-border']
+		self.filesystem = fs
 		self.keyboard = keyboard
 		self.area = area
 		self.index = index
@@ -716,14 +693,18 @@ class Frame(Core):
 		"""
 
 		header = self.headings[self.paths[dpath]]
-
-		lrender = location.type(self.theme, reference.ref_context, header.area)[-1]
 		header.truncate()
 		header.offset = 0
 		header.version = snapshot
 
+		from dataclasses import replace
+		fctx = self.filesystem.lf_fields
+		fctx = replace(fctx, separation=(lambda: reference.ref_context))
+		fs_lf = replace(self.filesystem, lf_fields=fctx)
+
+		elements = location.determine(reference.ref_context, reference.ref_path)
 		header.update(slice(0, 2), list(
-			map(lrender, location.determine(reference.ref_context, reference.ref_path))
+			map(fs_lf.rf_render, elements)
 		))
 
 		return header.render(slice(0, 2))
@@ -752,6 +733,9 @@ class Frame(Core):
 			self.returns.extend([None] * (n - len(self.returns)))
 
 		for ((v, d), rf, view) in zip(self.panes, self.refractions, self.views):
+			view.Empty = types.text.Phrase([
+				types.text.Words((0, "", rf.forms.lf_theme['empty']))
+			])
 			rf.configure(view.area)
 			self.reflections[rf.source.origin.ref_path].add((rf, view))
 
@@ -897,8 +881,7 @@ class Frame(Core):
 		f.compensate()
 		return d
 
-	@staticmethod
-	def fill_areas(patterns, *, Type=Glyph(textcolor=0x505050), Area=Area, ord=ord):
+	def fill_areas(self, patterns, *, Area=Area, ord=ord):
 		"""
 		# Generate the display instructions for rendering the given &patterns.
 
@@ -907,6 +890,7 @@ class Frame(Core):
 			# Iterator producing area and fill character pairs.
 		"""
 
+		Type = self.border
 		for avalues, fill_char in patterns:
 			a = Area(*avalues)
 			yield a, [Type.inscribe(ord(fill_char))] * a.volume
@@ -932,7 +916,9 @@ class Frame(Core):
 		if view.height == 0:
 			self.resize_footer(dpath, 1)
 			session.dispatch_delta(
-				self.fill_areas(self.structure.r_patch_footer(dpath[0], dpath[1]))
+				self.fill_areas(
+					self.structure.r_patch_footer(dpath[0], dpath[1])
+				)
 			)
 
 		self.focus, self.view = (
@@ -940,7 +926,7 @@ class Frame(Core):
 			view,
 		)
 
-	def relocate(self, dpath):
+	def relocate(self, session, dpath):
 		"""
 		# Adjust the location of the division identified by &dpath and
 		# load the data into a session resource for editing in the view.
@@ -948,21 +934,22 @@ class Frame(Core):
 
 		vi = self.paths[dpath]
 		ref = self.refractions[vi].source.origin
+		lf = session.load_type('filesystem')
 
 		# Update session state.
 		view = self.headings[vi]
 		self.focus, self.view = (
-			location.refract(self.theme, view, ref.ref_context, ref.ref_path, location.open),
+			location.refract(lf, view, ref.ref_context, ref.ref_path, location.open),
 			view,
 		)
 
 		self.focus.annotation = annotations.Filesystem('open',
-			self.focus.structure,
+			self.focus.forms,
 			self.focus.elements,
 			*self.focus.focus
 		)
 
-	def rewrite(self, dpath):
+	def rewrite(self, session, dpath):
 		"""
 		# Adjust the location of the division identified by &dpath and
 		# write the subject's elements to the location upon activation.
@@ -970,16 +957,17 @@ class Frame(Core):
 
 		vi = self.paths[dpath]
 		ref = self.refractions[vi].source.origin
+		lf = session.load_type('filesystem')
 
 		# Update session state.
 		view = self.headings[vi]
 		self.focus, self.view = (
-			location.refract(self.theme, view, ref.ref_context, ref.ref_path, location.save),
+			location.refract(lf, view, ref.ref_context, ref.ref_path, location.save),
 			view,
 		)
 
 		self.focus.annotation = annotations.Filesystem('save',
-			self.focus.structure,
+			self.focus.forms,
 			self.focus.elements,
 			*self.focus.focus
 		)
@@ -1077,12 +1065,14 @@ class Frame(Core):
 		"""
 
 		fai = focus.annotation
+		lf = focus.forms
 		rx, ry = (0, 0)
 		ctx = view.area
 		vx, vy = (ctx.left_offset, ctx.top_offset)
 		hoffset = view.horizontal_offset
 		top, left = focus.visible
 		hedge, edge = (ctx.span, ctx.lines)
+		empty_cell = focus.forms.lf_theme['empty'].inscribe(ord(' '))
 
 		# Get the cursor line.
 		v, h = focus.focus
@@ -1094,14 +1084,17 @@ class Frame(Core):
 			line = ""
 
 		h.limit(0, len(line))
-		# Prepare phrase and cells.
-		lfields = focus.structure(line)
-		if fai is not None:
-			# Overwrite, but get the cell count of the un-annotated form first.
-			fai.update(line, lfields)
-			lfields = list(annotations.extend(fai, lfields))
 
-		phrase = focus.format(lfields)
+		# Prepare phrase and cells.
+		li = lf.mkline(line, ln_offset=ln)
+		lfields = lf.lf_fields.partial()(li)
+		if fai is not None:
+			fai.update(line, lfields)
+			caf = lf.compose(lf.mkline("", ln_offset=ln), annotations.delimit(fai))
+			phrase = lf.compose(li, lfields)
+			phrase = types.Phrase(itertools.chain(lf.compose(li, lfields), caf))
+		else:
+			phrase = types.Phrase(lf.compose(li, lfields))
 
 		# Translate codepoint offsets to cell offsets.
 		m_cell = phrase.m_cell
@@ -1122,7 +1115,7 @@ class Frame(Core):
 			kb_mode = self.keyboard.mapping
 			cells = list(phrase.render(Define=self.define))
 			# Need one empty cell.
-			cells.append(types.text.Glyph(codepoint=ord(' '), cellcolor=0x000000))
+			cells.append(empty_cell)
 
 			ccount = len(cells)
 			ip = cursor.select_horizontal_position_indicator(kb_mode, 'position', inverted, hs)
@@ -1151,7 +1144,7 @@ class Frame(Core):
 
 		for pi in self.structure.r_indicators(si, rtypes=view.edges):
 			(x, y), color, ic, bc = pi
-			picell = types.text.Glyph(textcolor=color, codepoint=ord(ic))
+			picell = Glyph(textcolor=color, codepoint=ord(ic))
 			yield ctx.__class__(y, x, 1, 1), (picell,)
 
 class Session(Core):
@@ -1159,6 +1152,8 @@ class Session(Core):
 	# Root application state.
 
 	# [ Elements ]
+	# /configuration/
+		# The loaded set of application defaults.
 	# /host/
 		# The system execution context of the host machine.
 	# /logfile/
@@ -1168,7 +1163,8 @@ class Session(Core):
 	# /device/
 		# The target display and event source.
 	# /types/
-		# Mapping of file paths to loaded syntax (profile) types.
+		# Mapping of syntax types default reformulation instances.
+		# Used when importing resources.
 	# /resources/
 		# Mapping of file paths to &Resource instances.
 	# /systems/
@@ -1179,7 +1175,6 @@ class Session(Core):
 	"""
 
 	host: types.System
-	typepath: Sequence[files.Path]
 	executable: files.Path
 	resources: Mapping[files.Path, Resource]
 	systems: Mapping[System, Execution]
@@ -1187,24 +1182,121 @@ class Session(Core):
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	types: Mapping[files.Path, tuple[object, object]]
 
-	def __init__(self, system, io, executable, terminal:Device, position=(0,0), dimensions=None):
+	@staticmethod
+	def integrate_theme(colors):
+		cell = Glyph(codepoint=-1,
+			cellcolor=colors.palette[colors.cell['default']],
+			textcolor=colors.palette[colors.text['default']],
+		)
+
+		theme = {
+			k : cell.update(textcolor=colors.palette[v])
+			for k, v in colors.text.items()
+		}
+
+		for k, v in colors.cell.items():
+			theme[k] = theme[k].update(cellcolor=colors.palette[v])
+
+		theme['title'] = theme['field-annotation-title']
+		theme['empty'] = cell.inscribe(-1)
+
+		return theme
+
+	@staticmethod
+	def integrate_controls(controls):
+		defaults = {
+			'control': controls.control,
+			'insert': controls.insert,
+			'annotations': controls.annotations,
+			'capture-key': ia.types.Mode(('delta', ('insert', 'capture', 'key'), ())),
+			'capture-insert': ia.types.Mode(('delta', ('insert', 'capture'), ())),
+			'capture-replace': ia.types.Mode(('delta', ('replace', 'capture'), ())),
+		}
+
+		ctl = ia.types.Selection(defaults)
+		ctl.set('control')
+
+		# Translations for `distributed` qualification.
+		# Maps certain operations to vertical or horizontal mapped operations.
+		ctl.redirections['distributed'] = {
+			('delta', x): ('delta', y)
+			for x, y in [
+				(('character', 'swap', 'case'), ('horizontal', 'swap', 'case')),
+				(('delete', 'unit', 'current'), ('delete', 'horizontal', 'range')),
+				(('delete', 'unit', 'former'), ('delete', 'vertical', 'column')),
+				(('delete', 'element', 'current'), ('delete', 'vertical', 'range')),
+				(('delete', 'element', 'former'), ('delete', 'vertical', 'range')),
+
+				(('indentation', 'increment'), ('indentation', 'increment', 'range')),
+				(('indentation', 'decrement'), ('indentation', 'decrement', 'range')),
+				(('indentation', 'zero'), ('indentation', 'zero', 'range')),
+			]
+		}
+
+		return ctl
+
+	@staticmethod
+	def integrate_types(cfgtypes, theme):
+		ce, ltc, lic, isize = cfgtypes.formats[cfgtypes.Default]
+
+		from fault.system.text import cells as syscellcount
+		from ..cells.text import graphemes, words
+		cus = tools.cachedcalls(256)(
+			tools.compose(list, words,
+				tools.partial(graphemes, syscellcount, ctlsize=4, tabsize=4)
+			)
+		)
+
+		from fault.syntax import format
+
+		return types.Reformulations(
+			"", theme,
+			format.Characters.from_codec(ce, 'surrogateescape'),
+			format.Lines(ltc, lic),
+			None,
+			cus,
+		)
+
+	@staticmethod
+	def integrate_events(ia):
+		return {
+			x.i_category: x.select
+			for x in ia.sections()
+		}
+
+	def __init__(self, cfg, system, io, executable, terminal:Device, position=(0,0), dimensions=None):
+		self.focus = None
+		self.frame = 0
+		self.frames = []
+
+		self.configuration = cfg
+		self.events = self.integrate_events(ia)
+		self.theme = self.integrate_theme(cfg.colors)
+		self.keyboard = self.integrate_controls(cfg.controls)
 		self.host = system
 		self.logfile = None
 		self.io = io
 		self.placement = (position, dimensions)
 
 		self.executable = executable.delimit()
-		self.typepath = [home() / '.syntax']
 		self.device = terminal
 		self.deltas = []
-		self.theme = format.integrate(format.cell, format.theme, format.palette)
-		self.theme['title'] = self.theme['field-annotation-title']
 		self.cache = [] # Lines
-		self.types = dict()
+
+		ltype = self.integrate_types(self.configuration.types, self.theme)
+		self.types = {
+			"": ltype,
+			'filesystem': ltype.replace(lf_fields=fields.filesystem_paths),
+		}
+		self.types['lambda'] = self.load_type('lambda')
 
 		exepath = self.executable/'transcript'
-		editor_log = Reference(self.host.identity, 'filepath', str(exepath), self.executable, exepath)
-		self.transcript = Resource(editor_log, self.open_type(files.root))
+		editor_log = Reference(
+			self.host.identity, 'filepath',
+			str(exepath), self.executable,
+			exepath
+		)
+		self.transcript = Resource(editor_log, self.load_type('lambda'))
 		self.resources = {
 			self.executable/'transcript': self.transcript
 		}
@@ -1225,18 +1317,6 @@ class Session(Core):
 			self.host.identity: self.host,
 			self.process.identity: self.process,
 		}
-
-		self.keyboard = ia.types.Selection(keyboard.default)
-		self.keyboard.set('control')
-		self.keyboard.redirections['distributed'] = keyboard.distributions
-		self.events = {
-			x.i_category: x.select
-			for x in ia.sections()
-		}
-
-		self.focus = None
-		self.frame = 0
-		self.frames = []
 
 	def load(self):
 		from .session import structure_frames as parse
@@ -1266,30 +1346,12 @@ class Session(Core):
 
 		self.log = self.extend_transcript
 
-	def lookup_type(self, resource:files.Path):
-		"""
-		# Find the type that should be used for the given &resource.
-		"""
-
-		return self.type_by_extension(resource.extension or 'default')
-
-	@functools.lru_cache(4)
-	def type_by_extension(self, extension):
-		ext = '.' + extension
-		for typdir in self.typepath:
-			typfile = typdir/ext
-			if typfile.fs_type() != 'void':
-				return list(typfile.fs_follow_links())[-1]
-		else:
-			# format.Lambda
-			return files.root
-
 	def allocate_resource(self, ref:Reference) -> Resource:
 		"""
 		# Create a &Resource instance using the given reference as it's origin.
 		"""
 
-		return Resource(ref, self.open_type(ref.ref_type))
+		return Resource(ref, self.load_type(ref.ref_type))
 
 	def import_resource(self, ref:Reference) -> Resource:
 		"""
@@ -1306,17 +1368,28 @@ class Session(Core):
 
 		return rs
 
+	@staticmethod
+	def buffer_data(size, file):
+		buf = file.read(size)
+		while len(buf) >= size:
+			yield buf
+			buf = file.read(size)
+		yield buf
+
 	def load_resource(self, rs:Resource):
 		"""
 		# Load and retain the lines of the resource identified by &rs.origin.
 		"""
 
 		path = rs.origin.ref_path
+		codec = rs.forms.lf_codec
+		lines = rs.forms.lf_lines
 
 		try:
-			with path.fs_open('r', encoding=rs.encoding) as f:
+			with path.fs_open('rb') as f:
 				rs.status = path.fs_status()
-				rs.elements = sequence.Segments(x[:-1] for x in f.readlines())
+				ilines = lines.structure(codec.structure(self.buffer_data(1024, f)))
+				rs.elements = sequence.Segments('\t'*il + lc for il, lc in ilines)
 		except FileNotFoundError:
 			self.log("Resource does not exist: " + str(path))
 		except Exception as load_error:
@@ -1355,8 +1428,9 @@ class Session(Core):
 		"""
 
 		ref = rs.origin
+		codec = rs.forms.lf_codec
 		exectx = self.systems[ref.ref_system]
-		self.log(f"Writing {len(rs.elements)} {rs.encoding!r} lines to [{ref}]")
+		self.log(f"Writing {len(rs.elements)} [{str(rs.forms)}] lines to [{ref}]")
 
 		path = ref.ref_path
 		if path.fs_type() == 'void':
@@ -1365,7 +1439,7 @@ class Session(Core):
 				self.log(f"Allocating directories: " + str(leading))
 				path.fs_alloc() # Leading path not present on save.
 
-		idata = self.buffer_lines(rs.encoding, rs.elements)
+		idata = self.buffer_lines(codec.encoding, rs.elements)
 		size = 0
 
 		with open(ref.ref_identity, 'wb') as file:
@@ -1396,33 +1470,36 @@ class Session(Core):
 
 		del self.resources[rs.origin.ref_path]
 
-	def load_type(self, path:files.Path):
+	def lookup_type(self, path:files.Path):
+		cfgtypes = self.configuration.types
+		return cfgtypes.filename_extensions.get(path.extension, 'lambda')
+
+	def default_type(self):
+		return self.types['']
+
+	def load_type(self, sti):
 		"""
 		# Load and cache the syntax profile identified by &path.
 		"""
 
-		ft = format.prepare(path)
+		# Cached types.Reformulations instance.
+		if sti in self.types:
+			return self.types[sti]
 
-		def structure_line(line, *, TL=ft.process_line, SI=format.structure, list=list):
-			return list(SI(TL, line))
+		syntax_record = self.configuration.load_syntax(sti)
+		fimethod, ficonfig, ce, eol, ic, ils = syntax_record
 
-		format_line = functools.partial(format.compose, self.theme)
+		from fault.syntax import format
 
-		def render_line(line, *, TL=ft.process_line, SI=format.structure, FMT=format_line):
-			return FMT(list(SI(TL, line)))
+		lf = self.default_type().replace(
+			lf_type=sti,
+			lf_lines=format.Lines(eol, ic),
+			lf_codec=format.Characters.from_codec(ce, 'surrogateescape'),
+			lf_fields=fields.prepare(fimethod, ficonfig),
+		)
 
-		self.types[path] = (ft, structure_line, format_line, render_line)
-
-	def open_type(self, path:files.Path):
-		"""
-		# Get the type context, structure, and formatter for processing
-		# (line) elements into fields.
-		"""
-
-		if path not in self.types:
-			self.load_type(path)
-
-		return self.types[path]
+		self.types[sti] = lf
+		return lf
 
 	def reference(self, path):
 		"""
@@ -1575,6 +1652,7 @@ class Session(Core):
 
 		f = Frame(
 			self.device.define, self.theme,
+			self.load_type('filesystem'),
 			self.keyboard, area,
 			index=len(self.frames),
 			title=title
@@ -1652,7 +1730,8 @@ class Session(Core):
 
 	def snapshot(self):
 		"""
-		# Construct a snapshot of the session suitable for sequencing with &.session.sequence_frames.
+		# Construct a snapshot of the session suitable for sequencing with
+		# &.session.sequence_frames.
 		"""
 
 		for f in self.frames:
@@ -1712,7 +1791,7 @@ class Session(Core):
 		'(screen/resize)': 'session/screen/resize',
 
 		'(frame/create)': 'session/frame/create',
-		'(frame/clone)': 'session/frame/clone',
+		'(frame/copy)': 'session/frame/copy',
 		'(frame/close)': 'session/frame/close',
 		'(frame/previous)': 'session/frame/previous',
 		'(frame/next)': 'session/frame/next',
@@ -1727,6 +1806,7 @@ class Session(Core):
 		'(resource/copy)': 'session/resource/copy',
 		'(resource/close)': 'session/resource/close',
 
+		# Resource Elements, lines.
 		'(elements/undo)': 'transaction/undo',
 		'(elements/redo)': 'transaction/redo',
 		'(elements/select)': 'session/elements/transmit',

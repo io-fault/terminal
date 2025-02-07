@@ -6,8 +6,7 @@ from typing import Sequence
 
 from fault.system import files
 from . import types
-from . import location
-from . import format
+from . import fields
 
 def rotate(ai, quantity=1):
 	"""
@@ -35,15 +34,6 @@ def delimit(ai):
 		yield ('field-annotation-separator', ' ')
 		yield ('field-annotation-title', ai.title)
 	yield ('field-annotation-stop', ')')
-
-def extend(ai, lfields):
-	"""
-	# Unconditionally insert the delimited annotation at the end of &lfields.
-	"""
-
-	ifields = iter(lfields)
-	yield from ifields
-	yield from delimit(ai)
 
 def at(ai, lfields, offset, *, len=len):
 	"""
@@ -278,9 +268,9 @@ def color_variant(ctx, variant, src, sign, integer):
 	"""
 
 	if variant.isspace():
-		return [(format.Glyph(textcolor=0x000000, cellcolor=integer), variant)]
+		return [(types.Glyph(textcolor=0x000000, cellcolor=integer), variant)]
 	else:
-		return [(format.Glyph(cellcolor=0x000000, textcolor=integer), variant)]
+		return [(types.Glyph(cellcolor=0x000000, textcolor=integer), variant)]
 
 # Color preview constructor.
 ColorAnnotation = Preview.reference(
@@ -426,15 +416,17 @@ class Filesystem(Directory):
 	# Filesystem Directory query annotation for file path completion support.
 	"""
 
-	def __init__(self, title, structure, elements, vertical, horizontal):
+	def __init__(self, title, lf, elements, vertical, horizontal):
 		super().__init__(title)
-		self.structure = structure
+		self.forms = lf
 		self.elements = elements
 		self.vertical = vertical
 		self.horizontal = horizontal
 
+	_tpf = staticmethod(fields.typed_path_fields)
 	def structure_path(self, match):
-		return location.format_path(self.location, [match])
+		# Only displaying the match's filename.
+		return self._tpf(self.location, match.split('/'), separator='/')
 
 	def chdir(self, context, location):
 		super().chdir(context, location)

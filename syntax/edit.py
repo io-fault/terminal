@@ -17,6 +17,8 @@ from fault.system import query
 # Disable signal exits for multiple interpreter cases.
 process.__signal_exit__ = (lambda x: None)
 
+from .. import configuration
+
 from . import types
 from . import elements
 from .system import IOManager
@@ -149,6 +151,8 @@ def main(inv:process.Invocation) -> process.Exit:
 	path = identify_executable(inv)
 	wd = configure_working_directory(config)
 
+	configuration.load_sections()
+
 	host = elements.Execution(
 		types.System(
 			'system',
@@ -164,7 +168,11 @@ def main(inv:process.Invocation) -> process.Exit:
 	host.chdir(str(wd))
 
 	device = types.Device()
-	editor = elements.Session(host, IOManager.allocate(device.synchronize_io), path, device)
+	editor = elements.Session(
+		configuration, host,
+		IOManager.allocate(device.synchronize_io),
+		path, device
+	)
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 
 	fi = 0

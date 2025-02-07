@@ -3,14 +3,16 @@
 """
 import itertools
 import collections
-from typing import Optional, Protocol
 
 from dataclasses import dataclass
 from fault.context import tools
+from fault.syntax import format
 
-from collections.abc import Sequence, Mapping
+from collections.abc import Sequence, Mapping, Iterable
+from typing import Optional, Protocol, Literal, Callable
 
 from ..cells import text
+from ..cells.text import Phrase, Redirect, Words, Unit
 from ..cells.types import Area, Glyph, Device
 
 class Annotation(Protocol):
@@ -455,7 +457,7 @@ class View(object):
 		# the &area reflecting the current &image state.
 		"""
 
-		ec = text.Glyph(codepoint=-1, cellcolor=0x000000)
+		ec = self.Empty[0][-1].inscribe(ord(' '))
 		AType = self.area.__class__
 		rx = self.area.x_offset
 		ry = self.area.y_offset
@@ -1381,3 +1383,354 @@ class Reference(object):
 			self.ref_path,
 			self.ref_icons,
 		)
+
+@tools.struct()
+class Line(object):
+	"""
+	# A structured line providing commonly required data for processing
+	# by &Reformulations methods.
+
+	# [ Elements ]
+	# /ln_offset/
+		# The index used to retrieve the line.
+	# /ln_level/
+		# The level of indentation that the content starts on.
+	# /ln_content/
+		# The text content of the line including any trailing whitespace.
+	# /ln_extension/
+		# Unstructured metadata associated with the line.
+		# May define an override for &ln_type.
+	"""
+
+	ln_offset: int
+	ln_level: int
+	ln_content: str
+	ln_extension: str = ''
+
+	def i_format(self):
+		yield ('delimiter', "(")
+		yield ('line-number', str(self.ln_number))
+		yield ('delimiter', "->")
+		yield ('line-level', str(self.ln_level))
+		yield ('delimiter', ": ")
+		yield ('line-content', repr(self.ln_content))
+		if self.ln_extension:
+			yield ('delimiter', '+')
+			yield ('line-extension', self.ln_extension)
+		yield ('delimiter', ")")
+
+	@property
+	def ln_number(self) -> int:
+		"""
+		# The 1-based index of the line.
+		"""
+
+		return self.ln_offset + 1
+
+	def ln_trailing(self, filter=str.isspace) -> int:
+		"""
+		# Count the trailing whitespace in &ln_content.
+
+		# [ Parameters ]
+		# /filter/
+			# The false condition to look for at the end
+			# of &ln_content. Defaults to &str.isspace.
+		"""
+
+		if not filter(self.ln_content[-1:]):
+			return 0
+
+		for i in range(-2, -(len(self.ln_content)+1), -1):
+			if not filter(self.ln_content[i]):
+				return (-i) - 1
+		else:
+			return len(self.ln_content)
+
+	@property
+	def ln_trail(self):
+		"""
+		# The trailing whitespace in &ln_content.
+		"""
+
+		lnc = self.ln_content
+		tc = self.ln_trailing()
+		if tc == 0:
+			return ''
+
+		return lnc[len(lnc)-tc:]
+
+	@staticmethod
+	def il(line, *, ic='\t', enum=enumerate):
+		"""
+		# Identify the &line indentation level.
+		"""
+
+		i = 0
+		for i, x in enum(line):
+			if x != ic:
+				return i
+
+		# All charactere were &ic.
+		return len(line)
+
+	@classmethod
+	def from_text(Class, line:str, offset=-1):
+		il = Class.il(line)
+		return Class(offset, il, line[il:])
+
+@tools.struct()
+class Reformulations(object):
+	"""
+	# The set of I/O routines and descriptors for reading, writing, tokenizing,
+	# formatting, and rendering a line of syntax.
+
+	# Primarily used by syntax types, resources, and refractions to convert
+	# a line from one form into another.
+
+	# [ Elements ]
+	# /lf_type/
+		# The syntax type name.
+	# /lf_theme/
+		# The glyph templates used to compose Phrase instances from fields.
+	# /lf_codec/
+		# The encoding method used for reading and writing associated resources.
+	# /lf_lines/
+		# The formatting method used to identify line boundaries and
+		# indentation levels.
+	# /lf_fields/
+		# The field isolation method for separating line content.
+	# /lf_units/
+		# The segmentation method for isolating the characters expressed
+		# in a unicode codepoint sequence.
+	"""
+
+	from dataclasses import replace
+
+	lf_type: str
+	lf_theme: Mapping[str, Glyph]
+
+	lf_codec: format.Characters
+	lf_lines: format.Lines
+	lf_fields: format.Fields
+	lf_units: Callable[[str], Iterable[tuple[int, str]]]
+
+	@property
+	def lf_encoding(self) -> str:
+		"""
+		# Encoding identifier.
+		"""
+
+		return self.lf_codec.encoding
+
+	def mkline(self, text, ln_offset=-1):
+		il = self.lf_lines.measure_indentation(text)
+		return Line(ln_offset, il, text[il*len(self.lf_lines.indentation):])
+
+	def indent(self, level):
+		"""
+		# Construct the indentation characters representing the given level.
+
+		# [ Returns ]
+		# Sequence of whitespace characters with each index representing
+		# their corresponding level. For mixed indentation formats, empty
+		# characters will be returned to indicate that the former value
+		# represents multiple levels.
+		"""
+
+		return ['\t' for i in range(level)]
+
+	def structure_fields(self, ln:Line):
+		"""
+		# Construct a fields vector to describe the given line according to
+		# the configured &lf_fields.
+
+		# Indentation of the line is represented by prefixing the sequence
+		# with an &ln.ln_level count of indentation fields.
+		"""
+
+		fields = [('indentation', iv) for iv in self.indent(ln.ln_level)]
+		lff = self.lf_fields
+		fields.extend(lff.isolate(lff.separation, ln))
+		return fields
+
+	@property
+	def rf_structure(self):
+		def structure_line(line, *, SI=self.lf_fields.partial(), list=list):
+			li = self.mkline(line)
+			fields = [('indentation', '\t'*li.ln_level)]
+			fields.extend(SI(li))
+			return fields
+		return structure_line
+
+	@property
+	def rf_render(self):
+		def render_line(line):
+			li = self.mkline(line)
+			iso = self.lf_fields.partial()
+			return Phrase(self.compose(li, iso(li)))
+		return render_line
+
+	@staticmethod
+	def interpret_line_form(Class, spec:str) -> format.Lines:
+		"""
+		# Parse the string representation of a line form
+		# to create a &format.Lines instance for forming
+		# &Line instances.
+		"""
+
+		# Symbolic terms for common whitespace characters.
+		symbols = {
+			'lf': '\n',
+			'nl': '\n',
+			'cr': '\c',
+			'crlf': '\c\n',
+			'tab': '\t',
+			'ht': '\t',
+			'sp': ' ',
+		}
+
+		termspec, indentspec = term.split('->')
+
+		ilchar = indentspec.rstrip('0123456789')
+		ilc = int(indentspec.rstrip(ilchar) or '1')
+
+		t = symbols[termspec.lower()]
+		i = symbols[ilchar] * ilc
+
+		return format.Lines(t, i)
+
+	@staticmethod
+	def represent_line_form(linefmt: format.Lines) -> str:
+		"""
+		# The indented-line isolation method.
+		"""
+
+		symbols = {
+			"\r": 'cr',
+			"\r\n": 'crlf',
+			"\n": 'lf',
+			"\t": 'ht',
+			" ": 'sp',
+		}
+
+		ilc = linefmt.indentation
+		isym = symbols[ilc[:1]]
+		tsym = symbols[linefmt.termination]
+
+		# lf->ht or lf->sp4
+		if len(ilc) > 1:
+			ic = str(len(ilc))
+		else:
+			ic = ''
+
+		return "->".join((tsym, isym+ic))
+
+	def redirect_indentation(self, itype, il):
+		"""
+		# Special case control characters on the edges of line content.
+		"""
+
+		cf = self.lf_theme[itype]
+		if itype == 'indentation-only':
+			suffix = '>'
+		else:
+			suffix = ' '
+
+		display = (' ' * 3) + suffix
+		for c in range(il):
+			yield Redirect((len(display), display, cf, '\t'))
+
+	def redirect_trail(self, spaces):
+		"""
+		# Special case for trailing whitespace.
+		"""
+
+		cf = self.lf_theme['trailing-whitespace']
+		for c in spaces:
+			n = len(c)
+			yield Redirect((n, n * '#', cf, c))
+
+	def redirect_exceptions(self, phrasewords, *,
+			Unit=Unit,
+			isinstance=isinstance,
+			constants={
+				0x1f: Redirect((1, '\u2038',
+					Glyph(codepoint=ord('-'), textcolor=0x444444),
+					"\x1f"
+				))
+			},
+			obstruction=Glyph(codepoint=-1, textcolor=0x5050DF),
+			representation=Glyph(codepoint=-1, textcolor=0x777777),
+		):
+		"""
+		# Construct representations for control characters.
+		"""
+
+		for i in phrasewords:
+			if len(i.text) == 1 and isinstance(i, Unit):
+				o = ord(i.text)
+				if o < 32:
+					if o in constants:
+						yield constants[o]
+						continue
+
+					d = f"{o:02x}"
+					d = hex(o)[2:]
+					yield Redirect((1, '[', obstruction, ''))
+					yield Redirect((len(d), d, representation, i.text))
+					yield Redirect((1, ']', obstruction, ''))
+					continue
+			yield i
+
+	def segment(self, fields):
+		"""
+		# Construct a segmented phrase from the given fields.
+		"""
+
+		tg = self.lf_theme.get
+		return Phrase.segment(
+			(tg(ft, ft), self.lf_units(fc))
+			for ft, fc in fields
+		)
+
+	def compose(self, line, fields) -> Iterable[Words]:
+		"""
+		# Construct a Phrase instance representing the structured line.
+		"""
+
+		tg = self.lf_theme.get # Returns the requested key for already resolved Cells.
+		tws = line.ln_trail
+
+		if line.ln_content:
+			itype = 'indentation'
+		else:
+			itype = 'indentation-only'
+
+		sfields = list(fields)
+		if sfields:
+			# Strip trailing whitespace.
+			sfields[-1] = (
+				sfields[-1][0],
+				sfields[-1][1].rstrip()
+			)
+
+		content = Phrase.segment(
+			(tg(ft, ft), self.lf_units(fc))
+			for ft, fc in sfields
+		)
+
+		yield from self.redirect_indentation(itype, line.ln_level)
+		yield from self.redirect_exceptions(content)
+		yield from self.redirect_trail(tws)
+
+	def __str__(self):
+		return ''.join(x[1] for x in self.i_format())
+
+	def i_format(self):
+		yield ('scheme', 'syntax')
+		yield ('delimiter', '://')
+		yield ('syntax-type', self.lf_type)
+		yield ('delimiter', '/')
+		yield ('syntax-line-form', self.represent_line_form(self.lf_lines))
+		yield ('delimiter', '/')
+		yield ('syntax-character-encoding', self.lf_encoding)

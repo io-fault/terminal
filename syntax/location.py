@@ -5,68 +5,8 @@ import os.path
 import functools
 from fault.system import files
 
+from . import elements
 from . import types
-from . import delta
-from . import format
-
-def format_path(root, extension, *, separator='/', _is_link=os.path.islink):
-	"""
-	# Format the path components in &extension relative to &root.
-	"""
-
-	current = root
-	for f in extension[:-1]:
-		if not f:
-			yield ('path-empty', '')
-		else:
-			current = current/f
-
-			if f in {'.', '..'}:
-				yield ('relatives', f)
-			else:
-				if _is_link(current):
-					yield ('path-link', f)
-				else:
-					try:
-						typ = current.fs_type()
-					except OSError:
-						typ = 'warning'
-
-					if typ == 'directory':
-						yield ('path-directory', f)
-					elif typ == 'void':
-						yield ('file-not-found', f)
-					else:
-						yield (typ, f)
-
-		yield ('path-separator', separator)
-
-	f = extension[-1]
-	final = current/f
-	try:
-		typ = final.fs_type()
-	except OSError:
-		typ = 'warning'
-
-	# Slightly different from path segments.
-	if typ == 'data':
-		try:
-			if final.fs_executable():
-				typ = 'executable'
-			elif f[:1] == '.':
-				typ = 'dot-file'
-			else:
-				# No subtype override.
-				pass
-		except OSError:
-			typ = 'warning'
-	elif typ == 'void':
-		typ = 'file-not-found'
-	else:
-		# No adjustments necessary.
-		pass
-
-	yield (typ, f)
 
 def determine(context, path):
 	"""
@@ -84,42 +24,6 @@ def determine(context, path):
 		ipath = str(path)
 
 	return str(context), ipath
-
-def structure_path(rpath, line, *, separator='/'):
-	"""
-	# Structure the path components of &line relative to &rpath.
-	# If &line begins with a root directory, it is interpreted absolutely.
-	"""
-
-	s = separator
-	if line:
-		if line.startswith(s):
-			i = (format_path(files.root, line.split(s), separator=s))
-		else:
-			i = (format_path(rpath, line.split(s), separator=s))
-	else:
-		i = ()
-
-	l = [('indentation', '')]
-	l.extend(i)
-	l.append(('trailing-whitespace', ''))
-	return l
-
-def render(theme, rpath, context, line):
-	return format.compose(context, theme, structure_path(rpath, line))
-
-def type(theme, lcontext, gcontext):
-	"""
-	# Construct the necessary processing functions for supporting
-	# line structure, formatting, and rendering in a &.elements.Refraction.
-	"""
-
-	lc = lcontext.delimit()
-	structure = functools.partial(structure_path, lc)
-	fmt = functools.partial(format.compose, theme)
-	def render(line, *, structure=structure, fmt=fmt):
-		return fmt(structure(line))
-	return (lc, structure, fmt, render)
 
 def compose(pathlines, *, default='/dev/null'):
 	"""
@@ -194,7 +98,7 @@ def save(session, frame, rf, event):
 	rf.visible[0] = 0
 	session.dispatch_delta(frame.chpath(dpath, target.source.origin, snapshot=rf.log.snapshot()))
 
-def refract(theme, view, pathcontext, path, action):
+def refract(lf, view, pathcontext, path, action):
 	"""
 	# Construct a Refraction for representing a location path.
 	"""
@@ -214,10 +118,12 @@ def refract(theme, view, pathcontext, path, action):
 		files.root@'/dev/void',
 	)
 
-	from .elements import Resource, Refraction
-	rsrc = Resource(meta, type(theme, pathcontext, view.area))
+	from dataclasses import replace
+	fields = replace(lf.lf_fields, separation=(lambda: pathcontext))
+	lf = replace(lf, lf_fields=fields)
+	rsrc = elements.Resource(meta, lf)
 	rsrc.elements = list(map(str, determine(pathcontext, path)))
-	lrf = Refraction(rsrc)
+	lrf = elements.Refraction(rsrc)
 	lrf.configure(view.area)
 	lrf.activate = action # location.open or location.save
 	view.version = lrf.log.snapshot()

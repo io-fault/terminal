@@ -48,5 +48,71 @@ def test_Reference_string(test):
 	sys = module.System(
 		"system", "user", "token", "host", "title"
 	)
-	ref = module.Reference(sys, 'type', 'verbatum-path', None, "/ref/file", {})
+	ref = module.Reference(sys, 'type', 'verbatum-path', None, "/ref/file")
 	test/str(ref) == "system://user:token@host[title]/ref/file"
+
+def test_Line_properties(test):
+	"""
+	# - &module.Line
+	"""
+
+	li = module.Line(0, 0, 'content')
+	test/li.ln_offset == 0
+	test/li.ln_number == 1
+	test/li.ln_level == 0
+	test/li.ln_content == 'content'
+	test/li.ln_trailing() == 0
+	test/li.ln_extension == ''
+	test/li == module.Line(0, 0, 'content', '')
+
+	li = module.Line(-1, 2, 'trailing spaces  	 \n', 'ext')
+	test/li.ln_offset == -1
+	test/li.ln_number == 0
+	test/li.ln_level == 2
+	test/li.ln_trailing() == 5 # Three spaces, one tab, one line feed.
+	test/li.ln_extension == 'ext'
+
+def alloc_lambda_forms():
+	from ...syntax import fields
+	from fault.syntax import format
+	from ...configuration import types
+	from ...configuration import colors
+	from ...cells.types import Glyph
+
+	cell = Glyph(codepoint=-1,
+		cellcolor=colors.palette[colors.cell['default']],
+		textcolor=colors.palette[colors.text['default']],
+	)
+	theme = {
+		k : cell.update(textcolor=colors.palette[v])
+		for k, v in colors.text.items()
+	}
+	theme['title'] = theme['field-annotation-title']
+
+	kwi = fields.prepare(*types.implementations['lambda'])
+	return module.Reformulations(
+		'lambda', theme,
+		format.Characters.from_codec('utf-8', 'surrogateescape'),
+		format.Lines('\n', '\t'),
+		kwi,
+		fields.segmentation(4, 4),
+	)
+
+def test_Reformulations_structure_fields(test):
+	"""
+	# - &module.Reformulations.structure_fields
+	"""
+
+	lf = alloc_lambda_forms()
+	test/str(lf) == "syntax://lambda/lf->ht/utf-8"
+
+	test/lf.structure_fields(lf.mkline("test.")) == [
+		('inclusion-identifier', "test"),
+		('inclusion-router', "."),
+	]
+	test/lf.structure_fields(lf.mkline("test; extension")) == [
+		('inclusion-identifier', "test"),
+		('inclusion-terminator', ";"),
+		('inclusion-space', " "),
+		('inclusion-identifier', "extension"),
+	]

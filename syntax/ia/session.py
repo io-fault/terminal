@@ -65,7 +65,7 @@ def s_open_resource(session, frame, rf, event):
 	# Navigate to the resource location.
 	"""
 
-	frame.relocate((frame.vertical, frame.division))
+	frame.relocate(session, (frame.vertical, frame.division))
 
 @event('resource', 'save')
 def s_update_resource(session, frame, rf, event):
@@ -73,7 +73,7 @@ def s_update_resource(session, frame, rf, event):
 	# Update the resource to reflect the refraction's element state.
 	"""
 
-	frame.rewrite((frame.vertical, frame.division))
+	frame.rewrite(session, (frame.vertical, frame.division))
 
 @event('resource', 'write')
 def s_write_resource(session, frame, rf, event):
