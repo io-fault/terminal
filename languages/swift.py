@@ -1,0 +1,132 @@
+"""
+# Swift programming language profile.
+"""
+
+profile = {
+	"terminators": [",", ";"],
+	"routers": ["."],
+
+	"operations": [
+		"+", "-", "*", "/",
+		"=>"
+	],
+
+	"enclosures": [
+		["(", ")"],
+		["[", "]"],
+		["{", "}"]
+	],
+
+	"literals": [
+		["'", "'"],
+		["\"", "\""]
+	],
+
+	"keyword": [
+		"associatedtype",
+		"class",
+		"deinit",
+		"enum",
+		"extension",
+		"func",
+		"import",
+		"init",
+		"inout",
+		"internal",
+		"let",
+		"operator",
+		"private",
+		"protocol",
+		"public",
+		"static",
+		"struct",
+		"subscript",
+		"typealias",
+		"var",
+		"break",
+		"case",
+		"continue",
+		"default",
+		"defer",
+		"do",
+		"else",
+		"fallthrough",
+		"for",
+		"guard",
+		"if",
+		"in",
+		"repeat",
+		"return",
+		"switch",
+		"where",
+		"while",
+		"as",
+		"catch",
+		"dynamicType",
+		"false",
+		"is",
+		"nil",
+		"rethrows",
+		"super",
+		"self",
+		"Self",
+		"throw",
+		"throws",
+		"true",
+		"try",
+		"associativity",
+		"convenience",
+		"dynamic",
+		"didSet",
+		"final",
+		"get",
+		"infix",
+		"indirect",
+		"lazy",
+		"left",
+		"mutating",
+		"none",
+		"nonmutating",
+		"optional",
+		"override",
+		"postfix",
+		"precedence",
+		"prefix",
+		"Protocol",
+		"required",
+		"right",
+		"set",
+		"Type",
+		"unowned",
+		"weak",
+		"willSet"
+	],
+
+	"coreword": [
+		"Array",
+		"String",
+		"Dictionary",
+		"Optional",
+		"None",
+		"ImplicitlyUnwrappedOptional",
+		"Double",
+		"Int",
+		"Comparable",
+		"Hashable"
+	],
+
+	"metaword": [
+		"#file",
+		"#function",
+		"#column",
+		"#available",
+		"#if",
+		"#ifdef",
+		"#ifndef",
+		"#elseif",
+		"#else",
+		"#endif",
+		"#selector",
+		"#line"
+	]
+}

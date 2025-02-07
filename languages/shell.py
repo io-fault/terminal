@@ -1,0 +1,142 @@
+"""
+# Shell language profile.
+"""
+
+profile = {
+	"terminators": [";", "&&", "||"],
+	"operations": [
+		"!", "=", "&", "|",
+		"<>", "<", ">", "<&", ">&", "<<", ">>", ">|",
+		"$", "*", "$*", "$#", "$!", "$$", "$@",
+		"\\\\", "\\\""
+	],
+
+	"enclosures": [
+		["(", ")"],
+		["[", "]"],
+		["{", "}"],
+		["((", "))"]
+	],
+
+	"literals": [
+		["`", "`"],
+		["'", "'"],
+		["\"", "\""]
+	],
+
+	"exclusions": [
+		["#", ""]
+	],
+
+	"metaword": [
+		"diff",
+		"patch",
+		"uname",
+		"id",
+		"which",
+		"expr",
+		"wc",
+		"ed",
+		"sed",
+		"awk",
+		"grep",
+		"join",
+		"lam",
+		"tr",
+		"sort",
+		"uniq",
+		"cut",
+		"paste",
+		"head",
+		"tail",
+		"touch",
+		"chmod",
+		"chgrp",
+		"chflags",
+		"chown",
+		"ls",
+		"dirname",
+		"readlink",
+		"link",
+		"unlink",
+		"mkdir",
+		"mktemp",
+		"mkfifo",
+		"ln",
+		"cp",
+		"rsync",
+		"install",
+		"rm",
+		"rmdir",
+		"rmtree",
+		"cat",
+		"sleep",
+		"ps",
+		"make",
+		"man"
+	],
+
+	"keyword": [
+		"function",
+		"shift",
+		"if",
+		"fi",
+		"then",
+		"elif",
+		"else",
+		"case",
+		"esac",
+		"while",
+		"until",
+		"for",
+		"in",
+		"do",
+		"done",
+		"break",
+		"continue",
+		"return",
+		"local"
+	],
+
+	"coreword": [
+		"set",
+		"bind",
+		"exit",
+		".",
+		"..",
+		":",
+		"false",
+		"true",
+		"type",
+		"alias",
+		"getopts",
+		"builtin",
+		"command",
+		"test",
+		"printf",
+		"echo",
+		"read",
+		"cd",
+		"chdir",
+		"pwd",
+		"trap",
+		"eval",
+		"exec",
+		"fg",
+		"bg",
+		"jobid",
+		"jobs",
+		"wait",
+		"kill",
+		"times",
+		"fc",
+		"hash",
+		"readonly",
+		"ulimit",
+		"umask",
+		"unalias",
+		"export",
+		"setvar",
+		"unset"
+	]
+}
