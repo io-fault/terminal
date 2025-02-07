@@ -1905,3 +1905,16 @@ class Session(Core):
 		except Exception as derror:
 			self.error("Rendering Failure", derror)
 			del derror
+
+	def interact(self):
+		"""
+		# Dispatch the I/O service and execute &cycle until no frames exists.
+		"""
+
+		self.io.service()
+
+		try:
+			while self.frames:
+				self.cycle()
+		finally:
+			self.store()

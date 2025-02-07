@@ -175,6 +175,7 @@ def main(inv:process.Invocation) -> process.Exit:
 		editor.error("Session restoration", restore_error)
 
 	if not editor.frames:
+		# The session exits when no frames are present.
 		layout, rfq = configure_frame(wd, path, config)
 		fi = editor.allocate(layout = layout)
 		editor.frames[fi].fill(map(editor.refract, rfq))
@@ -186,10 +187,4 @@ def main(inv:process.Invocation) -> process.Exit:
 	editor.log("Environment:", *('\t'+k+'='+v for k,v in host.environment.items()))
 
 	# System I/O loop for command substitution and file I/O.
-	editor.io.service()
-
-	try:
-		while editor.frames:
-			editor.cycle()
-	finally:
-		editor.store()
+	editor.interact()
