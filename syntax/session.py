@@ -20,10 +20,22 @@ def filetest(s):
 
 	return False
 
-def filepath(fp):
+def filepath(fp, Separator='/', Root='/'):
 	if fp is None:
 		return '-'
-	return '/' + '//'.join(map('/'.join, fp.partitions()))
+	apath = Root
+
+	for p in fp.partitions():
+		filtered = list(filter(None, p))
+		if filtered:
+			if apath == Root:
+				# First partition.
+				apath += Separator.join(filtered) + Separator
+			else:
+				# Second.
+				apath += Separator + Separator.join(filtered)
+
+	return apath.rstrip(Separator)
 
 def structure_frames(session:str, *, Interpret=transport.structure):
 	"""
