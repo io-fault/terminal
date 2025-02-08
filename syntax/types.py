@@ -1548,27 +1548,29 @@ class Reformulations(object):
 		# with an &ln.ln_level count of indentation fields.
 		"""
 
-		fields = [('indentation', iv) for iv in self.indent(ln.ln_level)]
+		if ln.ln_level:
+			fields = [('indentation', iv) for iv in self.indent(ln.ln_level)]
+		else:
+			# Currently used to detect boundaries in Refraction.field_select.
+			fields = [('indentation', '')]
+
 		lff = self.lf_fields
 		fields.extend(lff.isolate(lff.separation, ln))
 		return fields
 
-	@property
-	def rf_structure(self):
-		def structure_line(line, *, SI=self.lf_fields.partial(), list=list):
-			li = self.mkline(line)
-			fields = [('indentation', '\t'*li.ln_level)]
-			fields.extend(SI(li))
-			return fields
-		return structure_line
+	def render(self, ilines:Iterable[Line]):
+		"""
+		# Construct &Phrase instances from the given &ilines.
+		"""
 
-	@property
-	def rf_render(self):
-		def render_line(line):
-			li = self.mkline(line)
-			iso = self.lf_fields.partial()
-			return Phrase(self.compose(li, iso(li)))
-		return render_line
+		lines = list(ilines)
+		return map(Phrase, (
+			self.compose(li, fields)
+			for li, fields in zip(
+				lines,
+				self.lf_fields.structure(lines),
+			)
+		))
 
 	@staticmethod
 	def interpret_line_form(Class, spec:str) -> format.Lines:

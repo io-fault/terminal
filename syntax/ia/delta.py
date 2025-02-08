@@ -52,16 +52,8 @@ def delete(rf, lo, offset, length):
 	# The logged deletion.
 	"""
 
-	line = rf.elements[lo]
-	phrase = rf.render(line)
-
-	p, r = phrase.seek((0, 0), offset)
-	assert r == 0
-	n, r = phrase.seek(p, length, *phrase.m_unit)
-	assert r == 0
-	stop = phrase.tell(n, *phrase.m_codepoint)
-
-	deleted = line[offset:stop]
+	line = rf.source.elements[lo]
+	deleted = line[offset:rf.cu_codepoints(lo, offset, length)]
 	(rf.log
 		.write(Update(lo, "", deleted, offset)))
 	return deleted
@@ -307,7 +299,7 @@ def swap_case_cu(session, frame, rf, event, quantity=1):
 	v, h = (x.get() for x in rf.focus)
 	line = rf.elements[v]
 
-	phrase = rf.render(line)
+	phrase = rf.phrase(v)
 	p, r = phrase.seek((0, 0), h, *phrase.m_codepoint)
 	assert r == 0
 	n, r = phrase.seek(p, quantity, *phrase.m_unit)
@@ -346,24 +338,18 @@ def delete_characters_behind(session, frame, rf, event, quantity=1):
 	# immediately before the cursor.
 	"""
 
-	v, h = (x.get() for x in rf.focus)
-	line = rf.elements[v]
+	lo, cp = (x.get() for x in rf.focus)
+	line = rf.elements[lo]
 
-	phrase = rf.render(line)
-	p, r = phrase.seek((0, 0), h, *phrase.m_codepoint)
-	assert r == 0
-	n, r = phrase.seek(p, -quantity, *phrase.m_unit)
-	assert r == 0
-	offset = phrase.tell(n, *phrase.m_codepoint)
-
-	removed = line[offset:h]
+	start = rf.cu_codepoints(lo, cp, -quantity)
+	removed = line[start:cp]
 	(rf.log
-		.write(Update(v, "", removed, offset))
+		.write(Update(lo, "", removed, start))
 		.apply(rf.elements)
 		.collapse()
 		.commit())
 
-	rf.focus[1].changed(h, -len(removed))
+	rf.focus[1].changed(cp, -len(removed))
 
 @event('delete', 'unit', 'current')
 def delete_characters_ahead(session, frame, rf, event, quantity=1):
@@ -375,7 +361,7 @@ def delete_characters_ahead(session, frame, rf, event, quantity=1):
 	v, h = (x.get() for x in rf.focus)
 	line = rf.elements[v]
 
-	phrase = rf.render(line)
+	phrase = rf.phrase(v)
 	p, r = phrase.seek((0, 0), h, *phrase.m_codepoint)
 	assert r == 0
 	n, r = phrase.seek(p, quantity, *phrase.m_unit)
@@ -467,11 +453,7 @@ def delete_indentation(session, frame, rf, event):
 	"""
 
 	ln = rf.focus[0].get()
-	fields = rf.structure(rf.elements[ln])
-	il = 0
-	if fields and fields[0][0] in {'indentation-only', 'indentation'}:
-		il = len(fields[0][1])
-
+	il = rf.source.sole(ln).ln_level
 	delete(rf, ln, 0, il)
 	commit(rf)
 	rf.focus[1].datum -= il
@@ -518,14 +500,9 @@ def delete_indentation_v(session, frame, rf, event, *, offset=None, quantity=1):
 
 	v, h = rf.focus
 	start, position, stop = v.snapshot()
-	for lo in range(start, stop):
-		fields = rf.structure(rf.elements[lo])
-		il = 0
-		if fields and fields[0][0] in {'indentation-only', 'indentation'}:
-			il = len(fields[0][1])
-
-		delete_defer(rf, lo, 0, '\t' * il)
-	rf.log.apply(rf.elements).commit().checkpoint()
+	for li in rf.source.select(start, stop):
+		delete_defer(rf, li.ln_offset, 0, '\t' * li.ln_level)
+	rf.source.commit().checkpoint()
 
 @event('delete', 'leading')
 def delete_to_beginning_of_line(session, frame, rf, event):

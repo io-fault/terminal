@@ -15,14 +15,16 @@ def render(rf, view, *lines):
 
 	start_of_view, left = rf.visible
 	count = len(rf.elements)
+	rline = rf.forms.render
+	gline = rf.source.sole
 
 	for lo in lines:
 		rlo = lo - start_of_view
-		if lo < count:
-			line = rf.elements[lo]
-		else:
-			line = ""
-		ph = rf.render(line)
+		try:
+			line = gline(lo)
+		except IndexError:
+			line = rf.forms.mkline("")
+		ph = next(rline((line,)))
 		area = slice(rlo, rlo+1)
 		view.update(area, (ph,))
 		yield from view.render(area)
@@ -147,7 +149,7 @@ def update(rf, view, changes, *,
 					# Delete caused transition.
 					view.offset = 0
 					s = view.delete(w, d)
-					s = view.prefix(list(map(rf.render, rf.elements[0:d])))
+					s = view.prefix(list(rf.iterphrases(0, d)))
 					dimage.append(view.render(s))
 					image_size -= d
 					continue
@@ -205,9 +207,7 @@ def update(rf, view, changes, *,
 		else:
 			# View's position is beyond the refraction's.
 			# Align the image with prefix.
-			s = view.prefix(list(map(rf.render,
-				rf.elements[start_of_view:start_of_view-dv]
-			)))
+			s = view.prefix(list(rf.iterphrases(start_of_view, start_of_view-dv)))
 			view.trim()
 			dimage.append([alignment.scroll_forward(view.area, -dv)] + list(view.render(s)))
 
@@ -221,13 +221,13 @@ def update(rf, view, changes, *,
 	elif displayed < available:
 		if last_page:
 			stop = start_of_view + (available - displayed)
-			s = view.prefix(list(map(rf.render, rf.elements[start_of_view:stop])))
+			s = view.prefix(list(rf.iterphrases(start_of_view, stop)))
 			view.offset += s.stop - s.start
 			dimage.append(view.render(s))
 		else:
 			tail = start_of_view + displayed
 			stop = start_of_view + available
-			s = view.suffix(list(map(rf.render, rf.elements[tail:stop])))
+			s = view.suffix(list(rf.iterphrases(tail, stop)))
 			dimage.append(view.render(s))
 
 		# Pad with Empty if necessary.
@@ -253,7 +253,7 @@ def refresh(rf, view:types.View, whence:int):
 	"""
 
 	visible = view.area.lines
-	phrases = list(map(rf.render, rf.elements[whence:whence+visible]))
+	phrases = list(rf.iterphrases(whence, whence+visible))
 	pad = visible - len(phrases)
 	if pad > 0:
 		phrases.extend([view.Empty] * pad)

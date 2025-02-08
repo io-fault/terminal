@@ -155,13 +155,23 @@ class Resource(Core):
 		self.status = None
 		self.cursors = {}
 
+	def commit(self):
+		return self.modifications.apply(self.elements).commit()
+
+	def sole(self, line_offset:int) -> types.Line:
+		"""
+		# Retrieve the &types.Line instance for the given &line_offset.
+		"""
+
+		return self.forms.mkline(self.elements[line_offset])
+
 	def select(self, start, stop, *, enum=enumerate) -> Iterable[types.Line]:
 		"""
 		# Retrieve &types.Line instances in the given range defined
 		# by &start and &stop.
 		"""
 
-		for i, v in enum(self.elements.select(start, stop)):
+		for i, v in enum(self.elements[start:stop]):
 			yield self.forms.mkline(v, ln_offset=start+i)
 
 	@staticmethod
@@ -268,16 +278,11 @@ class Refraction(Core):
 		new = object.__new__(self.__class__)
 		new.__dict__.update(self.__dict__.items())
 		new.forms = lf
-		new.structure = lf.rf_structure
-		new.render = lf.rf_structure
-
 		return new
 
 	def __init__(self, resource):
 		self.source = resource
 		self.forms = resource.forms
-		self.structure = self.forms.rf_structure
-		self.render = self.forms.rf_render
 		self.annotation = None
 		self.system_execution_status = {}
 
@@ -499,7 +504,8 @@ class Refraction(Core):
 		# Get the slices of the structured element.
 		"""
 
-		fs = self.structure(self.elements[element])
+		ln = self.source.sole(element)
+		fs = self.forms.structure_fields(ln)
 		return self.field_areas(fs), fs
 
 	def field_index(self, areas, offset):
@@ -565,15 +571,12 @@ class Refraction(Core):
 		return self.field_select(quantity)[1]
 
 	def unit(self, quantity):
-		# Find the current position.
-		h = self.focus[1].get()
-		phrase = self.render(self.current(1))
-		p, r = phrase.seek((0, 0), h)
-		assert r == 0
-
-		# Find the codepoint offset after the Character Unit at &p
-		np, r = phrase.seek(p, quantity, *phrase.m_unit)
-		return phrase.tell(np, *phrase.m_codepoint)
+		"""
+		# Get the Character Units at the cursor position.
+		"""
+		lo = self.focus[0].get()
+		cp = self.focus[1].get()
+		return self.cu_codepoints(lo, cp, quantity)
 
 	def vertical_selection_text(self) -> list[str]:
 		"""
@@ -593,6 +596,36 @@ class Refraction(Core):
 		ln = self.focus[0].get()
 		start, position, stop = self.focus[1].snapshot()
 		return self.elements[ln][start:stop]
+
+	def phrase(self, offset):
+		"""
+		# Render the &types.Phrase instance for the given line.
+		"""
+
+		return next(self.forms.render((self.source.sole(offset),)))
+
+	def iterphrases(self, start, stop):
+		"""
+		# Render the &types.Phrase instances for the given range.
+		"""
+
+		return self.forms.render(self.source.select(start, stop))
+
+	def cu_codepoints(self, ln_offset, cp_offset, cu_offset) -> int:
+		"""
+		# Get the number of codepoints used to represent the
+		# Character Unit identified by &ln_offset and &cp_offset.
+		"""
+
+		phrase = self.phrase(ln_offset)
+
+		p, r = phrase.seek((0, 0), cp_offset, *phrase.m_codepoint)
+		assert r == 0
+
+		n, r = phrase.seek(p, cu_offset, *phrase.m_unit)
+		assert r == 0
+
+		return phrase.tell(n, *phrase.m_codepoint)
 
 class Frame(Core):
 	"""
@@ -683,10 +716,8 @@ class Frame(Core):
 		view.offset = refraction.visible[0]
 		view.horizontal_offset = refraction.visible[1]
 		view.version = refraction.log.snapshot()
-		view.update(slice(0, None), [
-			refraction.render(ln)
-			for ln in refraction.elements[view.vertical(refraction)]
-		])
+		vslice = view.vertical(refraction)
+		view.update(slice(0, None), list(refraction.iterphrases(vslice.start, vslice.stop)))
 
 		return view
 
@@ -706,10 +737,7 @@ class Frame(Core):
 		fs_lf = replace(self.filesystem, lf_fields=fctx)
 
 		elements = location.determine(reference.ref_context, reference.ref_path)
-		header.update(slice(0, 2), list(
-			map(fs_lf.rf_render, elements)
-		))
-
+		header.update(slice(0, 2), list(fs_lf.render(map(fs_lf.mkline, elements))))
 		return header.render(slice(0, 2))
 
 	def chresource(self, path, refraction):
@@ -994,10 +1022,7 @@ class Frame(Core):
 			end = vo + vh
 			start = end + d
 			vrange = slice(vh + d, vh)
-			self.view.update(vrange, [
-				self.focus.render(element)
-				for element in self.focus.elements[start:end]
-			])
+			self.view.update(vrange, list(rf.iterphrases(start, end)))
 			yield from self.view.render(vrange)
 			yield from self.view.compensate()
 			return

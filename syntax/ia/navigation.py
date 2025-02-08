@@ -282,7 +282,7 @@ def event_select_absolute(session, frame, rf, event):
 	frame.division = div[1]
 	trf.focus[0].set(ry)
 
-	phrase = trf.render(trf.elements[ry])
+	phrase = trf.phrase(ry)
 	cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
 	h = phrase.tell(cp, *phrase.m_codepoint)
 	trf.focus[1].set(h)
