@@ -405,7 +405,7 @@ class Refraction(Core):
 		):
 		"""
 		# Adjust view positioning to compensate for changes in &elements and
-		# propagate to reflections to maintain their views.
+		# propagate to parallels to maintain their views.
 
 		# Executed on the target refraction after a change is performed.
 		"""
@@ -642,17 +642,17 @@ class Frame(Core):
 		self.views = []
 		self.refractions = []
 		self.returns = []
-		self.reflections = {}
+		self.parallels = {}
 		self.deltas = []
 
-	def reflect(self, ref:Reference, *sole) -> Iterable[Refraction]:
+	def refracting(self, ref:Reference, *sole) -> Iterable[Refraction]:
 		"""
-		# Iterate through all the Refractions representing &ref and
+		# Iterate through all the Refractions viewing &ref and
 		# its associated view. &sole, as an iterable, is returned if
 		# no refractions are associated with &ref.
 		"""
 
-		return self.reflections.get(ref.ref_path, sole)
+		return self.parallels.get(ref.ref_path, sole)
 
 	def attach(self, dpath, refraction) -> types.View:
 		"""
@@ -668,10 +668,10 @@ class Frame(Core):
 		current = self.refractions[vi]
 		self.returns[vi] = current
 		view = self.views[vi]
-		self.reflections[current.source.origin.ref_path].discard((current, view))
+		self.parallels[current.source.origin.ref_path].discard((current, view))
 
 		self.refractions[vi] = refraction
-		mirrors = self.reflections[refraction.source.origin.ref_path]
+		mirrors = self.parallels[refraction.source.origin.ref_path]
 		mirrors.add((refraction, view))
 		refraction.parallels = weakref.proxy(mirrors)
 
@@ -727,7 +727,7 @@ class Frame(Core):
 		"""
 
 		self.refractions[:] = refractions
-		self.reflections.clear()
+		self.parallels.clear()
 
 		# Align returns size.
 		n = len(self.refractions)
@@ -740,7 +740,7 @@ class Frame(Core):
 				types.text.Words((0, "", rf.forms.lf_theme['empty']))
 			])
 			rf.configure(view.area)
-			self.reflections[rf.source.origin.ref_path].add((rf, view))
+			self.parallels[rf.source.origin.ref_path].add((rf, view))
 
 	def remodel(self, area=None, divisions=None):
 		"""
@@ -756,7 +756,7 @@ class Frame(Core):
 
 		self.structure.configure(area, divisions)
 
-		self.reflections = collections.defaultdict(set)
+		self.parallels = collections.defaultdict(set)
 		self.panes = list(self.structure.iterpanes())
 		self.paths = {p: i for i, p in enumerate(self.panes)}
 
@@ -1561,7 +1561,7 @@ class Session(Core):
 		if frame is None:
 			return
 
-		for trf, v in frame.reflect(rsrc.origin):
+		for trf, v in frame.refracting(rsrc.origin):
 			if trf == frame.focus:
 				# Update handled by main loop.
 				continue
@@ -1837,7 +1837,7 @@ class Session(Core):
 
 		# Presume updates are required.
 		for resource_ref in rd:
-			frame.deltas.extend(frame.reflect(resource_ref))
+			frame.deltas.extend(frame.refracting(resource_ref))
 
 	def dispatch(self, frame, refraction, view, key):
 		"""
@@ -1865,10 +1865,10 @@ class Session(Core):
 			del operror
 
 		# Find parallel refractions that may require updates.
-		yield from frame.reflect(refraction.source.origin, (refraction, view))
+		yield from frame.refracting(refraction.source.origin, (refraction, view))
 		if frame.deltas:
 			for drf, dview in frame.deltas:
-				yield from frame.reflect(drf.source.origin, (drf, dview))
+				yield from frame.refracting(drf.source.origin, (drf, dview))
 			del frame.deltas[:]
 
 	def cycle(self, *, Method=projection.update):
