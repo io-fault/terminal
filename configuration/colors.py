@@ -14,7 +14,7 @@ palette = {
 	'application-border': 0x2D2D2D,
 
 	'black': 0x000000,
-	'white': 0xFFFFFF,
+	'white': 0xffffff,
 
 	'red': 0xed7973,
 	'green': 0x84d084,
@@ -30,7 +30,7 @@ palette = {
 	'chartreuse': 0x7fff00,
 	'forest': 0x228b22,
 	'maroon': 0x800000,
-	'orange': 0xffa500,
+	'orange': 0xffbe61,
 	'pink': 0xffc0cb,
 	'coral': 0xff7f50,
 	'beige': 0xf5f5dc,
@@ -39,7 +39,7 @@ palette = {
 	'teal': 0x209090,
 	'midnight': 0x191970,
 	'indigo': 0x4b0082,
-	'purple': 0xC38FF4,
+	'purple': 0xc38ff4,
 	'violet': 0xee82ee,
 
 	'absolute-red': 0xff0000,
@@ -48,6 +48,7 @@ palette = {
 	'absolute-blue': 0x0000ff,
 	'absolute-magenta': 0xff00ff,
 	'absolute-cyan': 0x00ffff,
+	'absolute-orange': 0xffa500,
 }
 
 text = {
@@ -93,6 +94,7 @@ text = {
 	'indentation': 'background', # Indentation with following line content.
 	'indentation-only': 'dark', # Indentation without line content.
 	'trailing-whitespace': 'absolute-red',
+	'line-termination': 'background', # End of Phrase padding character.
 
 	# Annotations
 	'field-annotation-start': 'blue',
@@ -129,4 +131,15 @@ text = {
 cell = {
 	'default': 'background',
 	'frame-border': 'background',
+
+	# Cursor
+	'cursor-start-exclusive': 'absolute-green',
+	'cursor-start-inclusive': 'absolute-green',
+	'cursor-stop-inclusive': 'absolute-orange',
+
+	'cursor-offset-active': 'absolute-yellow',
+	'cursor-offset-inactive': 'gray',
+	'cursor-stop-exclusive': 'absolute-red',
+
+	'cursor-void': 'gray',
 }

@@ -28,7 +28,7 @@ def delimit(ai):
 	# Apply common framing to an annotations primary image.
 	"""
 
-	yield ('field-annotation-start', ' (')
+	yield ('field-annotation-start', '(')
 	yield from ai.image()
 	if ai.title:
 		yield ('field-annotation-separator', ' ')

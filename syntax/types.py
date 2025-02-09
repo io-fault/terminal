@@ -13,7 +13,7 @@ from typing import Optional, Protocol, Literal, Callable
 
 from ..cells import text
 from ..cells.text import Phrase, Redirect, Words, Unit
-from ..cells.types import Area, Glyph, Device
+from ..cells.types import Area, Glyph, Device, Line as LineStyle
 
 class Annotation(Protocol):
 	"""
@@ -611,7 +611,7 @@ class Model(object):
 	"""
 
 	# Indicator images (characters) and colors.
-	from . import symbols, palette
+	from . import symbols
 	fm_iimages = {
 		'left': {
 			'leading': symbols.wedges['up'],
@@ -642,7 +642,6 @@ class Model(object):
 			'reset-weak': symbols.dotted['horizontal'],
 		},
 	}
-	fm_icolors = palette.range_colors
 
 	def verticals(self):
 		"""
@@ -1220,7 +1219,6 @@ class Model(object):
 		for pv, coffset, (itype, iimage, offset) in scaled:
 			iis = self.fm_iimages[pv]
 			ii = iis[iimage]
-			ic = self.fm_icolors[itype]
 
 			match pv:
 				case 'top' | 'bottom':
@@ -1234,7 +1232,7 @@ class Model(object):
 				# Default horizontal or vertical. Dotted (weak) or solid.
 				re = iis['reset-'+rtypes.get(pv, 'solid')]
 
-			yield (position, ic, ii, re)
+			yield (position, itype, ii, re)
 
 @tools.struct()
 class System(object):
@@ -1652,6 +1650,11 @@ class Reformulations(object):
 			n = len(c)
 			yield Redirect((n, n * '#', cf, c))
 
+		# Final cell padding to eliminate vacant phrases.
+		# The line feed is purely symbolic; annotation content can follow.
+		lf = self.lf_theme['line-termination']
+		yield Redirect((1, ' ', lf, '\n'))
+
 	def redirect_exceptions(self, phrasewords, *,
 			Unit=Unit,
 			isinstance=isinstance,
@@ -1676,8 +1679,7 @@ class Reformulations(object):
 						yield constants[o]
 						continue
 
-					d = f"{o:02x}"
-					d = hex(o)[2:]
+					d = hex(o)[2:].rjust(2, '0')
 					yield Redirect((1, '[', obstruction, ''))
 					yield Redirect((len(d), d, representation, i.text))
 					yield Redirect((1, ']', obstruction, ''))

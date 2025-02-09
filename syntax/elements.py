@@ -14,7 +14,6 @@ from fault.system.query import home
 from . import symbols
 from . import location
 from . import projection
-from . import cursor
 from . import annotations
 from . import alignment
 from . import types
@@ -574,6 +573,7 @@ class Refraction(Core):
 		"""
 		# Get the Character Units at the cursor position.
 		"""
+
 		lo = self.focus[0].get()
 		cp = self.focus[1].get()
 		return self.cu_codepoints(lo, cp, quantity)
@@ -625,7 +625,7 @@ class Refraction(Core):
 		n, r = phrase.seek(p, cu_offset, *phrase.m_unit)
 		assert r == 0
 
-		return phrase.tell(n, *phrase.m_codepoint)
+		return phrase.tell(phrase.areal(n), *phrase.m_codepoint)
 
 class Frame(Core):
 	"""
@@ -1078,6 +1078,28 @@ class Frame(Core):
 		i = self.paths[(v, d)]
 		return ((v, d, s), self.refractions[i], self.views[i])
 
+	@staticmethod
+	def cursor_cell(positions):
+		"""
+		# Apply changes to the cursor positions for visual indicators.
+		"""
+
+		if positions[1] >= positions[2]:
+			# after last character in range
+			return 'cursor-stop-exclusive'
+		elif positions[1] < positions[0]:
+			# before first character in range
+			return 'cursor-start-exclusive'
+		elif positions[0] == positions[1]:
+			# on first character in range
+			return 'cursor-start-inclusive'
+		elif positions[2]-1 == positions[1]:
+			# on last character in range
+			return 'cursor-stop-inclusive'
+		else:
+			# between first and last characters
+			return 'cursor-offset-active'
+
 	def indicate(self, focus, view):
 		"""
 		# Render the (cursor) status indicators.
@@ -1127,37 +1149,48 @@ class Frame(Core):
 		# Translate codepoint offsets to cell offsets.
 		m_cell = phrase.m_cell
 		m_cp = phrase.m_codepoint
+		m_cu = phrase.m_unit
+
 		hs = h.snapshot()
 		if hs[0] > hs[2]:
 			inverted = True
 			hs = tuple(reversed(hs))
 		else:
 			inverted = False
-		hc = [
-			phrase.tell(phrase.seek((0, 0), x, *m_cp)[0], *m_cell)
-			for x in hs
-		]
+
+		# Seek the codepoint and align on the next word with real text.
+		cursor_p = phrase.areal(phrase.seek((0, 0), hs[1], *m_cp)[0])
+
+		cursor_start = phrase.tell(cursor_p, *m_cell)
+		cursor_word = phrase[cursor_p[0]]
+		cursor_stop = cursor_start + min(cursor_word.cellcount(), cursor_word.cellrate)
+
+		rstart = phrase.tell(phrase.seek((0, 0), hs[0], *m_cp)[0], *m_cell)
+		rstop = phrase.tell(phrase.seek((0, 0), hs[2], *m_cp)[0], *m_cell)
+		hc = [rstart, cursor_start, rstop]
 
 		# Ignore when offscreen.
 		if rln >= 0 and rln < edge:
 			kb_mode = self.keyboard.mapping
 			cells = list(phrase.render(Define=self.define))
-			# Need one empty cell.
-			cells.append(empty_cell)
+			ccell = self.theme[self.cursor_cell(hs)]
 
-			ccount = len(cells)
-			ip = cursor.select_horizontal_position_indicator(kb_mode, 'position', inverted, hs)
-			span = min(hc[1], ccount-1)
-			upc = cells[span].codepoint
-			span += 1
-			while span < ccount and cells[span].codepoint == upc and cells[span].window > 0:
-				span += 1
-			cp = cells[hc[1]:span]
-			cells[hc[1]:span] = map(ip, cp)
+			if kb_mode == 'insert':
+				cells[cursor_start:cursor_stop] = [
+					c.update(underline=types.LineStyle.solid, linecolor=ccell.cellcolor)
+					for c in cells[cursor_start:cursor_stop]
+				]
+			else:
+				cells[cursor_start:cursor_stop] = [
+					c.update(textcolor=c.cellcolor, cellcolor=ccell.cellcolor)
+					for c in cells[cursor_start:cursor_stop]
+				]
 
-			ir = cursor.select_horizontal_range_indicator(kb_mode, 'range')
-			cr = cells[hc[0]:hc[2]]
-			cells[hc[0]:hc[2]] = map(ir, cr)
+				# Range underline; disabled when inserting.
+				cells[rstart:rstop] = [
+					c.update(underline=types.LineStyle.solid, linecolor=0x66cacaFF)
+					for c in cells[rstart:rstop]
+				]
 
 			yield ctx.__class__(vy + rln, vx, 1, hedge), cells[hoffset:hoffset+hedge]
 
@@ -1171,8 +1204,9 @@ class Frame(Core):
 		))
 
 		for pi in self.structure.r_indicators(si, rtypes=view.edges):
-			(x, y), color, ic, bc = pi
-			picell = Glyph(textcolor=color, codepoint=ord(ic))
+			(x, y), itype, ic, bc = pi
+			ccell = self.theme['cursor-' + itype]
+			picell = Glyph(textcolor=ccell.cellcolor, codepoint=ord(ic))
 			yield ctx.__class__(y, x, 1, 1), (picell,)
 
 class Session(Core):
@@ -1223,7 +1257,7 @@ class Session(Core):
 		}
 
 		for k, v in colors.cell.items():
-			theme[k] = theme[k].update(cellcolor=colors.palette[v])
+			theme[k] = theme.get(k, cell).update(cellcolor=colors.palette[v])
 
 		theme['title'] = theme['field-annotation-title']
 		theme['empty'] = cell.inscribe(-1)
