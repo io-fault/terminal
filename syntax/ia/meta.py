@@ -31,10 +31,14 @@ def application_switched(session, frame, rf, event):
 
 	pass
 
-def perform_selected_action(session, frame, rf, event):
+def perform_selected_action(session, frame, rf, event, hold=False):
 	if rf.activate is not None:
 		action = rf.activate
-		return action(session, frame, rf, event)
+		r = action(session, frame, rf, event)
+		if not hold:
+			session.dispatch_delta(frame.cancel())
+			session.keyboard.set('control')
+		return r
 	elif session.keyboard.mapping == 'insert':
 		# Presume document editing.
 		return session.events['delta'](('open', 'ahead'))(session, frame, rf, event)
@@ -47,10 +51,7 @@ def execute_and_cancel(session, frame, rf, event):
 	# Perform the primary action of the target refraction and cancel the prompt.
 	"""
 
-	r = perform_selected_action(session, frame, rf, event)
-	session.dispatch_delta(frame.cancel())
-	session.keyboard.set('control')
-	return r
+	return perform_selected_action(session, frame, rf, event)
 
 @event('activate', 'continue')
 def execute_and_hold(session, frame, rf, event):
@@ -58,7 +59,7 @@ def execute_and_hold(session, frame, rf, event):
 	# Perform the primary action and maintain the prompt's focus.
 	"""
 
-	return perform_selected_action(session, frame, rf, event)
+	return perform_selected_action(session, frame, rf, event, hold=True)
 
 def joinlines(decoder, linesep='\n', character=''):
 	# Used in conjunction with an incremental decoder to collapse line ends.
