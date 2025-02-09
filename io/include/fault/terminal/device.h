@@ -36,12 +36,10 @@ typedef int (*TerminalApplication)(void *context);
 		// to every API method.
 	// /cmd_view/
 		// The screen's dimensions and working offset.
-	// /cmd_empty/
-		// The cell template used to represent an empty cell on the screen.
-		// As the `-1` codepoint has no text content, this cell can be
-		// used to configure defaults.
 	// /cmd_image/
 		// The allocation of cells representing the display's state.
+		// The primary shared memory allocation between the device
+		// and the application.
 	// /cmd_dimensions/
 		// The parameters used to initialize the screen of the device.
 */
