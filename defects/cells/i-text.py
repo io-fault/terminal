@@ -199,4 +199,26 @@ def test_Phrase_render_double_width(test):
 		test/lc.codepoint == cp
 		test/lc.window == 1
 
+def test_Phrase_areal(test):
+	"""
+	# - &module.Phrase.areal
 
+	# Validate the expected positioning of &module.Phrase.areal.
+	"""
+
+	ph = module.Phrase([
+		module.Words((1, "prefix")),
+		module.Redirect((1, "[", module.Glyph(), "")),
+		module.Redirect((1, "*", module.Glyph(), "REAL")),
+		module.Redirect((1, "]", module.Glyph(), "")),
+	])
+
+	# Position directly after the prefix words.
+	after_prefix, re = ph.seek((0, 0), len("prefix"))
+	wi, ci = after_prefix
+	test/ph[wi][-1][ci:] == ""
+
+	# Aligned on the Redirect with REAL content.
+	before_real = ph.areal(after_prefix)
+	wi, ci = before_real
+	test/ph[wi][-1][ci:] == "REAL"

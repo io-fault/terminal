@@ -569,6 +569,23 @@ class Phrase(tuple):
 		ci, r = utranslate(word, abs(re + (lswitch * ll)))
 		return (i, ci), -r
 
+	def areal(self, position):
+		"""
+		# Align the position on the next real codepoint.
+
+		# Used to make sure positioning is set on a Word with
+		# non-empty text content.
+		"""
+		wi, ci = position
+		try:
+			while not self[wi].text[ci:]:
+				wi += 1
+				ci = 0
+			else:
+				return (wi, len(self[wi].text[:ci]))
+		except IndexError:
+			return (len(self)-1, len(self[-1].text))
+
 	def afirst(self, position):
 		"""
 		# Align the position to the beginning of the next word given
