@@ -132,14 +132,17 @@ cell = {
 	'default': 'background',
 	'frame-border': 'background',
 
-	# Cursor
+	# Cursor before and after character range.
 	'cursor-start-exclusive': 'absolute-green',
+	'cursor-stop-exclusive': 'absolute-red',
+
+	# Cursor on the edges of the character range.
 	'cursor-start-inclusive': 'absolute-green',
 	'cursor-stop-inclusive': 'absolute-orange',
 
+	# Cursor inside the character range.
 	'cursor-offset-active': 'absolute-yellow',
-	'cursor-offset-inactive': 'gray',
-	'cursor-stop-exclusive': 'absolute-red',
 
-	'cursor-void': 'gray',
+	# Cursor outside of line content. (End of line position)
+	'cursor-void': 'dark',
 }

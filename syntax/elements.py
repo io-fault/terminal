@@ -1173,7 +1173,12 @@ class Frame(Core):
 		if rln >= 0 and rln < edge:
 			kb_mode = self.keyboard.mapping
 			cells = list(phrase.render(Define=self.define))
-			ccell = self.theme[self.cursor_cell(hs)]
+
+			if cursor_start >= len(cells) - 1:
+				# End of line position.
+				ccell = self.theme['cursor-void']
+			else:
+				ccell = self.theme[self.cursor_cell(hs)]
 
 			if kb_mode == 'insert':
 				cells[cursor_start:cursor_stop] = [
