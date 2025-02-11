@@ -504,7 +504,7 @@ def set_cursor_start(session, frame, rf, event):
 
 @event('vertical', 'place', 'stop')
 def set_cursor_stop(session, frame, rf, event):
-	rf.focus[0].halt()
+	rf.focus[0].halt(+1)
 
 @event('vertical', 'place', 'center')
 def bisect_range(session, frame, rf, event):

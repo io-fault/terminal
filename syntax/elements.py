@@ -654,13 +654,14 @@ class Refraction(Core):
 			total += (-change)
 
 		for rf, v in getattr(self, 'parallels', ((self, None),)):
+			assert rf.source is src
 			position = rf.visible[0]
 			visible = rf.dimensions.lines
 			rf.visible[0] = op(total, visible, position, offset, sign*change)
 
 		return self
 
-	def vertical_changed(self, ln, *, lil=types.Line.il,
+	def vertical_changed(self, lo, *,
 			backward=alignment.backward,
 			forward=alignment.forward,
 		):
@@ -668,21 +669,19 @@ class Refraction(Core):
 		# Constrain the focus and apply margin scrolls.
 		"""
 
-		total = len(self.elements)
+		src = self.source
+		total = src.ln_count()
 
 		# Constrain vertical and identify indentation level (bol).
-		try:
-			line = self.elements[ln]
-		except IndexError:
-			line = ""
-			ll = 0
-			bol = 0
-			if ln >= total or ln < 0:
-				# Constrain vertical; may be zero.
-				self.focus[0].set(total)
+		ll = bol = 0
+		if lo < 0 or not total:
+			self.focus[0].set(0)
+		elif lo >= total:
+			self.focus[0].set(total - 1)
 		else:
-			ll = len(line)
-			bol = lil(line)
+			line = src.sole(lo)
+			ll = line.ln_level + len(line.ln_content)
+			bol = line.ln_level
 
 		# Constrain cursor.
 		h = self.focus[1]
@@ -693,23 +692,23 @@ class Refraction(Core):
 
 		# Margin scrolling.
 		current = self.visible[0]
-		rln = ln - current
+		rln = lo - current
 		climit = max(0, self.limits[0])
 		sunit = max(1, climit * 2)
 		edge = self.dimensions.lines
 		if rln <= climit:
 			# Backwards
 			position, rscroll, area = backward(total, edge, current, sunit)
-			if ln < position:
-				self.visible[0] = max(0, ln - (edge // 2))
+			if lo < position:
+				self.visible[0] = max(0, lo - (edge // 2))
 			else:
 				self.visible[0] = position
 		else:
 			if rln >= edge - climit:
 				# Forwards
 				position, rscroll, area = forward(total, edge, current, sunit)
-				if not (position + edge) > ln:
-					self.visible[0] = min(total - edge, ln - (edge // 2))
+				if not (position + edge) > lo:
+					self.visible[0] = min(total - edge, lo - (edge // 2))
 				else:
 					self.visible[0] = position
 
