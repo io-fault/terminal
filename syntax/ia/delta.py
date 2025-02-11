@@ -193,8 +193,8 @@ def delete_current_line(session, frame, rf, event, quantity=1, offset=0):
 
 	if offset < 0:
 		rf.focus[0].changed(lo, -quantity)
-	rf.focus[0].limit(0, src.ln_count())
 	rf.delta(lo, -deletion_count)
+	rf.vertical_changed(rf.focus[0].get())
 
 @event('delete', 'backward', 'adjacent', 'class')
 def delete_previous_field(session, frame, rf, event):
