@@ -18,9 +18,7 @@ from fault.system.kernel import Link
 from fault.system.kernel import Invocation
 from fault.system.kernel import Scheduler
 
-from . import types
 from . import elements
-from . import delta
 from . import annotations
 
 Decode = codecs.getincrementaldecoder('utf-8')
@@ -81,6 +79,7 @@ class Insertion(IO):
 
 	def execute(self, transfer):
 		rf = self.target
+		src = rf.source
 
 		lines = self.state(transfer).split('\n')
 		if not lines:
@@ -88,7 +87,8 @@ class Insertion(IO):
 
 		ln, co = self.cursor
 
-		dl, dc = delta.insert_lines_into(rf.elements, rf.log, ln, co, lines)
+		dl, dc = src.insert_lines_into(ln, co, lines)
+		src.commit()
 		rf.delta(ln, dl)
 		self.cursor = (ln + dl, co + dc)
 
@@ -99,8 +99,8 @@ class Insertion(IO):
 			rf.scroll(dl.__add__)
 
 	def final(self, xfer):
-		rf = self.target
-		rf.log.checkpoint()
+		src = self.target.source
+		src.checkpoint()
 
 	def interrupt(self):
 		self.system_operation = (lambda fd, rs: b'')

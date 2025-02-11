@@ -154,15 +154,19 @@ class Resource(Core):
 		self.status = None
 		self.cursors = {}
 
-	def commit(self):
-		return self.modifications.apply(self.elements).commit()
+	def ln_count(self) -> int:
+		"""
+		# The current number of lines present in the document.
+		"""
+
+		return self.elements.__len__()
 
 	def sole(self, line_offset:int) -> types.Line:
 		"""
 		# Retrieve the &types.Line instance for the given &line_offset.
 		"""
 
-		return self.forms.mkline(self.elements[line_offset])
+		return self.forms.mkline(self.elements[line_offset], line_offset)
 
 	def select(self, start, stop, *, enum=enumerate) -> Iterable[types.Line]:
 		"""
@@ -213,6 +217,229 @@ class Resource(Core):
 		fmt.append(f"{S}.{MS:03} seconds")
 
 		return ' '.join(fmt)
+
+	def last_insertion(self, limit=8, islice=itertools.islice):
+		"""
+		# Retrieve the last insertion from the log.
+		"""
+
+		for r in islice(reversed(self.modifications.records), 0, limit):
+			last = r.insertion
+			if last:
+				return last
+
+		return ""
+
+	def version(self):
+		"""
+		# Get the identifier of the latest modification.
+		"""
+
+		return self.modifications.snapshot()
+
+	def commit(self, collapse=True):
+		"""
+		# Apply pending modifications.
+		"""
+
+		log = self.modifications.apply(self.elements)
+		if collapse:
+			log.collapse()
+		return log.commit()
+
+	def checkpoint(self, collapse=True):
+		"""
+		# Apply, commit, and checkpoint the log.
+		"""
+
+		log = self.modifications.apply(self.elements)
+		if collapse:
+			log.collapse()
+		return log.commit().checkpoint()
+
+	def insert_codepoints(self, lo, offset, string):
+		"""
+		# Insert the &string at the given &offset without committing or applying.
+		"""
+
+		return (self.modifications
+			.write(delta.Update(lo, string, "", offset)))
+
+	def delete_range(self, lo, start, stop):
+		"""
+		# Remove &length codepoints from the &offset in line &lo.
+
+		# [ Returns ]
+		# The deleted string.
+		"""
+
+		line = self.elements[lo]
+		deletion = line[start:stop]
+
+		(self.modifications
+			.write(delta.Update(lo, "", deletion, start)))
+
+		return deletion
+
+	def delete_codepoints(self, lo, offset, deletion):
+		"""
+		# Remove &deletion from the &offset in line &lo.
+
+		# [ Returns ]
+		# The given &deletion.
+		"""
+
+		(self.modifications
+			.write(delta.Update(lo, "", deletion, offset)))
+
+		return deletion
+
+	def substitute_codepoints(self, lo:int, start:int, stop:int, string:str) -> int:
+		"""
+		# Remove the horizontal range from the line identified by &lo and
+		# insert the &string at &start.
+
+		# [ Returns ]
+		# The actual change in size.
+		"""
+
+		deletion = self.delete_range(lo, start, stop)
+		self.insert_codepoints(lo, start, string)
+
+		return deletion
+
+	def join(self, lo, count, *, withstring=''):
+		"""
+		# Join &count lines onto &lo using &withstring.
+
+		# [ Parameters ]
+		# /lo/
+			# The line offset.
+		# /count/
+			# The number of lines after &lo to join.
+		# /withstring/
+			# The character placed between the joined lines.
+			# Defaults to an empty string.
+		"""
+
+		lines = self.elements[lo:lo+1+count]
+		combined = withstring.join(lines)
+
+		(self.modifications
+			.write(delta.Update(lo, combined, lines[0], 0))
+			.write(delta.Lines(lo+1, [], [lines[-1]])))
+
+		return (lo+1, -len(lines))
+
+	def split(self, lo, offset):
+		"""
+		# Split the line identified by &lo at &offset.
+		"""
+
+		line = self.elements[lo]
+		nl = line[offset:]
+
+		(self.modifications
+			.write(delta.Update(lo, "", nl, offset))
+			.write(delta.Lines(lo+1, [nl], [])))
+
+		return (lo, 2)
+
+	def delete_lines(self, lo, lines):
+		"""
+		# Remove the &lines at &lo.
+		"""
+
+		self.modifications.write(delta.Lines(lo, [], lines))
+
+	def delete_lines(self, start:int, stop:int):
+		"""
+		# Remove the lines in the range &start and &stop.
+
+		# [ Returns ]
+		# The lines removed.
+		"""
+
+		lines = self.elements[start:stop]
+
+		(self.modifications
+			.write(delta.Lines(start, [], lines)))
+
+		return lines
+
+	def insert_lines(self, lo, lines):
+		"""
+		# Insert the &lines before &lo.
+		"""
+
+		(self.modifications
+			.write(delta.Lines(lo, lines, [])))
+
+		return len(lines)
+
+	def swap_case(self, lo:int, start:int, stop:int):
+		"""
+		# Swap the case of the character unit under the cursor.
+		"""
+
+		lc = self.elements[lo]
+		subbed = lc[start:stop]
+
+		(self.modifications
+			.write(delta.Update(lo, subbed.swapcase(), subbed, start)))
+
+	def move_lines(self, lo:int, start:int, stop:int) -> int:
+		"""
+		# Relocate the vertical range identified by &start and &stop before
+		# the line identified by &lo.
+
+		# [ Returns ]
+		# The actual count of lines moved.
+		"""
+
+		# Potentially effects update alignment.
+		# When a move is performed, update only looks at the final
+		# view and elements state. If insertion is performed before
+		# delete, the final state will not be aligned and the wrong
+		# elements will be represented at the insertion point.
+		if start < lo:
+			# Deleted range comes before insertion line.
+			deletion = self.delete_lines(start, stop)
+			self.insert_lines(lo - len(deletion), deletion)
+		else:
+			# Deleted range comes after insertion line.
+			assert lo <= start
+
+			deletion = self.delete_lines(start, stop)
+			self.insert_lines(lo, deletion)
+
+		return len(deletion)
+
+	def insert_lines_into(self, lo:int, offset:int, lines:list[str]):
+		"""
+		# Insert the given &lines at the &offset in the line identified by &lo.
+		# Modifies &elements using &log.
+
+		# [ Returns ]
+		# # Change in line count at &lo.
+		# # Change (codepoint length) in characters at &offset.
+		"""
+
+		try:
+			line = self.elements[lo]
+		except IndexError:
+			line = ""
+
+		prefix = line[:offset]
+		suffix = line[offset:]
+		lines[0] = prefix + lines[0]
+		lines[-1] = lines[-1] + suffix
+
+		(self.modifications
+			.write(delta.Lines(lo, [], [line]))
+			.write(delta.Lines(lo, lines, [])))
+
+		return len(lines) - 1, len(lines[-1]) - len(suffix) - offset
 
 class Refraction(Core):
 	"""
@@ -414,7 +641,9 @@ class Refraction(Core):
 		# Executed on the target refraction after a change is performed.
 		"""
 
-		total = len(self.elements)
+		src = self.source
+		total = src.ln_count()
+
 		if change > 0:
 			op = ainsert
 			sign = +1
@@ -626,6 +855,30 @@ class Refraction(Core):
 		assert r == 0
 
 		return phrase.tell(phrase.areal(n), *phrase.m_codepoint)
+
+	def take_vertical_range(self):
+		"""
+		# Delete and return the lines selected by the vertical range.
+		"""
+
+		start, position, stop = self.focus[0].snapshot()
+		src = self.source
+
+		lines = src.delete_lines(start, stop)
+
+		return (start, 0, lines)
+
+	def take_horizontal_range(self):
+		"""
+		# Delete and return the span selected by the horizontal range.
+		"""
+
+		lo = self.focus[0].get()
+		start, position, stop = self.focus[1].snapshot()
+		src = self.source
+
+		selection = src.delete_range(lo, start, stop)
+		return (ln, start, [selection])
 
 class Frame(Core):
 	"""

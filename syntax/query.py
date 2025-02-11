@@ -25,11 +25,11 @@ def refract(session, frame, view, qtype, state, action):
 	lrf = Refraction(meta)
 	lrf.configure(view.area)
 	lrf.activate = action # location.open or location.save
-	view.version = lrf.log.snapshot()
+	view.version = lrf.source.version()
 
 	# Set the range to all lines and place the cursor on the relative path..
 	lrf.focus[0].restore((0, 0, 1))
-	last = lrf.elements[-1]
+	last = lrf.source.elements[-1]
 	lrf.focus[1].restore((0, len(qtype) + 1, len(qtype) + len(state) + 1))
 	session.dispatch_delta(projection.refresh(lrf, view, 0))
 
@@ -80,7 +80,6 @@ def transform(session, frame, rf, system):
 	"""
 
 	from .system import Completion, Insertion, Transmission, Invocation, Decode, Encode
-	from .delta import take_vertical_range
 	from .annotations import ExecutionStatus
 	from fault.system import query
 
@@ -92,9 +91,12 @@ def transform(session, frame, rf, system):
 		# No command found.
 		return
 
+	src = rf.source
+	src.checkpoint()
+
 	c = Completion(rf, -1)
-	start, co, lines = take_vertical_range(rf)
-	rf.log.apply(rf.elements).commit()
+	start, co, lines = rf.take_vertical_range()
+	src.commit()
 	rf.focus[0].magnitude = 0
 	rf.delta(start, start + len(lines))
 
@@ -129,7 +131,7 @@ def transmit(session, frame, rf, system):
 		return
 
 	c = Completion(rf, -1)
-	lines = rf.elements[rf.focus[0].slice()]
+	lines = rf.source.elements[rf.focus[0].slice()]
 	x = Transmission(rf, sendlines(Encode().encode, 2048, lines), b'', 0)
 
 	# Trigger first buffer.
@@ -147,7 +149,7 @@ def issue(session, frame, rf, event):
 	"""
 
 	target, view = frame.select((frame.vertical, frame.division))
-	command, string = ' '.join(rf.elements).split(' ', 1)
+	command, string = ' '.join(rf.source.elements).split(' ', 1)
 	index[command](session, frame, target, string)
 	frame.deltas.append((target, view))
 
@@ -158,7 +160,7 @@ def find(session, frame, rf, string):
 
 	v, h = rf.focus
 	rf.query['search'] = string
-	ctl = rf.forward(len(rf.elements), v.get(), h.maximum)
+	ctl = rf.forward(len(rf.source.elements), v.get(), h.maximum)
 	rf.find(ctl, string)
 
 def seek(session, frame, rf, string):
@@ -176,7 +178,7 @@ def seek(session, frame, rf, string):
 
 	if whence == 'absolute':
 		if target.startswith('-'):
-			ln = len(rf.elements)
+			ln = len(rf.source.elements)
 		else:
 			ln = -1
 	elif whence == 'relative':
@@ -185,7 +187,7 @@ def seek(session, frame, rf, string):
 		log("Unrecognized seek whence " + repr(whence) + ".")
 		return
 
-	ln += int(target) if target else len(rf.elements)
+	ln += int(target) if target else len(rf.source.elements)
 
 	rf.seek(max(0, ln), 0)
 
@@ -208,11 +210,12 @@ def prepare(rf, command):
 		selector = (lambda lo: getfield(rf.fields(lo), index))
 	elif strctx == 'line':
 		di, arg = remainder.strip().split()
-		selector = (lambda lo: (slice(0, None), 'line', rf.elements[lo]))
+		selector = (lambda lo: (slice(0, None), 'line', rf.source.elements[lo]))
 
 	op = {
 		'prefix': (lambda a, t, f: (a.start, arg, "")),
 		'suffix': (lambda a, t, f: (a.stop, arg, "")),
+		'replace': (lambda a, t, f: (a.start, arg, f)),
 	}[di]
 
 	return selector, op
@@ -227,24 +230,29 @@ def rewrite(session, frame, rf, command):
 	lspan = v.slice()
 
 	# Identify first IL.
-	elements = rf.elements
-	lil = types.Line.il
-	il = lil(elements[lspan.start])
+	src = rf.source
+	ln = src.sole(lspan.start)
+	il = ln.ln_level
 
-	rf.log.checkpoint()
+	# Force checkpoint.
+	src.checkpoint()
+
 	for lo in range(lspan.start, lspan.stop):
-		if il != lil(elements[lo]):
+		if il != src.sole(lo).ln_level:
 			# Match starting IL.
 			continue
+
 		try:
 			selection = s(lo)
 		except IndexError:
 			# Handle shorter line cases by skipping them.
 			continue
 		else:
-			position, sub, removed = d(*selection)
-			rf.log.write(delta.Update(lo, sub, removed, position))
-	rf.log.apply(rf.elements).commit().checkpoint()
+			co, sub, removed = d(*selection)
+			deletion = src.substitute_codepoints(lo, co, co + len(removed), sub)
+			assert deletion == removed
+
+	src.checkpoint()
 
 index = {
 	'seek': seek,

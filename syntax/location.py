@@ -63,17 +63,19 @@ def open(session, frame, rf, event):
 	# a new refraction to represent the loaded resource.
 	"""
 
+	src = rf.source
+
 	# Construct reference and load dependencies.
 	dpath = (frame.vertical, frame.division)
-	new = session.refract(compose(rf.source.elements))
+	new = session.refract(compose(src.elements))
 
 	session.dispatch_delta(frame.attach(dpath, new).refresh())
 	session.keyboard.set('control')
 	frame.refocus()
 
-	del rf.elements[:]
+	del src.elements[:]
 	rf.visible[0] = 0
-	session.dispatch_delta(frame.chpath(dpath, new.source.origin, snapshot=rf.log.snapshot()))
+	session.dispatch_delta(frame.chpath(dpath, new.source.origin, snapshot=src.version()))
 
 def save(session, frame, rf, event):
 	"""
@@ -84,9 +86,11 @@ def save(session, frame, rf, event):
 	# to that path.
 	"""
 
+	src = rf.source
+
 	# Construct reference and load dependencies.
 	dpath = (frame.vertical, frame.division)
-	path = compose(rf.elements)
+	path = compose(src.elements)
 
 	frame.refocus()
 	target = frame.focus
@@ -94,9 +98,9 @@ def save(session, frame, rf, event):
 	session.keyboard.set('control')
 
 	# Location heading.
-	del rf.elements[:]
+	del src.elements[:]
 	rf.visible[0] = 0
-	session.dispatch_delta(frame.chpath(dpath, target.source.origin, snapshot=rf.log.snapshot()))
+	session.dispatch_delta(frame.chpath(dpath, target.source.origin, snapshot=src.version()))
 
 def refract(lf, view, pathcontext, path, action):
 	"""
@@ -126,11 +130,11 @@ def refract(lf, view, pathcontext, path, action):
 	lrf = elements.Refraction(rsrc)
 	lrf.configure(view.area)
 	lrf.activate = action # location.open or location.save
-	view.version = lrf.log.snapshot()
+	view.version = rsrc.version()
 
 	# Set the range to all lines and place the cursor on the relative path..
 	lrf.focus[0].restore((0, 1, 2))
-	last = lrf.elements[-1]
+	last = rsrc.elements[-1]
 	name = last.rfind('/') + 1
 	lrf.focus[1].restore((name, name, len(last)))
 
