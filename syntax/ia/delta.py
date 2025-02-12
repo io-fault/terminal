@@ -18,7 +18,7 @@ def xact_abort(session, frame, rf, event):
 	# Retract until the last checkpoint and enter control mode.
 	"""
 
-	rf.source.undo(rf.elements)
+	rf.source.undo()
 	session.keyboard.set('control')
 
 @event('commit')
