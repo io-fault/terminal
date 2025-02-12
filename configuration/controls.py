@@ -144,8 +144,8 @@ if 'controls':
 	a(('v', km_control), 'delta', ('indentation', 'zero'))
 	a(('v', km_meta), 'delta', ('paste', 'before'))
 
-	a(('u'), 'transaction', ('undo',))
-	a(('u', km_shift), 'transaction', ('redo',))
+	a(('u'), 'delta', ('undo',))
+	a(('u', km_shift), 'delta', ('redo',))
 
 	a(('x'), 'delta', ('delete', 'unit', 'current'))
 	a(('x', km_shift), 'delta', ('delete', 'unit', 'former'))
@@ -199,8 +199,8 @@ if 'inserts':
 	mode = insert
 
 	a(('a', km_control), 'navigation', ('horizontal', 'backward', 'beginning'))
-	a(('c', km_control), 'transaction', ('abort',)) # Default SIGINT.
-	a(('d', km_control), 'transaction', ('commit',)) # Default EOF.
+	a(('c', km_control), 'delta', ('abort',)) # Legacy terminal default: SIGINT.
+	a(('d', km_control), 'delta', ('commit',)) # Legacy terminal default: EOF.
 	a(('e', km_control), 'navigation', ('horizontal', 'forward', 'end'))
 	a(('f', km_control), 'meta', ('query',))
 	a(('g', km_control), 'delta', ('insert', 'annotation'))

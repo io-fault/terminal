@@ -2139,8 +2139,8 @@ class Session(Core):
 		'(resource/close)': 'session/resource/close',
 
 		# Resource Elements, lines.
-		'(elements/undo)': 'transaction/undo',
-		'(elements/redo)': 'transaction/redo',
+		'(elements/undo)': 'delta/undo',
+		'(elements/redo)': 'delta/redo',
 		'(elements/select)': 'session/elements/transmit',
 		'(elements/insert)': 'delta/insert/text',
 		'(elements/delete)': 'delta/delete',
