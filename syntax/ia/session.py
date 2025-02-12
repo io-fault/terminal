@@ -200,11 +200,7 @@ def transmit_selected_elements(session, frame, rf, event):
 
 	if rf.focus[0].magnitude > 0:
 		# Vertical Range
-		start, position, stop = rf.focus[0].snapshot()
-		selection = '\n'.join(rf.elements[start:stop])
+		selection = rf.forms.lf_lines.sequence(rf.vertical_selection_text())
 	else:
-		# Horizontal Range
-		ln = rf.focus[0].get()
-		start, position, stop = rf.focus[1].snapshot()
-		selection = rf.elements[ln][start:stop]
+		selection = rf.horizontal_selection_text()
 	session.device.transmit(selection.encode('utf-8'))
