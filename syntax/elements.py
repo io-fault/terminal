@@ -1302,11 +1302,11 @@ class Frame(Core):
 			return
 
 		# Restore location.
-		del rf.elements[:]
+		src = rf.source
 		rf.visibility[0].datum = view.offset
 		rf.visibility[1].datum = view.horizontal_offset
 		rf.visible[:] = (view.offset, view.horizontal_offset)
-		yield from self.chpath(dpath, self.focus.source.origin, snapshot=rf.log.snapshot())
+		yield from self.chpath(dpath, self.focus.source.origin, snapshot=src.version())
 
 	def close_prompt(self, dpath):
 		"""
