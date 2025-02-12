@@ -237,6 +237,20 @@ class Resource(Core):
 
 		return self.modifications.snapshot()
 
+	def undo(self, quantity=1):
+		"""
+		# Revert modifications until the previous checkpoint is reached.
+		"""
+
+		return self.modifications.undo(self.elements, quantity)
+
+	def redo(self, quantity=1):
+		"""
+		# Replay modifications until the next checkpoint is reached.
+		"""
+
+		return self.modifications.redo(self.elements, quantity)
+
 	def commit(self, collapse=True):
 		"""
 		# Apply pending modifications.

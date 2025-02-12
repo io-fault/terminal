@@ -12,7 +12,7 @@ def xact_abort(session, frame, rf, event):
 	# Retract until the last checkpoint and enter control mode..
 	"""
 
-	rf.log.undo(rf.elements)
+	rf.source.undo(rf.elements)
 	session.keyboard.set('control')
 
 @event('commit')
@@ -21,7 +21,7 @@ def xact_commit(session, frame, rf, event):
 	# Log a checkpoint and enter control mode.
 	"""
 
-	rf.log.checkpoint()
+	rf.source.checkpoint()
 	session.keyboard.set('control')
 
 @event('undo')
@@ -30,7 +30,7 @@ def log_undo(session, frame, rf, event, quantity=1):
 	# Retract until the last checkpoint and move the records to the future.
 	"""
 
-	rf.log.undo(rf.elements, quantity)
+	rf.source.undo(quantity)
 
 @event('redo')
 def log_redo(session, frame, rf, event, quantity=1):
@@ -38,4 +38,4 @@ def log_redo(session, frame, rf, event, quantity=1):
 	# Apply future until the next checkpoint and move the records to the past.
 	"""
 
-	rf.log.redo(rf.elements, quantity)
+	rf.source.redo(quantity)
