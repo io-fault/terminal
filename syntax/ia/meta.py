@@ -186,7 +186,8 @@ def atposition_insert_mode_switch(session, frame, rf, event):
 	# Transition into insert-mode.
 	"""
 
-	rf.log.checkpoint()
+	rf.source.checkpoint()
+
 	session.keyboard.set('insert')
 	rf.whence = 0
 
@@ -197,8 +198,9 @@ def fieldend_insert_mode_switch(session, frame, rf, event):
 	# of the horizontal range.
 	"""
 
+	rf.source.checkpoint()
+
 	rf.focus[1].move(0, +1)
-	rf.log.checkpoint()
 	session.keyboard.set('insert')
 	rf.whence = -1
 
@@ -209,8 +211,9 @@ def fieldend_insert_mode_switch(session, frame, rf, event):
 	# of the horizontal range.
 	"""
 
+	rf.source.checkpoint()
+
 	rf.focus[1].move(0, -1)
-	rf.log.checkpoint()
 	session.keyboard.set('insert')
 	rf.whence = +1
 
@@ -220,13 +223,10 @@ def startofline_insert_mode_switch(session, frame, rf, event):
 	# Transition into insert-mode moving the cursor to the beginning of the line.
 	"""
 
-	ln = rf.focus[0].get()
-	i = 0
-	for i, x in enumerate(rf.elements[ln]):
-		if x != '\t':
-			break
-	rf.focus[1].set(i)
-	rf.log.checkpoint()
+	rf.source.checkpoint()
+
+	lo = rf.focus[0].get()
+	rf.focus[1].set(rf.source.sole(lo).ln_level)
 	session.keyboard.set('insert')
 	rf.whence = -2
 
@@ -236,9 +236,11 @@ def endofline_insert_mode_switch(session, frame, rf, event):
 	# Transition into insert-mode moving the cursor to the end of the line.
 	"""
 
-	ln = rf.focus[0].get()
-	rf.focus[1].set(len(rf.elements[ln]))
-	rf.log.checkpoint()
+	rf.source.checkpoint()
+
+	lo = rf.focus[0].get()
+	ln = rf.source.sole(lo)
+	rf.focus[1].set(ln.ln_level + len(ln.ln_content))
 	session.keyboard.set('insert')
 	rf.whence = +2
 
@@ -278,7 +280,7 @@ def refresh_view_image(session, frame, rf, event):
 		f"View: {view.offset!r} {view.version!r} {view.area!r}",
 		f"Cursor: {rf.focus[0].snapshot()!r}",
 		f"Refraction: {rf.visibility[0].snapshot()!r}",
-		f"Lines: {len(rf.elements)}, {rf.log.snapshot()}",
+		f"Lines: {rf.source.ln_count()}, {rf.source.version()}",
 	)
 	session.dispatch_delta(projection.refresh(rf, view, rf.visible[0]))
 
