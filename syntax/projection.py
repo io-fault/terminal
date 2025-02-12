@@ -7,14 +7,15 @@ from . import types
 
 def render(rf, view, *lines):
 	"""
-	# Update the &view representations of &lines from &rf.elements.
+	# Update the &view representations of &lines from &rf.source.
 
 	# [ Returns ]
 	# Screen delta.
 	"""
 
 	start_of_view, left = rf.visible
-	count = len(rf.elements)
+	src = rf.source
+	count = src.ln_count()
 	rline = rf.forms.render
 	gline = rf.source.sole
 
@@ -51,6 +52,7 @@ def update(rf, view, changes, *,
 	# to render a new image.
 	"""
 
+	src = rf.source
 	va = view.area
 	dvh = rf.visibility[1].datum
 	if view.horizontal_offset != dvh:
@@ -65,7 +67,7 @@ def update(rf, view, changes, *,
 	visible = va.lines
 	start_of_view = rf.visible[0]
 	end_of_view = start_of_view + visible
-	total = len(rf.elements)
+	total = src.ln_count()
 
 	# Reconstruct total so that view changes can be tracked as they were.
 	dr = list(changes)
