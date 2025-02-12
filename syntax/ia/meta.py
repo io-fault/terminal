@@ -5,6 +5,15 @@ from .. import annotations
 from . import types
 event, Index = types.Index.allocate('meta')
 
+@event('synchronize')
+def synchronize_io(session, *eventcontext):
+	"""
+	# Respond to an I/O synchronization event for integrating
+	# parallel I/O events into the terminal application.
+	"""
+
+	session.integrate(*eventcontext)
+
 @event('ineffective')
 def operation_not_found(session, frame, rf, event):
 	"""

@@ -2131,7 +2131,7 @@ class Session(Core):
 				d.invalidate_cells(area)
 
 	intercepts = {
-		'(session/synchronize)': 'session/synchronize',
+		'(session/synchronize)': 'meta/synchronize',
 		'(session/close)': 'session/close',
 		'(session/save)': 'session/save',
 		'(session/reset)': 'session/reset',

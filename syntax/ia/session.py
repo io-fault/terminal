@@ -208,12 +208,3 @@ def transmit_selected_elements(session, frame, rf, event):
 		start, position, stop = rf.focus[1].snapshot()
 		selection = rf.elements[ln][start:stop]
 	session.device.transmit(selection.encode('utf-8'))
-
-@event('synchronize')
-def synchronize_io(session, *eventcontext):
-	"""
-	# Respond to an I/O synchronization event for integrating
-	# parallel I/O events into the terminal application.
-	"""
-
-	session.integrate(*eventcontext)
