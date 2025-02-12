@@ -237,6 +237,13 @@ class Resource(Core):
 
 		return self.modifications.snapshot()
 
+	def changes(self, version):
+		"""
+		# Get the &delta instructions since the given &version.
+		"""
+
+		return self.modifications.since(version)
+
 	def undo(self, quantity=1):
 		"""
 		# Revert modifications until the previous checkpoint is reached.
@@ -388,6 +395,17 @@ class Resource(Core):
 
 		(self.modifications
 			.write(delta.Lines(lo, lines, [])))
+
+		return len(lines)
+
+	def extend_lines(self, lines):
+		"""
+		# Append the given &lines to the resource's elements.
+		"""
+
+		(self.modifications
+			.write(delta.Lines(self.ln_count(), lines, []))
+		)
 
 		return len(lines)
 
@@ -953,9 +971,9 @@ class Frame(Core):
 
 		return self.parallels.get(ref.ref_path, sole)
 
-	def attach(self, dpath, refraction) -> types.View:
+	def attach(self, dpath, rf) -> types.View:
 		"""
-		# Assign the &refraction to the view associated with
+		# Assign the &rf to the view associated with
 		# the &division of the &vertical.
 
 		# [ Returns ]
@@ -963,27 +981,28 @@ class Frame(Core):
 		# to the display in order to update the screen.
 		"""
 
+		src = rf.source
 		vi = self.paths[dpath]
 		current = self.refractions[vi]
 		self.returns[vi] = current
 		view = self.views[vi]
 		self.parallels[current.source.origin.ref_path].discard((current, view))
 
-		self.refractions[vi] = refraction
-		mirrors = self.parallels[refraction.source.origin.ref_path]
-		mirrors.add((refraction, view))
-		refraction.parallels = weakref.proxy(mirrors)
+		self.refractions[vi] = rf
+		mirrors = self.parallels[src.origin.ref_path]
+		mirrors.add((rf, view))
+		rf.parallels = weakref.proxy(mirrors)
 
 		if (self.vertical, self.division) == dpath:
 			self.refocus()
 
 		# Configure and refresh.
-		refraction.configure(view.area)
-		view.offset = refraction.visible[0]
-		view.horizontal_offset = refraction.visible[1]
-		view.version = refraction.log.snapshot()
-		vslice = view.vertical(refraction)
-		view.update(slice(0, None), list(refraction.iterphrases(vslice.start, vslice.stop)))
+		rf.configure(view.area)
+		view.offset = rf.visible[0]
+		view.horizontal_offset = rf.visible[1]
+		view.version = src.version()
+		vslice = view.vertical(rf)
+		view.update(slice(0, None), list(rf.iterphrases(vslice.start, vslice.stop)))
 
 		return view
 
@@ -1078,7 +1097,7 @@ class Frame(Core):
 
 		for rf, view in zip(self.refractions, self.views):
 			projection.refresh(rf, view, rf.visible[0])
-			view.version = rf.log.snapshot()
+			view.version = rf.source.version()
 
 	def resize(self, area):
 		"""
@@ -1880,11 +1899,8 @@ class Session(Core):
 
 		rsrc = self.transcript
 		log = rsrc.modifications
-		(log
-			.write(delta.Lines(len(rsrc.elements), lines, []))
-			.apply(rsrc.elements)
-			.commit()
-		)
+		rsrc.extend_lines(lines)
+		rsrc.commit()
 
 		# Initialization cases where a frame is not available.
 		frame = self.focus
@@ -1896,11 +1912,11 @@ class Session(Core):
 				# Update handled by main loop.
 				continue
 
-			trf.seek(len(rsrc.elements), 0)
-			changes = log.since(v.version)
+			trf.seek(rsrc.ln_count(), 0)
+			changes = rsrc.changes(v.version)
 			tupdate = projection.update(trf, v, changes)
 			#tupdate = projection.refresh(trf, v, 0)
-			v.version = trf.log.snapshot()
+			v.version = trf.source.version()
 			self.dispatch_delta(tupdate)
 
 	def resize(self):
@@ -2230,10 +2246,11 @@ class Session(Core):
 			key = device.key()
 
 			for (rf, view) in self.dispatch(frame, frame.focus, frame.view, key):
-				current = rf.log.snapshot()
+				src = rf.source
+				current = src.version()
 				voffsets = [view.offset, view.horizontal_offset]
 				if current != view.version or rf.visible != voffsets:
-					self.dispatch_delta(Method(rf, view, rf.log.since(view.version)))
+					self.dispatch_delta(Method(rf, view, src.changes(view.version)))
 					view.version = current
 		except Exception as derror:
 			self.error("Rendering Failure", derror)
