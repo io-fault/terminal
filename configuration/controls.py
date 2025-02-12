@@ -57,7 +57,7 @@ k_space = 0x2423
 for mode in (control, insert):
 	a((k_return), 'meta', ('activate',))
 	a((k_return, km_control), 'meta', ('activate', 'continue'))
-	a((k_return, km_meta), 'meta', ('elements', 'dispatch'))
+	a((k_return, km_meta), 'delta', ('elements', 'dispatch'))
 	a((k_return, km_shift), 'navigation', ('view', 'return'))
 
 if 'controls':

@@ -794,3 +794,12 @@ def insert_annotation(session, frame, rf, event):
 	src.insert_codepoints(lo, co, string)
 	src.commit()
 	rf.focus[1].changed(co, len(string))
+
+@event('elements', 'dispatch')
+def dispatch_system_command(session, frame, rf, event):
+	"""
+	# Send the selected elements to the device manager.
+	"""
+
+	from .. import query
+	query.substitute(session, frame, rf)

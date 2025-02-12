@@ -891,7 +891,7 @@ class Refraction(Core):
 		src = self.source
 
 		selection = src.delete_range(lo, start, stop)
-		return (ln, start, [selection])
+		return (lo, start, [selection])
 
 class Frame(Core):
 	"""

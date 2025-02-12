@@ -61,53 +61,6 @@ def execute_and_hold(session, frame, rf, event):
 
 	return perform_selected_action(session, frame, rf, event, hold=True)
 
-def joinlines(decoder, linesep='\n', character=''):
-	# Used in conjunction with an incremental decoder to collapse line ends.
-	data = (yield None)
-	while True:
-		buf = decoder(data)
-		data = (yield buf.replace(linesep, character))
-
-def substitute(session, frame, rf, event):
-	"""
-	# Send the selected elements to the device manager.
-	"""
-
-	from ..system import Completion, Insertion, Invocation, Decode
-	from ..delta import take_horizontal_range
-	from ..annotations import ExecutionStatus
-	from fault.system.query import executables
-
-	# Horizontal Range
-	ln, co, lines = take_horizontal_range(rf)
-	rf.focus[1].magnitude = 0
-	readlines = joinlines(Decode('utf-8').decode)
-	readlines.send(None)
-	readlines = readlines.send
-	(rf.log.apply(rf.elements).commit())
-
-	cmd = '\n'.join(lines).split()
-	for exepath in executables(cmd[0]):
-		inv = Invocation(str(exepath), tuple(cmd))
-		break
-	else:
-		# No command found.
-		return
-
-	c = Completion(rf, -1)
-	i = Insertion(rf, (ln, co), readlines)
-	pid = session.io.invoke(c, i, None, inv)
-	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
-	rf.annotate(ca)
-
-@event('elements', 'dispatch')
-def dispatch_system_command(session, frame, rf, event):
-	"""
-	# Send the selected elements to the device manager.
-	"""
-
-	substitute(session, frame, rf, event)
-
 @event('query')
 def directory_annotation_request(session, frame, rf, event):
 	"""

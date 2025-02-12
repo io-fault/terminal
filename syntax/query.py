@@ -37,6 +37,44 @@ def refract(session, frame, view, qtype, state, action):
 		session.keyboard.set('insert')
 	return lrf
 
+def joinlines(decoder, linesep='\n', character=''):
+	# Used in conjunction with an incremental decoder to collapse line ends.
+	data = (yield None)
+	while True:
+		buf = decoder(data)
+		data = (yield buf.replace(linesep, character))
+
+def substitute(session, frame, rf):
+	"""
+	# Send the selected elements to the device manager.
+	"""
+
+	from .system import Completion, Insertion, Invocation, Decode
+	from .annotations import ExecutionStatus
+	from fault.system.query import executables
+
+	# Horizontal Range
+	lo, co, lines = rf.take_horizontal_range()
+	rf.focus[1].magnitude = 0
+	readlines = joinlines(Decode('utf-8').decode)
+	readlines.send(None)
+	readlines = readlines.send
+	rf.source.commit()
+
+	cmd = '\n'.join(lines).split()
+	for exepath in executables(cmd[0]):
+		inv = Invocation(str(exepath), tuple(cmd))
+		break
+	else:
+		# No command found.
+		return
+
+	c = Completion(rf, -1)
+	i = Insertion(rf, (lo, co), readlines)
+	pid = session.io.invoke(c, i, None, inv)
+	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+	rf.annotate(ca)
+
 def execute(session, frame, rf, system):
 	"""
 	# Send the selected elements to the device manager.
