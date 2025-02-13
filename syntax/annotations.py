@@ -416,10 +416,10 @@ class Filesystem(Directory):
 	# Filesystem Directory query annotation for file path completion support.
 	"""
 
-	def __init__(self, title, lf, elements, vertical, horizontal):
+	def __init__(self, title, lf, source, vertical, horizontal):
 		super().__init__(title)
 		self.forms = lf
-		self.elements = elements
+		self.source = source
 		self.vertical = vertical
 		self.horizontal = horizontal
 
@@ -438,10 +438,12 @@ class Filesystem(Directory):
 		if ln == 0:
 			rpath = files.root
 		else:
-			if self.elements[1].startswith('/'):
+			ln_ctx, ln_file = self.source.select(0, 2)
+
+			if ln_file.ln_content.startswith('/'):
 				rpath = files.root
 			else:
-				rpath = (files.root@self.elements[0])
+				rpath = (files.root@ln_ctx.ln_content)
 
 		# Identify field.
 		current = self.horizontal.get()

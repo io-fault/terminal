@@ -98,13 +98,13 @@ def copy_resource(session, frame, rf, event):
 		raise ValueError("not a filesystem path: " + url) # Expects an absolute path.
 
 	re = rf.source.origin.ref_path@url
-	rs = session.allocate_resource(session.reference(re))
-	rs.elements = rf.source.elements
-	rs.encoding = rf.source.encoding
-	if rs.origin.ref_path.fs_type() != 'void':
-		rs.status = rs.origin.ref_path.fs_status()
+	src = session.allocate_resource(session.reference(re))
+	src.elements = rf.source.elements
+	src.encoding = rf.source.encoding
+	if src.origin.ref_path.fs_type() != 'void':
+		src.status = src.origin.ref_path.fs_status()
 
-	session.store_resource(rs)
+	session.store_resource(src)
 
 @event('resource', 'close')
 def s_close_resource(session, frame, rf, event):

@@ -1425,6 +1425,23 @@ class Line(object):
 
 		return self.ln_offset + 1
 
+	@property
+	def ln_length(self) -> int:
+		"""
+		# The number of codepoints in &ln_content.
+		# Temporarily includes &ln_level as tabs are integrated in raw strings.
+		"""
+
+		return self.ln_level + len(self.ln_content)
+
+	@property
+	def ln_void(self) -> bool:
+		"""
+		# Whether the line has no content and no indentation.
+		"""
+
+		return not self.ln_level and not self.ln_content
+
 	def ln_trailing(self, filter=str.isspace) -> int:
 		"""
 		# Count the trailing whitespace in &ln_content.
@@ -1445,9 +1462,13 @@ class Line(object):
 			return len(self.ln_content)
 
 	@property
-	def ln_trail(self):
+	def ln_trail(self) -> str:
 		"""
 		# The trailing whitespace in &ln_content.
+
+		# [ Returns ]
+		# The whitespace codepoints or an empty string
+		# if there are no trailing whitespace codepoints.
 		"""
 
 		lnc = self.ln_content
@@ -1456,25 +1477,6 @@ class Line(object):
 			return ''
 
 		return lnc[len(lnc)-tc:]
-
-	@staticmethod
-	def il(line, *, ic='\t', enum=enumerate):
-		"""
-		# Identify the &line indentation level.
-		"""
-
-		i = 0
-		for i, x in enum(line):
-			if x != ic:
-				return i
-
-		# All charactere were &ic.
-		return len(line)
-
-	@classmethod
-	def from_text(Class, line:str, offset=-1):
-		il = Class.il(line)
-		return Class(offset, il, line[il:])
 
 @tools.struct()
 class Reformulations(object):

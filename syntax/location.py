@@ -123,19 +123,20 @@ def refract(lf, view, pathcontext, path, action):
 	)
 
 	from dataclasses import replace
-	fields = replace(lf.lf_fields, separation=(lambda: pathcontext))
-	lf = replace(lf, lf_fields=fields)
-	rsrc = elements.Resource(meta, lf)
-	rsrc.elements = list(map(str, determine(pathcontext, path)))
-	lrf = elements.Refraction(rsrc)
-	lrf.configure(view.area)
-	lrf.activate = action # location.open or location.save
-	view.version = rsrc.version()
+	src = elements.Resource(meta, lf)
+	src.elements[:] = list(map(str, determine(pathcontext, path)))
+
+	rf = elements.Refraction(src)
+	pathfields = replace(lf.lf_fields, separation=(lambda: pathcontext@src.sole(0).ln_content))
+	rf.forms = lf.replace(lf_fields=pathfields)
+	rf.configure(view.area)
+	rf.activate = action # location.open or location.save
+	view.version = src.version()
 
 	# Set the range to all lines and place the cursor on the relative path..
-	lrf.focus[0].restore((0, 1, 2))
-	last = rsrc.elements[-1]
-	name = last.rfind('/') + 1
-	lrf.focus[1].restore((name, name, len(last)))
+	rf.focus[0].restore((0, 1, 2))
+	last = src.sole(1)
+	name = last.ln_content.rfind('/') + 1
+	rf.focus[1].restore((name, name, last.ln_length))
 
-	return lrf
+	return rf

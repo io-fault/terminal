@@ -1,5 +1,5 @@
 """
-# Adapters for field isolation.
+# Adapters for field isolation and scanners.
 """
 from os.path import islink
 from fault.context import tools
@@ -7,6 +7,49 @@ from fault.system import files
 from fault.system.process import fs_pwd
 from fault.syntax.format import Fields
 from fault.syntax import keywords
+
+def identify_routing_series(fields, index, ftype='router'):
+	"""
+	# Identify the boundary of the field series where &ftype fields
+	# extend the range.
+
+	# [ Returns ]
+	# A pair of &fields indexes identifying the first and last fields
+	# of the series.
+	"""
+	scans = (
+		range(index - 1, -1, -1),
+		range(index + 1, len(fields), 1),
+	)
+	locations = []
+
+	# Iterate through both directions from &index.
+	for r in scans:
+		rs = 0
+		last = index
+
+		# Scan for series and exit when successive non-router
+		for fi in r:
+			ft, fc = fields[fi]
+			if ftype in ft:
+				# Continue series.
+				rs = 1
+				last = fi
+			else:
+				rs -= 1
+				if rs < 0:
+					# Successive decrement, end of series.
+					fi -= 1
+					break
+				else:
+					if ft in {'indentation', 'indentation-only', 'space'}:
+						break
+
+					last = fi
+
+		locations.append(last)
+
+	return tuple(locations)
 
 def typed_path_fields(root, extension, *, separator='/'):
 	"""

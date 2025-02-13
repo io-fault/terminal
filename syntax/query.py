@@ -21,7 +21,7 @@ def refract(session, frame, view, qtype, state, action):
 	)
 
 	meta = Resource(ref, session.load_type('lambda'))
-	meta.elements = list(map(str, [qtype + ' ' + state]))
+	meta.elements[:] = list(map(str, [qtype + ' ' + state]))
 	lrf = Refraction(meta)
 	lrf.configure(view.area)
 	lrf.activate = action # location.open or location.save

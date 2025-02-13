@@ -1,10 +1,6 @@
 """
 # Navigation methods controlling cursor vectors.
 """
-import itertools
-from ..types import Line
-lil = Line.il
-
 from . import types
 event, Index = types.Index.allocate('navigation')
 
@@ -78,13 +74,19 @@ def h_backward(session, frame, rf, event, quantity=1):
 
 @event('horizontal', 'backward', 'beginning')
 def move_start_of_line(session, frame, rf, event):
-	line = rf.elements[rf.focus[0].get()]
-	rf.focus[1].set(lil(line))
+	"""
+	# Move the cursor to the beginning of the line.
+	"""
+
+	rf.focus[1].set(rf.cwl().ln_level)
 
 @event('horizontal', 'forward', 'end')
 def move_end_of_line(session, frame, rf, event):
-	line = rf.elements[rf.focus[0].get()]
-	rf.focus[1].set(len(line))
+	"""
+	# Move the cursor to the end of the line.
+	"""
+
+	rf.focus[1].set(rf.cwl().ln_length)
 
 @event('horizontal', 'start')
 def move_start_of_range(session, frame, rf, event):
@@ -92,6 +94,7 @@ def move_start_of_range(session, frame, rf, event):
 	# Horizontally move the cursor to the beginning of the range.
 	# or extend the range if already on the edge of the start.
 	"""
+
 	h = rf.focus[1]
 	if h.offset == 0:
 		n = rf.field(-1)
@@ -111,6 +114,7 @@ def move_end_of_range(session, frame, rf, event):
 	"""
 	# Horizontally move the cursor to the end of the range.
 	"""
+
 	h = rf.focus[1]
 	if h.offset == h.magnitude:
 		n = rf.field(+1)
@@ -134,7 +138,7 @@ def step_character_backwards(session, frame, rf, event, *, quantity=1):
 def cursor_latter_element(session, frame, rf, event, quantity=1):
 	v = rf.focus[0]
 	ln = v.get() + quantity
-	v.set(min(ln, len(rf.elements)))
+	v.set(min(ln, rf.source.ln_count()))
 	rf.vertical_changed(ln)
 
 @event('vertical', 'backward', 'unit')
@@ -157,39 +161,45 @@ def configure_sections(session, frame, rf, event, quantity=1):
 	pos = rf.focus[0].get()
 	rf.focus[0].restore((pos - delta // 2, pos, pos + delta // 2))
 
-def start_ilevel(lines, position):
-	ln = position.datum
-	for line in lines[ln:ln+1]:
-		return lil(line)
-	else:
-		return 0
-
 @event('vertical', 'start')
 def v_seek_start(session, frame, rf, event):
 	"""
 	# Relocate the vertical position to the start of the vertical range.
 	"""
-	v = rf.focus[0]
 
-	if v.offset <= 0:
-		il = start_ilevel(rf.elements, v)
-		stop, start = find_indentation_block(rf.elements, v.slice().start, il, final=0)
-		v.restore((start, start, stop))
+	src = rf.source
+	start, lo, stop = rf.focus[0].snapshot()
+
+	if lo <= start:
+		il = min(filter(None, (src.sole(start).ln_level, src.sole(stop-1).ln_level)))
+		offsets = src.find_indentation_block(il, start-1, limit=-1)
+		if offsets is not None:
+			start, stop = offsets
+			rf.focus[0].restore((start, start, stop))
 	else:
-		v.offset = 0
-	rf.vertical_changed(v.get())
+		rf.focus[0].move(0, 1)
+
+	rf.vertical_changed(rf.focus[0].get())
 
 @event('vertical', 'stop')
 def v_seek_stop(session, frame, rf, event):
-	v = rf.focus[0]
+	"""
+	# Relocate the vertical position to the end of the vertical range.
+	"""
 
-	if (v.offset+1) >= v.magnitude:
-		il = start_ilevel(rf.elements, v)
-		start, stop = find_indentation_block(rf.elements, v.slice().stop-1, il, final=len(rf.elements))
-		v.restore((start+1, stop, stop+1))
+	src = rf.source
+	start, lo, stop = rf.focus[0].snapshot()
+
+	if lo >= stop - 1:
+		il = min(filter(None, (src.sole(start).ln_level, src.sole(stop-1).ln_level)))
+		offsets = src.find_indentation_block(il, stop, limit=src.ln_count())
+		if offsets is not None:
+			start, stop = offsets
+			rf.focus[0].restore((start, stop-1, stop))
 	else:
-		v.offset = v.magnitude - 1
-	rf.vertical_changed(v.get())
+		rf.focus[0].move(1, -1)
+
+	rf.vertical_changed(rf.focus[0].get())
 
 @event('horizontal', 'jump', 'string')
 def select_unit_string(session, frame, rf, event, string, *, quantity=1):
@@ -211,53 +221,52 @@ def select_character(session, frame, rf, event, quantity=1):
 	"""
 	# Horizontally move the cursor to the character in the event.
 	"""
+
 	return select_unit_string(session, frame, rf, event, session.device.transfer_text() or '')
 
 @event('vertical', 'void', 'forward')
 def move_next_void(session, frame, rf, event, quantity=1):
-	for i in range(rf.focus[0].get()+1, len(rf.elements)):
-		if (rf.elements[i] or ' ').isspace():
-			break
-	else:
-		i = len(rf.elements)
+	src = rf.source
 
-	rf.focus[0].set(i)
-	rf.vertical_changed(i)
+	ln = src.find_next_void(rf.focus[0].get() + 1)
+	if ln is None:
+		lo = src.ln_count()
+	else:
+		lo = ln.ln_offset
+
+	rf.focus[0].set(lo)
+	rf.vertical_changed(lo)
 
 @event('vertical', 'void', 'backward')
 def move_previous_void(session, frame, rf, event):
-	for i in range(rf.focus[0].get()-1, -1, -1):
-		if (rf.elements[i] or ' ').isspace():
-			break
-	else:
-		i = 0
+	src = rf.source
 
-	rf.focus[0].set(i)
-	rf.vertical_changed(i)
+	ln = src.find_previous_void(rf.focus[0].get() - 1)
+	if ln is None:
+		lo = 0
+	else:
+		lo = ln.ln_offset
+
+	rf.focus[0].set(lo)
+	rf.vertical_changed(lo)
 
 @event('horizontal', 'select', 'line')
 def span_line(session, frame, rf, event):
 	"""
-	# Alter the horizontal range to be the length of the current vertical index.
+	# Alter the horizontal range to be the length of the current line.
 	"""
 
-	ln = rf.focus[0].get()
-	try:
-		line = rf.elements[ln]
-	except IndexError:
-		line = ""
-
-	i = 0
-	for i, x in enumerate(line):
-		if x != '\t':
-			break
-	rf.focus[1].restore((i, max(i, rf.focus[1].get()), len(line)))
+	ln = rf.cwl()
+	start = ln.ln_level
+	stop = ln.ln_length
+	rf.focus[1].restore((start, rf.focus[1].get(), stop))
 
 @event('vertical', 'select', 'line')
 def vertical_unit_select(session, frame, rf, event, quantity=1):
 	"""
 	# Alter the vertical range to contain a single line.
 	"""
+
 	v = rf.focus[0]
 	v.configure(v.get(), 1)
 
@@ -289,59 +298,18 @@ def event_select_absolute(session, frame, rf, event):
 
 	frame.refocus()
 
-def identify_routing_series(fields, index, ftype='router'):
-	"""
-	# Identify the boundary of the field series where &ftype fields
-	# extend the range.
-
-	# [ Returns ]
-	# A pair of &fields indexes identifying the first and last fields
-	# of the series.
-	"""
-	scans = (
-		range(index - 1, -1, -1),
-		range(index + 1, len(fields), 1),
-	)
-	locations = []
-
-	# Iterate through both directions from &index.
-	for r in scans:
-		rs = 0
-		last = index
-
-		# Scan for series and exit when successive non-router
-		for fi in r:
-			ft, fc = fields[fi]
-			if ftype in ft:
-				# Continue series.
-				rs = 1
-				last = fi
-			else:
-				rs -= 1
-				if rs < 0:
-					# Successive decrement, end of series.
-					fi -= 1
-					break
-				else:
-					if ft in {'indentation', 'indentation-only', 'space'}:
-						break
-
-					last = fi
-
-		locations.append(last)
-
-	return tuple(locations)
-
 @event('horizontal', 'select', 'series')
 def select_series(session, frame, rf, event):
 	"""
 	# Expand the horizontal range to include fields separated by an routing delimiter.
 	"""
+
 	hcp = rf.focus[1].get()
 	areas, fields = rf.fields(rf.focus[0].get())
 	cfi = rf.field_index(areas, hcp)
 
-	first, last = identify_routing_series(fields, cfi)
+	from ..fields import identify_routing_series as irs
+	first, last = irs(fields, cfi)
 
 	rf.focus[1].restore((
 		areas[first].start,
@@ -349,151 +317,31 @@ def select_series(session, frame, rf, event):
 		areas[last].stop
 	))
 
-def indentation_enclosure(lines, il, start, stop):
-	"""
-	# Identify the area of the header and footer of an indentation level.
-	"""
-	maxln = len(lines)
-
-	cil = il
-	for i, l in enumerate(lines.select(stop-1, maxln), stop-1):
-		if l:
-			# Only breaking on empty.
-			cil = lil(l)
-			if cil < il:
-				stop = i
-				break
-		elif cil == il:
-			# Empty *and* last indentation level was the inquired &il.
-			stop = i + 1
-			break
-	else:
-		stop = maxln
-
-	cil = il
-	for i, l in enumerate(lines.select(start, -1)):
-		if l:
-			# Only breaking on empty.
-			cil = lil(l)
-			if cil < il:
-				start -= i
-				start += 1
-				break
-		elif cil == il:
-			# Empty *and* last indentation level was the inquired &il.
-			start -= i
-			start += 1
-			break
-	else:
-		start = 0
-
-	return start, stop
-
-def find_indentation_block(lines, ln, il, *, final=0):
-	"""
-	# Identify the area of an adjacent indentation level.
-	"""
-
-	d = 1 if final > ln else -1
-
-	# Find the first line at the indentation level.
-	for i, l in enumerate(lines.select(ln + d, final)):
-		if l and lil(l) >= il:
-			start = ln + (d * i)
-			break
-	else:
-		start = final
-
-	last_void = -2
-	for i, l in enumerate(lines.select(start + d, final)):
-		if not l:
-			last_void = i
-			continue
-
-		if l and lil(l) < il:
-			if last_void == i - 1:
-				stop = start + (d * last_void)
-			else:
-				stop = start + (d * i)
-			break
-	else:
-		stop = final
-
-	return start, stop
-
-def indentation_block(lines, il, start, stop):
-	"""
-	# Identify the area of an indentation level.
-	"""
-	maxln = len(lines)
-	if il == 0:
-		return (0, maxln)
-
-	for i, l in enumerate(lines.select(stop, maxln), stop):
-		if l and lil(l) < il:
-			stop = i
-			break
-	else:
-		stop = maxln
-
-	for i, l in enumerate(lines.select(start, -1)):
-		if l and lil(l) < il:
-			start -= i
-			# Start is inclusive, so +1 as the change in level is after the edge.
-			start += 1
-			break
-	else:
-		start = 0
-
-	return start, stop
-
-def contiguous_block(lines, il, start, stop):
-	"""
-	# Identify the area of an indentation level.
-	"""
-	maxln = len(lines)
-
-	for i, l in enumerate(lines.select(stop, maxln)):
-		if not l:
-			stop += i
-			break
-	else:
-		stop = maxln
-
-	for i, l in enumerate(lines.select(start-1, -1)):
-		if not l:
-			start -= i
-			break
-	else:
-		start = 0
-
-	return start, stop
-
 @event('vertical', 'select', 'indentation')
 def select_indentation(session, frame, rf, event):
-	ln = rf.focus[0].get()
-	try:
-		il = lil(rf.elements[ln])
-	except IndexError:
-		il = 0
+	src = rf.source
+	ln = rf.cwl()
 
-	if il == 0:
-		start, stop = contiguous_block(rf.elements, il, ln, ln)
+	if not ln.ln_level:
+		start, stop = src.map_contiguous_block(ln.ln_level, ln.ln_offset, ln.ln_offset)
 	else:
-		start, stop = indentation_block(rf.elements, il, ln, ln)
-	rf.focus[0].restore((start, ln, stop))
+		start, stop = src.map_indentation_block(ln.ln_level, ln.ln_offset, ln.ln_offset)
+
+	rf.focus[0].restore((start, ln.ln_offset, stop))
 
 @event('vertical', 'select', 'indentation', 'level')
 def select_outer_indentation_level(session, frame, rf, quantity=1):
-	start, ln, stop = rf.focus[0].snapshot()
-	il = lil(rf.elements[start])
+	src = rf.source
+	start, lo, stop = rf.focus[0].snapshot()
 
-	d = indentation_block(rf.elements, il, start, stop)
-	if d == (start, stop):
-		# Change levels selecting the surrounding areas of the IL.
-		d = indentation_enclosure(rf.elements, il-1, start, stop)
+	il = rf.source.sole(start).ln_level
+	hstart, hstop = src.map_indentation_block(il, start, stop)
 
-	rf.focus[0].restore((d[0], ln, d[1]))
+	if hstart == start and hstop == stop:
+		hstart = src.indentation_enclosure_heading(il, start)
+		hstop = src.indentation_enclosure_footing(il, stop)
+
+	rf.focus[0].restore((hstart, lo, hstop))
 
 @event('vertical', 'place', 'start')
 def set_cursor_start(session, frame, rf, event):
@@ -639,7 +487,7 @@ def scroll_last(session, frame, rf, event, *, quantity=1):
 
 	ay, ax = session.device.cursor_cell_status()
 	fi, rf, view = frame.target(ay, ax)
-	offset = len(rf.elements)
+	offset = rf.source.ln_count()
 	rf.scroll(lambda x: offset)
 	frame.deltas.append((rf, view))
 
@@ -662,19 +510,19 @@ def find_set_search_term(session, frame, rf, event):
 @event('find', 'previous')
 def find_previous_string(session, frame, rf, event):
 	"""
-	# Find the next occurrence of the horizontal range in &rf.elements.
+	# Find the next occurrence of the horizontal range in the resource.
 	"""
 
 	v, h = rf.focus
 	term = rf.query.get('search') or rf.horizontal_selection_text()
-	rf.find(rf.backward(len(rf.elements), v.get(), h.minimum), term)
+	rf.find(rf.backward(rf.source.ln_count(), v.get(), h.minimum), term)
 
 @event('find', 'next')
 def find_next_string(session, frame, rf, event):
 	"""
-	# Find the next occurrence of the horizontal range in &rf.elements.
+	# Find the next occurrence of the horizontal range in the resource.
 	"""
 
 	v, h = rf.focus
 	term = rf.query.get('search') or rf.horizontal_selection_text()
-	rf.find(rf.forward(len(rf.elements), v.get(), h.maximum), term)
+	rf.find(rf.forward(rf.source.ln_count(), v.get(), h.maximum), term)

@@ -202,7 +202,7 @@ def endofline_insert_mode_switch(session, frame, rf, event):
 
 	lo = rf.focus[0].get()
 	ln = rf.source.sole(lo)
-	rf.focus[1].set(ln.ln_level + len(ln.ln_content))
+	rf.focus[1].set(ln.ln_length)
 	session.keyboard.set('insert')
 	rf.whence = +2
 

@@ -174,8 +174,13 @@ class Resource(Core):
 		# by &start and &stop.
 		"""
 
-		for i, v in enum(self.elements[start:stop]):
-			yield self.forms.mkline(v, ln_offset=start+i)
+		if stop < start:
+			sign = -1
+		else:
+			sign = +1
+
+		for i, v in enum(self.elements.select(start, stop)):
+			yield self.forms.mkline(v, ln_offset=start + (i * sign))
 
 	@staticmethod
 	def since(start, stop, *, precision='millisecond'):
@@ -473,6 +478,163 @@ class Resource(Core):
 
 		return len(lines) - 1, len(lines[-1]) - len(suffix) - offset
 
+	def map_contiguous_block(self, il, start, stop):
+		"""
+		# Identify the area of non-empty lines.
+		"""
+
+		bstart = 0
+		bstop = self.ln_count()
+
+		for ln in self.select(stop, bstop):
+			if ln.ln_void:
+				bstop = ln.ln_offset
+				break
+
+		for ln in self.select(start-1, -1):
+			if ln.ln_void:
+				bstart = ln.ln_offset + 1
+				break
+
+		return (bstart, bstop)
+
+	def map_indentation_block(self, il, start, stop):
+		"""
+		# Identify the area of an indentation level.
+		"""
+
+		bstart = 0
+		bstop = self.ln_count()
+
+		if il == 0:
+			return (bstart, bstop)
+
+		for ln in self.select(stop, bstop):
+			if ln.ln_content and ln.ln_level < il:
+				bstop = ln.ln_offset
+				break
+
+		for ln in self.select(start, -1):
+			if ln.ln_content and ln.ln_level < il:
+				bstart = ln.ln_offset + 1
+				break
+
+		return (bstart, bstop)
+
+	def indentation_enclosure_footing(self, il, lo):
+		"""
+		# Identify the area of the header and footer of an indentation level.
+		"""
+
+		# Scan forwards for reduced IL with content.
+		eof = self.ln_count()
+		ilines = iter(self.select(lo, eof))
+
+		leading_void = self.sole(lo - 1).ln_void
+
+		# Scan for IL reduction.
+		for ln in ilines:
+			if ln.ln_level < il:
+				# Found reduction in IL, note last exclusive.
+
+				if leading_void and ln.ln_offset == lo:
+					# Handle Python's case where there is no footing.
+					return lo
+
+				il = ln.ln_level
+				last = ln.ln_offset
+				break
+		else:
+			return eof
+
+		# Scan for contiguous lines at the reduced IL.
+		for ln in ilines:
+			if ln.ln_level >= il and ln.ln_content:
+				# Continue while there is a contiguous block at the reduced IL.
+				continue
+			else:
+				# IL reduced or void.
+				if ln.ln_void:
+					# Seek end of void.
+					break
+				else:
+					# Reduced IL with content.
+					return ln.ln_offset
+		else:
+			return eof
+
+		# Scan for contiguous void lines.
+		for ln in ilines:
+			if not ln.ln_void:
+				# Scanned past all contiguous lines.
+				return ln.ln_offset
+
+		return eof
+
+	def indentation_enclosure_heading(self, il, lo):
+		"""
+		# Identify the area of the header of an indentation level.
+		"""
+
+		eof = self.ln_count()
+
+		# Scan forwards for reduced IL with content.
+		ilines = iter(self.select(lo - 1, -1))
+
+		# Scan for IL reduction.
+		for ln in ilines:
+			if ln.ln_level < il:
+				# Found reduction in IL, note last exclusive.
+				il = ln.ln_level
+				break
+		else:
+			return 0
+
+		# Scan for contiguous lines at the reduced IL.
+		for ln in ilines:
+			if ln.ln_level >= il and ln.ln_content:
+				# Continue while there is a contiguous block at the reduced IL.
+				continue
+			else:
+				return ln.ln_offset + 1
+
+		return 0
+
+	def find_indentation_block(self, il, lo, limit=0):
+		"""
+		# Identify the area of an adjacent indentation level.
+		"""
+
+		# Find the indentation.
+		for ln in self.select(lo, limit):
+			if not ln.ln_void and ln.ln_level == il:
+				# Detect the edges.
+				return self.map_indentation_block(il, ln.ln_offset, ln.ln_offset)
+
+		return None
+
+	def find_next_void(self, lo:int) -> types.Line:
+		"""
+		# Find the next completely empty line from &lo.
+		"""
+
+		for ln in self.select(lo, self.ln_count()):
+			if ln.ln_void:
+				return ln
+
+		return None
+
+	def find_previous_void(self, lo:int) -> types.Line:
+		"""
+		# Find the previous completely empty line from &lo.
+		"""
+
+		for ln in self.select(lo, -1):
+			if ln.ln_void:
+				return ln
+
+		return None
+
 class Refraction(Core):
 	"""
 	# The elements and status of a selected resource.
@@ -507,7 +669,7 @@ class Refraction(Core):
 	cancel = None
 
 	def current(self, depth):
-		d = self.elements
+		d = self.source.elements
 		for i in range(depth):
 			f = self.focus[i]
 			fi = f.get()
@@ -544,9 +706,6 @@ class Refraction(Core):
 		self.annotation = None
 		self.system_execution_status = {}
 
-		self.elements = resource.elements
-		self.log = resource.modifications
-
 		self.focus = (types.Position(), types.Position())
 		self.visibility = (types.Position(), types.Position())
 		self.query = {} # Query state; last search, seek, etc.
@@ -575,7 +734,7 @@ class Refraction(Core):
 		return self
 
 	def view(self):
-		return len(self.elements), self.dimensions[1], self.visible[1]
+		return self.source.ln_count(), self.dimensions[1], self.visible[1]
 
 	def scroll(self, delta):
 		"""
@@ -587,7 +746,7 @@ class Refraction(Core):
 		if to < 0:
 			to = 0
 		else:
-			last = len(self.elements) - self.dimensions.lines
+			last = self.source.ln_count() - self.dimensions.lines
 			if to > last:
 				to = max(0, last)
 
@@ -630,7 +789,7 @@ class Refraction(Core):
 
 		for area in selections:
 			start, stop = area
-			ilines = self.elements.select(*area)
+			ilines = self.source.elements.select(*area)
 
 			for lo, line in zip(range(start, stop, d), ilines):
 				i = fmethod(line, string, *srange)
@@ -644,23 +803,19 @@ class Refraction(Core):
 					h.restore((i, i, i + termlength))
 					return
 
-	def seek(self, element, unit):
+	def seek(self, lo, unit):
 		"""
 		# Relocate the cursor to the &unit in &element.
 		"""
 
+		src = self.source
+		ln = src.sole(lo)
 		width = self.dimensions.span
-		self.focus[0].set(element)
-		self.focus[1].set(unit if unit is not None else len(self.elements[element]))
+
+		self.focus[0].set(lo)
+		self.focus[1].set(unit if unit is not None else ln.ln_length)
 		page_offset = element - (width // 2)
 		self.scroll(lambda x: page_offset)
-
-	def usage(self):
-		"""
-		# Calculate the resource, memory, usage of the refraction.
-		"""
-
-		return self.log.usage() + self.elements.usage()
 
 	def delta(self, offset, change, *, max=max,
 			ainsert=alignment.insert,
@@ -838,14 +993,14 @@ class Refraction(Core):
 		cp = self.focus[1].get()
 		return self.cu_codepoints(lo, cp, quantity)
 
-	def vertical_selection_text(self) -> list[str]:
+	def vertical_selection_text(self) -> Iterable[types.Line]:
 		"""
 		# Lines of text in the vertical range.
 		"""
 
 		# Vertical Range
 		start, position, stop = self.focus[0].snapshot()
-		return self.elements[start:stop]
+		return self.source.select(start, stop)
 
 	def horizontal_selection_text(self) -> str:
 		"""
@@ -853,9 +1008,17 @@ class Refraction(Core):
 		"""
 
 		# Horizontal Range
-		ln = self.focus[0].get()
+		lo = self.focus[0].get()
 		start, position, stop = self.focus[1].snapshot()
-		return self.elements[ln][start:stop]
+		ln = self.source.sole(lo)
+		return ln.ln_content[start-ln.ln_level:stop-ln.ln_level]
+
+	def cwl(self) -> types.Line:
+		"""
+		# Get the current working line.
+		"""
+
+		return self.source.sole(self.focus[0].get())
 
 	def phrase(self, offset):
 		"""
@@ -1261,7 +1424,7 @@ class Frame(Core):
 
 		self.focus.annotation = annotations.Filesystem('open',
 			self.focus.forms,
-			self.focus.elements,
+			self.focus.source,
 			*self.focus.focus
 		)
 
@@ -1284,7 +1447,7 @@ class Frame(Core):
 
 		self.focus.annotation = annotations.Filesystem('save',
 			self.focus.forms,
-			self.focus.elements,
+			self.focus.source,
 			*self.focus.focus
 		)
 
@@ -1399,6 +1562,7 @@ class Frame(Core):
 		# Iterable of screen deltas.
 		"""
 
+		src = focus.source
 		fai = focus.annotation
 		lf = focus.forms
 		rx, ry = (0, 0)
@@ -1414,7 +1578,7 @@ class Frame(Core):
 		ln = v.get()
 		rln = ln - top
 		try:
-			line = focus.elements[ln]
+			line = src.elements[ln]
 		except IndexError:
 			line = ""
 
