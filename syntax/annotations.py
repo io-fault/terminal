@@ -178,7 +178,7 @@ class Status(object):
 		yield ('title', self.mode)
 		l, o = self.position
 		yield ('inclusion-space', ' ')
-		yield ('inclusion-identifier', f"L{l+1}.{o}")
+		yield ('inclusion-identifier', f"L{l+1}.{o+1}")
 
 class Preview(object):
 	"""
