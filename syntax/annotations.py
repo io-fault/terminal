@@ -435,7 +435,7 @@ class Filesystem(Directory):
 	def update(self, line, structure):
 		# Presumes resource location editing.
 		ln = self.vertical.get()
-		if ln == 0:
+		if ln == 0 or self.source.ln_count() < 2:
 			rpath = files.root
 		else:
 			ln_ctx, ln_file = self.source.select(0, 2)
