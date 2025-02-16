@@ -1,8 +1,8 @@
 """
 # Session and device instructions.
 """
-from . import types
-event, Index = types.Index.allocate('session')
+from .types import Index
+event, Index = Index.allocate('session')
 
 @event('log')
 def open_session_log(session, frame, rf, event):
@@ -87,7 +87,7 @@ def s_write_resource(session, frame, rf, event):
 def copy_resource(session, frame, rf, event):
 	"""
 	# Write the elements to the resource identified by the absolute path in
-	# device's transferred text.
+	# the device's transferred text.
 
 	# Used when the device manager passes the path in after the user selects
 	# a destination path.

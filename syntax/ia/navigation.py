@@ -1,8 +1,8 @@
 """
 # Navigation methods controlling cursor vectors.
 """
-from . import types
-event, Index = types.Index.allocate('navigation')
+from .types import Index
+event, Index = Index.allocate('navigation')
 
 @event('session', 'view', 'forward')
 def sv_forward(session, frame, rf, event, *, quantity=1):
@@ -78,7 +78,7 @@ def move_start_of_line(session, frame, rf, event):
 	# Move the cursor to the beginning of the line.
 	"""
 
-	rf.focus[1].set(rf.cwl().ln_level)
+	rf.focus[1].set(0)
 
 @event('horizontal', 'forward', 'end')
 def move_end_of_line(session, frame, rf, event):
@@ -171,7 +171,11 @@ def v_seek_start(session, frame, rf, event):
 	start, lo, stop = rf.focus[0].snapshot()
 
 	if lo <= start:
-		il = min(filter(None, (src.sole(start).ln_level, src.sole(stop-1).ln_level)))
+		try:
+			il = min(filter(None, (src.sole(start).ln_level, src.sole(stop-1).ln_level)))
+		except ValueError:
+			il = 0
+
 		offsets = src.find_indentation_block(il, start-1, limit=-1)
 		if offsets is not None:
 			start, stop = offsets
@@ -191,7 +195,11 @@ def v_seek_stop(session, frame, rf, event):
 	start, lo, stop = rf.focus[0].snapshot()
 
 	if lo >= stop - 1:
-		il = min(filter(None, (src.sole(start).ln_level, src.sole(stop-1).ln_level)))
+		try:
+			il = min(filter(None, (src.sole(start).ln_level, src.sole(stop-1).ln_level)))
+		except ValueError:
+			il = 0
+
 		offsets = src.find_indentation_block(il, stop, limit=src.ln_count())
 		if offsets is not None:
 			start, stop = offsets
@@ -206,13 +214,9 @@ def select_unit_string(session, frame, rf, event, string, *, quantity=1):
 	"""
 	# Horizontally move the cursor to the character in the event.
 	"""
+
 	h = rf.focus[1]
-
-	start = h.get()
-	if start < 0:
-		start = 0
-
-	offset = rf.current(1).find(string, start + 1)
+	offset = rf.cwl().ln_content.find(string, h.get() + 1)
 	if offset > -1:
 		h.set(offset)
 
@@ -257,9 +261,7 @@ def span_line(session, frame, rf, event):
 	"""
 
 	ln = rf.cwl()
-	start = ln.ln_level
-	stop = ln.ln_length
-	rf.focus[1].restore((start, rf.focus[1].get(), stop))
+	rf.focus[1].restore((0, rf.focus[1].get(), ln.ln_length))
 
 @event('vertical', 'select', 'line')
 def vertical_unit_select(session, frame, rf, event, quantity=1):
@@ -291,10 +293,11 @@ def event_select_absolute(session, frame, rf, event):
 	frame.division = div[1]
 	trf.focus[0].set(ry)
 
+	li = trf.source.sole(ry)
 	phrase = trf.phrase(ry)
 	cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
 	h = phrase.tell(cp, *phrase.m_codepoint)
-	trf.focus[1].set(h)
+	trf.focus[1].set(h - li.ln_level)
 
 	frame.refocus()
 

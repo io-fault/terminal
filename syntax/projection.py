@@ -24,7 +24,7 @@ def render(rf, view, *lines):
 		try:
 			line = gline(lo)
 		except IndexError:
-			line = rf.forms.mkline("")
+			line = rf.forms.ln_interpret("")
 		ph = next(rline((line,)))
 		area = slice(rlo, rlo+1)
 		view.update(area, (ph,))

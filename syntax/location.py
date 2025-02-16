@@ -5,7 +5,6 @@ import os.path
 import functools
 from fault.system import files
 
-from . import elements
 from . import types
 
 def determine(context, path):
@@ -67,7 +66,7 @@ def open(session, frame, rf, event):
 
 	# Construct reference and load dependencies.
 	dpath = (frame.vertical, frame.division)
-	new = session.refract(compose(src.elements))
+	new = session.refract(compose(li.ln_content for li in src.select(0, 2)))
 
 	session.dispatch_delta(frame.attach(dpath, new).refresh())
 	session.keyboard.set('control')
@@ -90,7 +89,7 @@ def save(session, frame, rf, event):
 
 	# Construct reference and load dependencies.
 	dpath = (frame.vertical, frame.division)
-	path = compose(src.elements)
+	path = compose(li.ln_content for li in src.select(0, 2))
 
 	frame.refocus()
 	target = frame.focus
@@ -123,10 +122,12 @@ def refract(lf, view, pathcontext, path, action):
 	)
 
 	from dataclasses import replace
-	src = elements.Resource(meta, lf)
-	src.elements[:] = list(map(str, determine(pathcontext, path)))
+	from .elements import Refraction, Resource
+	src = Resource(meta, lf)
+	src.extend_lines(map(lf.ln_interpret, determine(pathcontext, path)))
+	src.commit()
 
-	rf = elements.Refraction(src)
+	rf = Refraction(src)
 	pathfields = replace(lf.lf_fields, separation=(lambda: pathcontext@src.sole(0).ln_content))
 	rf.forms = lf.replace(lf_fields=pathfields)
 	rf.configure(view.area)

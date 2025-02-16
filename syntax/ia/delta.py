@@ -7,10 +7,9 @@
 """
 import itertools
 
-from fault.range.types import IRange
-from . import types
-from ..delta import Update, Lines
-event, Index = types.Index.allocate('delta')
+from .types import Index
+event, Index = Index.allocate('delta')
+from .. import types
 
 @event('abort')
 def xact_abort(session, frame, rf, event):
@@ -190,7 +189,7 @@ def delete_characters_behind(session, frame, rf, event, quantity=1):
 	line = src.elements[lo]
 
 	start = rf.cu_codepoints(lo, co, -quantity)
-	removed = src.delete_range(lo, start, co)
+	removed = src.delete_codepoints(lo, start, co)
 	src.commit()
 
 	rf.focus[1].changed(start, -len(removed))
@@ -207,7 +206,7 @@ def delete_characters_ahead(session, frame, rf, event, quantity=1):
 	line = src.elements[lo]
 
 	stop = rf.cu_codepoints(lo, co, quantity)
-	removed = src.delete_range(lo, co, stop)
+	removed = src.delete_codepoints(lo, co, stop)
 	src.commit()
 
 	rf.focus[1].changed(co, -len(removed))
@@ -222,7 +221,7 @@ def delete_current_line(session, frame, rf, event, quantity=1, offset=0):
 	lo = rf.focus[0].get() + offset
 
 	src = rf.source
-	deletion_count = len(src.delete_lines(lo, lo + quantity))
+	deletion_count = src.delete_lines(lo, lo + quantity)
 	src.checkpoint()
 
 	if offset < 0:
@@ -240,15 +239,15 @@ def delete_previous_field(session, frame, rf, event):
 	src = rf.source
 	li = src.sole(rf.focus[0].get())
 	areas, fields = rf.fields(li.ln_offset)
+	if not fields:
+		return
 
 	i = rf.field_index(areas, co)
 	while i and fields[i][0] in {'space', 'trailing-space'}:
 		i -= 1
 	word = areas[max(0, i-1)]
 
-	removed = li.ln_content[word.start-li.ln_level:co-li.ln_level]
-	src.delete_codepoints(li.ln_offset, word.start, removed)
-
+	removed = src.delete_codepoints(li.ln_offset, word.start, co)
 	src.commit()
 
 	rf.focus[1].changed(word.start, -len(removed))
@@ -262,42 +261,26 @@ def replace_character_unit(session, frame, rf, event):
 	session.keyboard.transition('capture')
 
 @event('indentation', 'increment')
-def insert_indentation_level(session, frame, rf, event, quantity=1):
+def increase_indentation_level(session, frame, rf, event, quantity=1):
 	"""
 	# Increment the indentation of the current line.
 	"""
 
 	lo = rf.focus[0].get()
 	src = rf.source
-	li = src.sole(lo)
-
-	src.insert_codepoints(lo, 0, "\t" * quantity)
+	src.increase_indentation(lo, quantity)
 	src.commit()
 
-	rf.focus[1].changed(0, quantity)
-
 @event('indentation', 'decrement')
-def delete_indentation_level(session, frame, rf, event, quantity=1):
+def decrease_indentation_level(session, frame, rf, event, quantity=1):
 	"""
 	# Decrement the indentation of the current line.
 	"""
 
 	lo = rf.focus[0].get()
 	src = rf.source
-	li = src.sole(lo)
-
-	if li.ln_level < quantity:
-		q = li.ln_level
-	else:
-		q = quantity
-
-	if q < 1:
-		return
-
-	deletion = src.delete_range(lo, 0, q)
+	src.adjust_indentation(lo, lo+1, -quantity)
 	src.commit()
-
-	rf.focus[1].changed(0, -q)
 
 @event('indentation', 'zero')
 def delete_indentation(session, frame, rf, event):
@@ -307,59 +290,30 @@ def delete_indentation(session, frame, rf, event):
 
 	lo = rf.focus[0].get()
 	src = rf.source
-	il = src.sole(lo).ln_level
-
-	deletion = src.delete_range(lo, 0, il)
+	src.delete_indentation(lo, lo+1)
 	src.commit()
 
-	rf.focus[1].datum -= il
-
 @event('indentation', 'increment', 'range')
-def insert_indentation_levels_v(session, frame, rf, event, quantity=1):
+def increase_indentation_levels_v(session, frame, rf, event, quantity=1):
 	"""
 	# Increment the indentation of the vertical range.
 	"""
 
 	start, position, stop = rf.focus[0].snapshot()
 	src = rf.source
-	il_cursor = src.sole(position).ln_level
-
-	for li in src.select(start, stop):
-		if not li.ln_content and li.ln_level == 0:
-			# Ignore empty lines.
-			continue
-
-		src.insert_codepoints(li.ln_offset, 0, '\t' * quantity)
-
+	src.adjust_indentation(start, stop, quantity)
 	src.checkpoint()
 
-	if position >= start and position < stop:
-		rf.focus[1].changed(0, quantity)
-
 @event('indentation', 'decrement', 'range')
-def delete_indentation_levels_v(session, frame, rf, event, quantity=1):
+def decrease_indentation_levels_v(session, frame, rf, event, quantity=1):
 	"""
 	# Decrement the indentation of the current line.
 	"""
 
 	start, position, stop = rf.focus[0].snapshot()
 	src = rf.source
-	il_cursor = src.sole(position).ln_level
-
-	for li in src.select(start, stop):
-		if li.ln_level < quantity:
-			q = li.ln_level
-		else:
-			q = quantity
-
-		if q > 0:
-			src.delete_range(li.ln_offset, 0, q)
-
+	src.adjust_indentation(start, stop, -quantity)
 	src.checkpoint()
-
-	if position >= start and position < stop:
-		dc = src.sole(position).ln_level - il_cursor
-		rf.focus[1].changed(0, dc)
 
 @event('indentation', 'zero', 'range')
 def delete_indentation_v(session, frame, rf, event, *, offset=None, quantity=1):
@@ -369,16 +323,8 @@ def delete_indentation_v(session, frame, rf, event, *, offset=None, quantity=1):
 
 	start, position, stop = rf.focus[0].snapshot()
 	src = rf.source
-	il_cursor = src.sole(position).ln_level
-
-	for li in src.select(start, stop):
-		src.delete_codepoints(li.ln_offset, 0, '\t' * li.ln_level)
-
+	src.delete_indentation(start, stop)
 	src.checkpoint()
-
-	if position >= start and position < stop:
-		dc = src.sole(position).ln_level - il_cursor
-		rf.focus[1].changed(0, dc)
 
 @event('delete', 'leading')
 def delete_to_beginning_of_line(session, frame, rf, event):
@@ -389,7 +335,7 @@ def delete_to_beginning_of_line(session, frame, rf, event):
 	lo, co = (x.get() for x in rf.focus)
 	src = rf.source
 
-	src.delete_range(lo, 0, co)
+	src.delete_codepoints(lo, 0, co)
 	src.checkpoint()
 
 	rf.focus[1].changed(0, -co)
@@ -402,8 +348,9 @@ def delete_to_end_of_line(session, frame, rf, event):
 
 	lo, co = (x.get() for x in rf.focus)
 	src = rf.source
+	li = src.sole(lo)
 
-	src.delete_range(lo, co, len(src.elements[lo]))
+	src.delete_codepoints(lo, co, li.ln_length)
 	src.checkpoint()
 
 @event('open', 'behind')
@@ -426,7 +373,7 @@ def open_newline_behind(session, frame, rf, event, quantity=1):
 	else:
 		il = 0
 
-	src.insert_lines(lo, ["\t" * il] * quantity)
+	src.insert_lines(lo, [types.Line(-1, il, "")] * quantity)
 	src.commit()
 
 	rf.focus[0].changed(lo, quantity)
@@ -459,7 +406,7 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 	else:
 		il = 0
 
-	src.insert_lines(lo + 1, ["\t" * il] * quantity)
+	src.insert_lines(lo + 1, [types.Line(-1, il, "")] * quantity)
 	src.commit()
 
 	rf.focus[0].changed(lo, quantity)
@@ -475,7 +422,7 @@ def open_first(session, frame, rf, event, quantity=1):
 
 	src = rf.source
 
-	src.insert_lines(0, [""])
+	src.insert_lines(0, [types.Line(-1, 0, "")] * quantity)
 	src.checkpoint()
 
 	rf.focus[0].set(0)
@@ -489,9 +436,9 @@ def open_last(session, frame, rf, event, quantity=1):
 	"""
 
 	src = rf.source
-	lo = len(src.elements)
+	lo = src.ln_count()
 
-	src.insert_lines(lo, [""])
+	src.insert_lines(lo, [types.Line(-1, 0, "")] * quantity)
 	src.checkpoint()
 
 	rf.focus[0].set(lo)
@@ -559,11 +506,7 @@ def replicate_vertical_range(session, frame, rf, event, offset, quantity=1):
 	start, lo, stop = rf.focus[0].snapshot()
 	src = rf.source
 
-	lines = src.elements[start:stop]
-	lines.append("")
-	lo += offset
-	dl, du = src.insert_lines_into(lo, 0, lines)
-	src.commit()
+	dl = src.replicate_lines(lo, start, stop)
 
 	rf.focus[0].changed(lo, dl)
 	rf.delta(lo, dl)
@@ -599,7 +542,7 @@ def delete_character_column(session, frame, rf, event, quantity=1):
 
 	for lo in range(start, stop):
 		stop = rf.cu_codepoints(lo, co, quantity)
-		src.delete_range(lo, co, stop)
+		src.delete_codepoints(lo, co, stop)
 
 	src.checkpoint()
 
@@ -612,7 +555,7 @@ def delete_vertical_range_lines(session, frame, rf, event):
 	start, position, stop = rf.focus[0].snapshot()
 	src = rf.source
 
-	d = len(src.delete_lines(start, stop))
+	d = src.delete_lines(start, stop)
 	src.checkpoint()
 
 	rf.focus[0].changed(start, -d)
@@ -635,7 +578,7 @@ def delete_unit_range(session, frame, rf, event):
 	lo = rf.focus[0].get()
 	start, p, stop = rf.focus[1].snapshot()
 
-	src.delete_range(lo, start, stop)
+	src.delete_codepoints(lo, start, stop)
 	src.commit()
 
 	rf.focus[1].changed(start, -(stop - start))
@@ -666,7 +609,7 @@ def subrange(session, frame, rf, event):
 	start, p, stop = rf.focus[1].snapshot()
 	src = rf.source
 
-	src.delete_range(lo, start, stop)
+	src.delete_codepoints(lo, start, stop)
 	src.commit()
 
 	rf.focus[1].restore((start, start, start))
@@ -695,8 +638,12 @@ def split_line_at_cursor(session, frame, rf, event):
 	"""
 
 	lo = rf.focus[0].get()
+	src = rf.source
 	offset = rf.focus[1].get()
-	rf.delta(*rf.source.split(lo, offset))
+
+	d = src.split(lo, offset)
+	src.commit()
+	rf.delta(*d)
 
 @event('line', 'join')
 def join_line_with_following(session, frame, rf, event, quantity=1):
@@ -705,7 +652,11 @@ def join_line_with_following(session, frame, rf, event, quantity=1):
 	"""
 
 	lo = rf.focus[0].get()
-	rf.delta(*rf.source.join(lo, quantity))
+	src = rf.source
+
+	d = src.join(lo, quantity)
+	src.commit()
+	rf.delta(*d)
 
 @event('copy')
 def copy(session, frame, rf, event):
@@ -747,35 +698,21 @@ def paste_before_line(session, frame, rf, event):
 	src.insert_lines(lo, session.cache)
 
 @event('insert', 'text')
-def insert_segments(session, frame, rf, event):
+def insert_transfer_text(session, frame, rf, event):
 	"""
-	# Break the string instances in &segments into individual lines
-	# and insert them into the document at the cursor's position and
-	# advance the cursor to the end of the insertion.
+	# Splice the event's transfer text into the resource.
 	"""
 
-	segments = [session.device.transfer_text()]
+	text = session.device.transfer_text()
 	src = rf.source
 
-	lines = ['']
-	for lineseq in segments:
-		new = lineseq.splitlines(keepends=False)
-		if not new:
-			continue
-		lines[-1] += new[0]
-		lines.extend(new[1:])
-
-	if not lines:
-		return
-
 	lo = rf.focus[0].get()
-	offset = rf.focus[1].get()
-	dy, dx = src.insert_lines_into(lo, offset, lines)
+	co = rf.focus[1].get()
+	lo, co, r = src.splice_text(src.forms.lf_lines, lo, co, text)
 	src.checkpoint()
 
-	rf.focus[0].set(lo + dy)
-	rf.focus[1].set(offset + dx)
-	src.checkpoint()
+	rf.focus[0].set(lo)
+	rf.focus[1].set(co)
 
 @event('insert', 'annotation')
 def insert_annotation(session, frame, rf, event):

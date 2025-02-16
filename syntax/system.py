@@ -70,39 +70,54 @@ class Insertion(IO):
 	"""
 
 	target: elements.Refraction
-	cursor: object
+	cursor: tuple[int, int, str]
 	state: Callable
 
-	read_size = 512
+	level: int = 0
+	read_size: int = 512
 	system_operation = os.read
 	event_type = Event.io_receive
 
 	def execute(self, transfer):
-		rf = self.target
-		src = rf.source
+		"""
+		# Perform the insertion into the resource.
+		"""
 
-		lines = self.state(transfer).split('\n')
-		if not lines:
+		lines_txt = self.state(transfer)
+		if not lines_txt:
 			return
 
-		ln, co = self.cursor
+		rf = self.target
+		src = rf.source
+		lf = src.forms
 
-		dl, dc = src.insert_lines_into(ln, co, lines)
+		lo, co, leading = self.cursor
+		self.cursor = src.splice_text(lf.lf_lines, lo, co, leading + lines_txt, ln_level=self.level)
 		src.commit()
-		rf.delta(ln, dl)
-		self.cursor = (ln + dl, co + dc)
+		dl = self.cursor[0] - lo
+		rf.delta(lo, dl)
 
 		vp = rf.focus[0]
 		vp.magnitude += dl
-		if vp.get() >= ln:
+		if vp.get() >= lo:
 			vp.update(dl)
-			rf.scroll(dl.__add__)
+			rf.vertical_changed(vp.get())
 
-	def final(self, xfer):
+	def final(self):
 		src = self.target.source
+		lo, co, remainder = self.cursor
+		if remainder:
+			src.insert_codepoints(lo, co, remainder)
+
+		# Remove final empty line.
+		li = src.sole(lo)
+		if not li.ln_content:
+			src.delete_lines(lo, lo+1)
+
 		src.checkpoint()
 
 	def interrupt(self):
+		# Force a zero read to cause &transition to cancel and finalize.
 		self.system_operation = (lambda fd, rs: b'')
 
 	def transition(self, scheduler, log, link):
@@ -114,9 +129,7 @@ class Insertion(IO):
 		if not xfer:
 			# EOF
 			scheduler.cancel(link)
-
-			# Workaround to trigger ev_clear to release the file descriptor.
-			scheduler.enqueue(lambda: None)
+			scheduler.enqueue(self.final)
 		else:
 			log.append((self, xfer))
 
@@ -143,7 +156,7 @@ class Transmission(IO):
 		self.total += len(written)
 		rf = self.target
 
-	def final(self, transfer):
+	def final(self):
 		pass
 
 	def transferred(self, transfer):
@@ -174,7 +187,7 @@ class Transmission(IO):
 			scheduler.cancel(link)
 
 			# Workaround to trigger ev_clear to release the file descriptor.
-			scheduler.enqueue(lambda: None)
+			scheduler.enqueue(self.final)
 
 @dataclass()
 class Completion(IO):

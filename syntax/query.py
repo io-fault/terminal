@@ -21,7 +21,9 @@ def refract(session, frame, view, qtype, state, action):
 	)
 
 	meta = Resource(ref, session.load_type('lambda'))
-	meta.elements[:] = list(map(str, [qtype + ' ' + state]))
+	lf = meta.forms
+	meta.extend_lines(map(lf.ln_interpret, [qtype + ' ' + state]))
+	meta.commit()
 	lrf = Refraction(meta)
 	lrf.configure(view.area)
 	lrf.activate = action # location.open or location.save
@@ -52,6 +54,7 @@ def substitute(session, frame, rf):
 	from .system import Completion, Insertion, Invocation, Decode
 	from .annotations import ExecutionStatus
 	from fault.system.query import executables
+	src = rf.source
 
 	# Horizontal Range
 	lo, co, lines = rf.take_horizontal_range()
@@ -59,7 +62,7 @@ def substitute(session, frame, rf):
 	readlines = joinlines(Decode('utf-8').decode)
 	readlines.send(None)
 	readlines = readlines.send
-	rf.source.commit()
+	src.commit()
 
 	cmd = '\n'.join(lines).split()
 	for exepath in executables(cmd[0]):
@@ -70,7 +73,7 @@ def substitute(session, frame, rf):
 		return
 
 	c = Completion(rf, -1)
-	i = Insertion(rf, (lo, co), readlines)
+	i = Insertion(rf, (lo, co, ''), readlines)
 	pid = session.io.invoke(c, i, None, inv)
 	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
 	rf.annotate(ca)
@@ -83,6 +86,7 @@ def execute(session, frame, rf, system):
 	from .system import Completion, Insertion, Invocation, Decode
 	from .annotations import ExecutionStatus
 	from fault.system import query
+	src = rf.source
 
 	cmd = system.split()
 	for exepath in query.executables(cmd[0]):
@@ -93,18 +97,31 @@ def execute(session, frame, rf, system):
 		return
 
 	c = Completion(rf, -1)
-	ln = rf.focus[0].get()
+	lo = rf.focus[0].get()
 	co = rf.focus[1].get()
 	readlines = Decode('utf-8').decode
-	i = Insertion(rf, (ln, co), readlines)
+
+	if lo >= src.ln_count():
+		src.ln_initialize()
+		src.commit()
+	target_line = src.sole(lo)
+
+	i = Insertion(rf, (lo, co, ''), readlines)
+	i.level = target_line.ln_level
+	if i.level:
+		# Maintain initial indentation context on first line,
+		# and make sure that there is a line to write into.
+		src.insert_lines(lo, [src.forms.ln_interpret("", level=i.level)])
+		src.commit()
+
 	pid = session.io.invoke(c, i, None, inv)
 	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
 	rf.annotate(ca)
 
-def sendlines(encoder, limit, lines):
+def bufferlines(limit, lines):
 	buffer = b''
 	for l in lines:
-		buffer += encoder(l + '\n')
+		buffer += l
 		if len(buffer) > limit:
 			yield buffer
 			buffer = b''
@@ -129,18 +146,34 @@ def transform(session, frame, rf, system):
 		# No command found.
 		return
 
+	readlines = Decode('utf-8').decode
 	src = rf.source
 	src.checkpoint()
 
 	c = Completion(rf, -1)
 	start, co, lines = rf.take_vertical_range()
 	src.commit()
+
 	rf.focus[0].magnitude = 0
 	rf.delta(start, start + len(lines))
 
-	readlines = Decode('utf-8').decode
-	i = Insertion(rf, (start, co), readlines)
-	x = Transmission(rf, sendlines(Encode().encode, 2048, lines), b'', 0)
+	i = Insertion(rf, (start, 0, ''), readlines)
+	lfb = src.forms.lf_codec.sequence
+	lfl = src.forms.lf_lines.sequence
+	try:
+		cil = min(li.ln_level for li in lines if li.ln_content)
+	except ValueError:
+		cil = 0
+	i.level = cil
+
+	# Maintain initial indentation context on first line,
+	# and make sure that there is a line to write into.
+	src.insert_lines(start, [src.forms.ln_interpret("", level=cil)])
+	src.commit()
+
+	ilines = ((li.ln_level - cil, li.ln_content) for li in lines)
+
+	x = Transmission(rf, bufferlines(2048, lfb(lfl(ilines))), b'', 0)
 
 	# Trigger first buffer.
 	x.transferred(b'')
@@ -169,8 +202,8 @@ def transmit(session, frame, rf, system):
 		return
 
 	c = Completion(rf, -1)
-	lines = rf.source.elements[rf.focus[0].slice()]
-	x = Transmission(rf, sendlines(Encode().encode, 2048, lines), b'', 0)
+	lines = rf.source.serialize(*rf.focus[0].range())
+	x = Transmission(rf, bufferlines(2048, lines), b'', 0)
 
 	# Trigger first buffer.
 	x.transferred(b'')
@@ -187,7 +220,8 @@ def issue(session, frame, rf, event):
 	"""
 
 	target, view = frame.select((frame.vertical, frame.division))
-	command, string = ' '.join(rf.source.elements).split(' ', 1)
+	src = rf.source
+	command, string = ' '.join(x.ln_content for x in src.select(0, src.ln_count())).split(' ', 1)
 	index[command](session, frame, target, string)
 	frame.deltas.append((target, view))
 

@@ -113,6 +113,9 @@ class Execution(Core):
 		self.executable = ifpath
 		self.interface = argv
 
+##
+# The line content offset is hardcoded to avoid references, but are
+# parenthesized so that substitution may be performed if changes are needed.
 class Resource(Core):
 	"""
 	# The representation of a stored resource and its modifications.
@@ -126,7 +129,7 @@ class Resource(Core):
 	# /origin/
 		# Reference identifying the resource being modified and refracted.
 	# /forms/
-		# The line reformulations.
+		# The default line reformulations for formatting the elements.
 	# /elements/
 		# The sequence of lines being modified.
 	# /modifications/
@@ -166,9 +169,9 @@ class Resource(Core):
 		# Retrieve the &types.Line instance for the given &line_offset.
 		"""
 
-		return self.forms.mkline(self.elements[line_offset], line_offset)
+		return self.forms.ln_structure(self.elements[line_offset], line_offset)
 
-	def select(self, start, stop, *, enum=enumerate) -> Iterable[types.Line]:
+	def select(self, start, stop) -> Iterable[types.Line]:
 		"""
 		# Retrieve &types.Line instances in the given range defined
 		# by &start and &stop.
@@ -179,8 +182,22 @@ class Resource(Core):
 		else:
 			sign = +1
 
-		for i, v in enum(self.elements.select(start, stop)):
-			yield self.forms.mkline(v, ln_offset=start + (i * sign))
+		structure = self.forms.ln_structure
+		i = start
+		for li in self.elements.select(start, stop):
+			yield structure(li, ln_offset=i)
+			i += sign
+
+	def serialize(self, start:int, stop:int, encoding=None) -> Iterable[bytes]:
+		"""
+		# Convert lines between &start and &stop into the
+		# encoded form described by &forms.
+		"""
+
+		lfb = self.forms.lf_codec
+		lfl = self.forms.lf_lines
+		lines = ((li.ln_level, li.ln_content) for li in self.select(start, stop))
+		return lfb.sequence(lfl.sequence(lines))
 
 	@staticmethod
 	def since(start, stop, *, precision='millisecond'):
@@ -289,34 +306,41 @@ class Resource(Core):
 		"""
 
 		return (self.modifications
-			.write(delta.Update(lo, string, "", offset)))
+			.write(delta.Update(lo, string, "", offset + (4))))
 
-	def delete_range(self, lo, start, stop):
+	def extend_codepoints(self, lo, string):
 		"""
-		# Remove &length codepoints from the &offset in line &lo.
-
-		# [ Returns ]
-		# The deleted string.
+		# Append the given &string to the line, &lo.
 		"""
 
-		line = self.elements[lo]
-		deletion = line[start:stop]
+		co = self.sole(lo).ln_length + (4)
 
 		(self.modifications
-			.write(delta.Update(lo, "", deletion, start)))
+			.write(delta.Update(lo, string, "", co)))
 
-		return deletion
-
-	def delete_codepoints(self, lo, offset, deletion):
+	def delete_codepoints(self, lo:int, start:int, stop:int):
 		"""
 		# Remove &deletion from the &offset in line &lo.
+
+		# [ Parameters ]
+		# /lo/
+			# The line offset containing the codepoints to be deleted.
+		# /start/
+			# The codepoint offset to delete from.
+		# /stop/
+			# The codepoint offset to delete to.
 
 		# [ Returns ]
 		# The given &deletion.
 		"""
 
+		line = self.elements[lo]
+		start += (4)
+		stop += (4)
+		deletion = line[start:stop]
+
 		(self.modifications
-			.write(delta.Update(lo, "", deletion, offset)))
+			.write(delta.Update(lo, "", deletion, start)))
 
 		return deletion
 
@@ -329,10 +353,49 @@ class Resource(Core):
 		# The actual change in size.
 		"""
 
-		deletion = self.delete_range(lo, start, stop)
+		deletion = self.delete_codepoints(lo, start, stop)
 		self.insert_codepoints(lo, start, string)
 
 		return deletion
+
+	def increase_indentation(self, lo:int, change:int):
+		"""
+		# Unconditionally apply the given &change to the indentation
+		# level of the line at &lo.
+		"""
+
+		log = self.modifications
+		li = self.sole(lo)
+		i = li.ln_level + change
+		log.write(delta.Update(li.ln_offset, chr(i), chr(li.ln_level), 0))
+
+	def adjust_indentation(self, start:int, stop:int, change:int):
+		"""
+		# Apply the given &change to the indentation of the lines within
+		# &start and &stop while skipping lines with no content and no
+		# indentation.
+		"""
+
+		log = self.modifications
+		for li in self.select(start, stop):
+			if li.ln_void:
+				continue
+
+			i = max(0, li.ln_level + change)
+			log.write(delta.Update(li.ln_offset, chr(i), chr(li.ln_level), 0))
+
+	def delete_indentation(self, start:int, stop:int):
+		"""
+		# Remove all indentations from all the lines in &start and &stop.
+		"""
+
+		log = self.modifications
+		zero = chr(0)
+
+		for li in self.select(start, stop):
+			if li.ln_level == 0:
+				continue
+			log.write(delta.Update(li.ln_offset, zero, chr(li.ln_level), 0))
 
 	def join(self, lo, count, *, withstring=''):
 		"""
@@ -348,12 +411,12 @@ class Resource(Core):
 			# Defaults to an empty string.
 		"""
 
-		lines = self.elements[lo:lo+1+count]
-		combined = withstring.join(lines)
+		lines = list(self.select(lo, lo+1+count))
+		combined = withstring.join(li.ln_content for li in lines)
 
 		(self.modifications
-			.write(delta.Update(lo, combined, lines[0], 0))
-			.write(delta.Lines(lo+1, [], [lines[-1]])))
+			.write(delta.Update(lo, combined, self.elements[lo][4:], (4)))
+			.write(delta.Lines(lo+1, [], [self.elements[lo+1]])))
 
 		return (lo+1, -len(lines))
 
@@ -362,21 +425,100 @@ class Resource(Core):
 		# Split the line identified by &lo at &offset.
 		"""
 
-		line = self.elements[lo]
-		nl = line[offset:]
+		lf = self.forms
+		li = self.sole(lo)
+		nlstr = li.ln_content[offset:]
+		nl = lf.ln_interpret(nlstr, level=li.ln_level)
 
 		(self.modifications
-			.write(delta.Update(lo, "", nl, offset))
-			.write(delta.Lines(lo+1, [nl], [])))
+			.write(delta.Update(lo, "", nlstr, offset + (4)))
+			.write(delta.Lines(lo+1, [lf.ln_sequence(nl)], [])))
 
 		return (lo, 2)
 
-	def delete_lines(self, lo, lines):
+	def splice_text(self, ln_format, lo:int, co:int, text:str, ln_level=0):
 		"""
-		# Remove the &lines at &lo.
+		# Insert &text in the line &lo at the indentation relative character &co.
+		# Using &ln_format to split lines in &text, the first line is inserted
+		# before &co in &lo. The trailing lines are inserted after &lo with the last line
+		# inheriting any text *after* &co.
+
+		# [ Parameters ]
+		# /ln_format/
+			# The line form that should be used to split &text.
+		# /lo/
+			# The line offset in &self.elements.
+		# /co/
+			# The codepoint offset in the target line, &lo.
+		# /text/
+			# The text to be split and integrated into &self.elements.
+		# /ln_level/
+			# The indentation level to add to all created lines.
+
+		# [ Returns ]
+		# The insertion state as a tuple holding the line offset, codepoint offset,
+		# and remainder to be prefixed to text for the next call to splice_text.
 		"""
 
-		self.modifications.write(delta.Lines(lo, [], lines))
+		# Check for partial termination.
+		# No-op for single byte termination.
+		pt = ln_format.measure_partial_termination(text)
+		if pt:
+			# Avoid inserting codepoints that may become a boundary
+			# with the next insertion.
+			remainder = text[-pt:]
+			text = text[:-pt]
+		else:
+			remainder = ''
+
+		first, *wholes = text.split(ln_format.termination)
+
+		level_line = ln_format.level
+		target_line = self.sole(lo)
+
+		# Handle indentation extension case. Previous splice has a partial
+		# read on an indented, currently, content-less line. When this happens,
+		# indentation needs to be increased when flevel is greater than zero.
+		flevel, fcontent = level_line(first)
+		if flevel:
+			if not target_line.ln_content or co == 0:
+				# Inherit leading indentation.
+				self.increase_indentation(lo, flevel)
+			else:
+				# Indentation already terminated, line content has already began.
+				# Insert indentation codepoints raw.
+				fcontent = first
+
+		if wholes:
+			# Carry the tail in the first line.
+			suffix = self.substitute_codepoints(lo, co, target_line.ln_length, fcontent)
+			wholes[-1] = wholes[-1] + suffix
+
+			# Identify indentation boundaries and structure the line.
+			ln_i = self.forms.ln_interpret # Universal
+			llines = map(level_line, wholes)
+			slines = list(ln_i(ls, level=(ln_level+il if ls else il)) for il, ls in llines)
+
+			# Insert and identify the new codepoint offset in the final line.
+			dl = self.insert_lines(lo+1, slines)
+			co = slines[-1].ln_length - len(suffix)
+		else:
+			self.insert_codepoints(lo, co, fcontent)
+			co = co + len(fcontent)
+			dl = 0 # No change in &lo.
+
+		return (lo + dl, co, remainder)
+
+	def replicate_lines(self, lo:int, start:int, stop:int):
+		"""
+		# Copy the lines between &start and &stop to &lo.
+		"""
+
+		rlines = self.elements[start:stop]
+		(self.modifications
+			.write(delta.Lines(lo, rlines, [])))
+
+		return len(rlines)
 
 	def delete_lines(self, start:int, stop:int):
 		"""
@@ -391,33 +533,50 @@ class Resource(Core):
 		(self.modifications
 			.write(delta.Lines(start, [], lines)))
 
-		return lines
+		# Export in generator to defer processing in case discarded.
+		return len(lines)
 
-	def insert_lines(self, lo, lines):
+	def insert_lines(self, lo, lines:Iterable[types.Line]):
 		"""
 		# Insert the &lines before &lo.
 		"""
 
+		slines = [self.forms.ln_sequence(x) for x in lines]
 		(self.modifications
-			.write(delta.Lines(lo, lines, [])))
+			.write(delta.Lines(lo, slines, [])))
 
-		return len(lines)
+		return len(slines)
 
-	def extend_lines(self, lines):
+	def extend_lines(self, lines:Iterable[types.Line]):
 		"""
 		# Append the given &lines to the resource's elements.
 		"""
 
+		slines = [self.forms.ln_sequence(x) for x in lines]
 		(self.modifications
-			.write(delta.Lines(self.ln_count(), lines, []))
+			.write(delta.Lines(self.ln_count(), slines, []))
 		)
 
-		return len(lines)
+		return len(slines)
+
+	def ln_initialize(self, content="", level=0, offset=None):
+		"""
+		# Initialize a new line at the end of elements.
+		"""
+
+		lo = offset if offset is not None else self.ln_count()
+		lines = [chr(level) + "\x00\x00\x00" + content]
+		(self.modifications
+			.write(delta.Lines(lo, lines, []))
+		)
 
 	def swap_case(self, lo:int, start:int, stop:int):
 		"""
 		# Swap the case of the character unit under the cursor.
 		"""
+
+		start += (4)
+		stop += (4)
 
 		lc = self.elements[lo]
 		subbed = lc[start:stop]
@@ -439,44 +598,61 @@ class Resource(Core):
 		# view and elements state. If insertion is performed before
 		# delete, the final state will not be aligned and the wrong
 		# elements will be represented at the insertion point.
+		log = self.modifications.write
+		deletion = self.elements[start:stop]
+
 		if start < lo:
 			# Deleted range comes before insertion line.
-			deletion = self.delete_lines(start, stop)
-			self.insert_lines(lo - len(deletion), deletion)
+			log(delta.Lines(start, [], deletion))
+			log(delta.Lines(lo - len(deletion), deletion, []))
 		else:
 			# Deleted range comes after insertion line.
 			assert lo <= start
 
-			deletion = self.delete_lines(start, stop)
-			self.insert_lines(lo, deletion)
+			log(delta.Lines(start, [], deletion))
+			log(delta.Lines(lo, deletion, []))
 
 		return len(deletion)
 
-	def insert_lines_into(self, lo:int, offset:int, lines:list[str]):
+	def take_leading(self, lo:int, co:int) -> str:
 		"""
-		# Insert the given &lines at the &offset in the line identified by &lo.
-		# Modifies &elements using &log.
+		# Delete and return the codepoints *before* &co in the line, &lo.
 
-		# [ Returns ]
-		# # Change in line count at &lo.
-		# # Change (codepoint length) in characters at &offset.
+		# [ Parameters ]
+		# /lo/
+			# The offset of the line to edit.
+		# /co/
+			# The codepoint offset to delete from.
 		"""
 
-		try:
-			line = self.elements[lo]
-		except IndexError:
-			line = ""
+		lf = self.forms
+		r = self.elements[lo][(4):co+(4)]
 
-		prefix = line[:offset]
-		suffix = line[offset:]
-		lines[0] = prefix + lines[0]
-		lines[-1] = lines[-1] + suffix
+		if r:
+			(self.modifications
+				.write(delta.Update(lo, "", r, (4))))
 
-		(self.modifications
-			.write(delta.Lines(lo, [], [line]))
-			.write(delta.Lines(lo, lines, [])))
+		return r
 
-		return len(lines) - 1, len(lines[-1]) - len(suffix) - offset
+	def take_following(self, lo:int, co:int) -> str:
+		"""
+		# Delete and return the codepoints *after* &co in the line, &lo.
+
+		# [ Parameters ]
+		# /lo/
+			# The offset of the line to edit.
+		# /co/
+			# The codepoint offset to delete from.
+		"""
+
+		lf = self.forms
+		r = self.sole(lo).ln_content[co:]
+
+		if r:
+			(self.modifications
+				.write(delta.Update(lo, "", r, co + (4))))
+
+		return r
 
 	def map_contiguous_block(self, il, start, stop):
 		"""
@@ -789,17 +965,17 @@ class Refraction(Core):
 
 		for area in selections:
 			start, stop = area
-			ilines = self.source.elements.select(*area)
+			ilines = self.source.select(*area)
 
-			for lo, line in zip(range(start, stop, d), ilines):
-				i = fmethod(line, string, *srange)
+			for li in ilines:
+				i = fmethod(li.ln_content, string, *srange)
 				if i == -1:
 					# Not in this line.
 					srange = (0, None)
 					continue
 				else:
-					v.set(lo)
-					self.vertical_changed(lo)
+					v.set(li.ln_offset)
+					self.vertical_changed(li.ln_offset)
 					h.restore((i, i, i + termlength))
 					return
 
@@ -809,12 +985,12 @@ class Refraction(Core):
 		"""
 
 		src = self.source
-		ln = src.sole(lo)
+		li = src.sole(lo)
 		width = self.dimensions.span
 
 		self.focus[0].set(lo)
-		self.focus[1].set(unit if unit is not None else ln.ln_length)
-		page_offset = element - (width // 2)
+		self.focus[1].set(unit if unit is not None else li.ln_length)
+		page_offset = lo - (width // 2)
 		self.scroll(lambda x: page_offset)
 
 	def delta(self, offset, change, *, max=max,
@@ -867,8 +1043,7 @@ class Refraction(Core):
 			self.focus[0].set(total - 1)
 		else:
 			line = src.sole(lo)
-			ll = line.ln_level + len(line.ln_content)
-			bol = line.ln_level
+			ll = line.ln_length
 
 		# Constrain cursor.
 		h = self.focus[1]
@@ -918,8 +1093,9 @@ class Refraction(Core):
 		# Get the slices of the structured element.
 		"""
 
+		lff = self.forms.lf_fields
 		ln = self.source.sole(element)
-		fs = self.forms.structure_fields(ln)
+		fs = list(lff.isolate(lff.separation, ln))
 		return self.field_areas(fs), fs
 
 	def field_index(self, areas, offset):
@@ -976,7 +1152,7 @@ class Refraction(Core):
 			if q == 0:
 				break
 		else:
-			fi = -1
+			fi = max(0, end - step)
 
 		t = areas[fi]
 		return fi, t
@@ -1011,7 +1187,7 @@ class Refraction(Core):
 		lo = self.focus[0].get()
 		start, position, stop = self.focus[1].snapshot()
 		ln = self.source.sole(lo)
-		return ln.ln_content[start-ln.ln_level:stop-ln.ln_level]
+		return ln.ln_content[start:stop]
 
 	def cwl(self) -> types.Line:
 		"""
@@ -1058,7 +1234,8 @@ class Refraction(Core):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 
-		lines = src.delete_lines(start, stop)
+		lines = list(src.select(start, stop))
+		src.delete_lines(start, stop)
 
 		return (start, 0, lines)
 
@@ -1071,7 +1248,7 @@ class Refraction(Core):
 		start, position, stop = self.focus[1].snapshot()
 		src = self.source
 
-		selection = src.delete_range(lo, start, stop)
+		selection = src.delete_codepoints(lo, start, stop)
 		return (lo, start, [selection])
 
 class Frame(Core):
@@ -1184,8 +1361,9 @@ class Frame(Core):
 		fctx = replace(fctx, separation=(lambda: reference.ref_context))
 		fs_lf = replace(self.filesystem, lf_fields=fctx)
 
-		elements = location.determine(reference.ref_context, reference.ref_path)
-		header.update(slice(0, 2), list(fs_lf.render(map(fs_lf.mkline, elements))))
+		lines = location.determine(reference.ref_context, reference.ref_path)
+		lines = map(fs_lf.ln_interpret, lines)
+		header.update(slice(0, 2), list(fs_lf.render(lines)))
 		return header.render(slice(0, 2))
 
 	def chresource(self, path, refraction):
@@ -1577,19 +1755,19 @@ class Frame(Core):
 		v, h = focus.focus
 		ln = v.get()
 		rln = ln - top
-		try:
-			line = src.elements[ln]
-		except IndexError:
-			line = ""
 
-		h.limit(0, len(line))
+		try:
+			li = src.sole(ln)
+		except IndexError:
+			li = types.Line(ln, 0, "")
+
+		h.limit(0, len(li.ln_content))
 
 		# Prepare phrase and cells.
-		li = lf.mkline(line, ln_offset=ln)
 		lfields = lf.lf_fields.partial()(li)
 		if fai is not None:
-			fai.update(line, lfields)
-			caf = lf.compose(lf.mkline("", ln_offset=ln), annotations.delimit(fai))
+			fai.update(li.ln_content, lfields)
+			caf = lf.compose(types.Line(ln, 0, ""), annotations.delimit(fai))
 			phrase = lf.compose(li, lfields)
 			phrase = types.Phrase(itertools.chain(lf.compose(li, lfields), caf))
 		else:
@@ -1600,7 +1778,7 @@ class Frame(Core):
 		m_cp = phrase.m_codepoint
 		m_cu = phrase.m_unit
 
-		hs = h.snapshot()
+		hs = tuple(x + li.ln_level for x in h.snapshot())
 		if hs[0] > hs[2]:
 			inverted = True
 			hs = tuple(reversed(hs))
@@ -1800,10 +1978,10 @@ class Session(Core):
 
 		ltype = self.integrate_types(self.configuration.types, self.theme)
 		self.types = {
-			"": ltype,
+			"": ltype, # Root type.
 			'filesystem': ltype.replace(lf_fields=fields.filesystem_paths),
 		}
-		self.types['lambda'] = self.load_type('lambda')
+		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
 
 		exepath = self.executable/'transcript'
 		editor_log = Reference(
@@ -1891,20 +2069,22 @@ class Session(Core):
 			buf = file.read(size)
 		yield buf
 
-	def load_resource(self, rs:Resource):
+	def load_resource(self, src:Resource):
 		"""
-		# Load and retain the lines of the resource identified by &rs.origin.
+		# Load and retain the lines of the resource identified by &src.origin.
 		"""
 
-		path = rs.origin.ref_path
-		codec = rs.forms.lf_codec
-		lines = rs.forms.lf_lines
+		path = src.origin.ref_path
+		lf = src.forms
+		codec = lf.lf_codec
+		lines = lf.lf_lines
 
 		try:
 			with path.fs_open('rb') as f:
-				rs.status = path.fs_status()
+				src.status = path.fs_status()
 				ilines = lines.structure(codec.structure(self.buffer_data(1024, f)))
-				rs.elements = sequence.Segments('\t'*il + lc for il, lc in ilines)
+				cpr = map(lf.ln_sequence, (types.Line(-1, il, lc) for il, lc in ilines))
+				src.elements = sequence.Segments(cpr)
 		except FileNotFoundError:
 			self.log("Resource does not exist: " + str(path))
 		except Exception as load_error:
@@ -1916,7 +2096,7 @@ class Session(Core):
 		self.log("Writing will attempt to create the file and any leading paths.")
 
 	@staticmethod
-	def buffer_lines(encoding, ilines):
+	def buffer_lines(ilines):
 		# iter(elements) is critical here; repeating the running iterator
 		# as islice continues to take processing units to be buffered.
 		ielements = itertools.repeat(iter(ilines))
@@ -1926,8 +2106,7 @@ class Session(Core):
 		for lines in ilinesets:
 			bl = len(buf)
 			for line in lines:
-				buf += line.encode(encoding)
-				buf += b'\n'
+				buf += line
 
 			if bl == len(buf):
 				yield buf
@@ -1936,16 +2115,17 @@ class Session(Core):
 				yield buf
 				buf = bytearray()
 
-	def store_resource(self, rs:Resource):
+	def store_resource(self, src:Resource):
 		"""
-		# Write the elements of the process local resource, &rs, to the file
-		# identified by &rs.origin using the origin's system context.
+		# Write the elements of the process local resource, &src, to the file
+		# identified by &src.origin using the origin's system context.
 		"""
 
-		ref = rs.origin
-		codec = rs.forms.lf_codec
+		ref = src.origin
+		codec = src.forms.lf_codec
+		lform = src.forms.lf_lines
 		exectx = self.systems[ref.ref_system]
-		self.log(f"Writing {len(rs.elements)} [{str(rs.forms)}] lines to [{ref}]")
+		self.log(f"Writing {len(src.elements)} [{str(src.forms)}] lines to [{ref}]")
 
 		path = ref.ref_path
 		if path.fs_type() == 'void':
@@ -1954,7 +2134,9 @@ class Session(Core):
 				self.log(f"Allocating directories: " + str(leading))
 				path.fs_alloc() # Leading path not present on save.
 
-		idata = self.buffer_lines(codec.encoding, rs.elements)
+		ilines = lform.sequence((li.ln_level, li.ln_content) for li in src.select(0, src.ln_count()))
+		ibytes = codec.sequence(ilines)
+		idata = self.buffer_lines(ibytes)
 		size = 0
 
 		with open(ref.ref_identity, 'wb') as file:
@@ -1968,15 +2150,15 @@ class Session(Core):
 		if st.size != size:
 			self.log(f"Calculated write size differs from system reported size: {st.size}")
 
-		if rs.status is None:
+		if src.status is None:
 			self.log("No previous modification time, file is new.")
 		else:
-			age = rs.age(st.last_modified)
+			age = src.age(st.last_modified)
 			if age is not None:
 				self.log("Last modification was " + age + " ago.")
 
-		rs.saved = rs.modifications.snapshot()
-		rs.status = st
+		src.saved = src.modifications.snapshot()
+		src.status = st
 
 	def delete_resource(self, rs:Resource):
 		"""

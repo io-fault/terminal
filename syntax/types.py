@@ -362,6 +362,14 @@ class Position(object):
 		start, pos, stop = map(adjustment.__add__, self.snapshot())
 		return Slice(start, stop, step)
 
+	def range(self, adjustment=0):
+		"""
+		# Construct a tuple pair noting the range of the cursor.
+		"""
+
+		start, pos, stop = map(adjustment.__add__, self.snapshot())
+		return (start, stop)
+
 @dataclass(match_args=False, eq=False)
 class View(object):
 	"""
@@ -1432,7 +1440,7 @@ class Line(object):
 		# Temporarily includes &ln_level as tabs are integrated in raw strings.
 		"""
 
-		return self.ln_level + len(self.ln_content)
+		return len(self.ln_content)
 
 	@property
 	def ln_void(self) -> bool:
@@ -1441,6 +1449,42 @@ class Line(object):
 		"""
 
 		return not self.ln_level and not self.ln_content
+
+	def prefix(self, string):
+		"""
+		# Reconstruct the line with the given string prepended to the content.
+		"""
+
+		return self.__class__(
+			self.ln_offset,
+			self.ln_level,
+			string + self.ln_content,
+			self.ln_extension,
+		)
+
+	def suffix(self, string):
+		"""
+		# Reconstruct the line with the given string appended to the content.
+		"""
+
+		return self.__class__(
+			self.ln_offset,
+			self.ln_level,
+			self.ln_content + string,
+			self.ln_extension,
+		)
+
+	def relevel(self, ilevel):
+		"""
+		# Reconstruct the line with the given indentation level.
+		"""
+
+		return self.__class__(
+			self.ln_offset,
+			ilevel,
+			self.ln_content,
+			self.ln_extension,
+		)
 
 	def ln_trailing(self, filter=str.isspace) -> int:
 		"""
@@ -1522,41 +1566,63 @@ class Reformulations(object):
 
 		return self.lf_codec.encoding
 
-	def mkline(self, text, ln_offset=-1):
-		il = self.lf_lines.measure_indentation(text)
-		return Line(ln_offset, il, text[il*len(self.lf_lines.indentation):])
-
-	def indent(self, level):
+	@property
+	def ln_content_offset(self):
 		"""
-		# Construct the indentation characters representing the given level.
+		# The constant offset identifying where line content begins
+		# in the elements of a Process Local Resource.
 
-		# [ Returns ]
-		# Sequence of whitespace characters with each index representing
-		# their corresponding level. For mixed indentation formats, empty
-		# characters will be returned to indicate that the former value
-		# represents multiple levels.
+		# The size of the leading header specifying
+		# the indentation level of the line and the size of the line extension.
+
+		# - &ln_sequence
+		# - &ln_structure
 		"""
 
-		return ['\t' for i in range(level)]
+		return (4)
 
-	def structure_fields(self, ln:Line):
+	def ln_sequence(self, ln:Line) -> str:
 		"""
-		# Construct a fields vector to describe the given line according to
-		# the configured &lf_fields.
-
-		# Indentation of the line is represented by prefixing the sequence
-		# with an &ln.ln_level count of indentation fields.
+		# Construct the unicode codepoint representation of &ln
+		# for storage as a Resource element.
 		"""
 
-		if ln.ln_level:
-			fields = [('indentation', iv) for iv in self.indent(ln.ln_level)]
+		if ln.ln_extension:
+			lxs = len(ln.ln_extension)
+			lx_size = chr((lxs >> 14) & 0x7F) + chr((lxs >> 7) & 0x7F) + chr(lxs & 0x7F)
 		else:
-			# Currently used to detect boundaries in Refraction.field_select.
-			fields = [('indentation', '')]
+			lxs = 0
+			lx_size = "\x00\x00\x00"
 
-		lff = self.lf_fields
-		fields.extend(lff.isolate(lff.separation, ln))
-		return fields
+		return chr(ln.ln_level) + lx_size + ln.ln_content + ln.ln_extension
+
+	def ln_interpret(self, linesrc:str, offset:int=-1, level:int=0) -> Line:
+		"""
+		# Interpret &linesrc as a structured line.
+		"""
+
+		return Line(offset, level, linesrc)
+
+	def ln_structure(self, linestr:str, ln_offset=-1) -> Line:
+		"""
+		# Construct the structured Line instance from the unicode codepoint representation
+		# used by Resource elements.
+		"""
+
+		il = ord(linestr[0]) # Indentation level.
+
+		if linestr[1:(4)] == "\x00\x00\x00":
+			# No extension.
+			lxs = 0
+			lx = ''
+			lc = linestr[(4):]
+		else:
+			# Extension data.
+			lxs = ord(linestr[1]) << 14 | ord(linestr[2]) << 7 | ord(linestr[3])
+			lx = linestr[len(linestr)-lxs:]
+			lc = linestr[(4):-len(lx)]
+
+		return Line(ln_offset, il, lc, lx)
 
 	def render(self, ilines:Iterable[Line]):
 		"""
