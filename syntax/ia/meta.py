@@ -236,7 +236,6 @@ def refresh_view_image(session, frame, rf, event):
 	# Redraw the view's image.
 	"""
 
-	from .. import projection
 	view = frame.view
 	session.log(
 		f"View: {view.offset!r} {view.version!r} {view.area!r}",
@@ -244,7 +243,7 @@ def refresh_view_image(session, frame, rf, event):
 		f"Refraction: {rf.visibility[0].snapshot()!r}",
 		f"Lines: {rf.source.ln_count()}, {rf.source.version()}",
 	)
-	session.dispatch_delta(projection.refresh(rf, view, rf.visible[0]))
+	session.dispatch_delta(rf.refresh(view, rf.visible[0]))
 
 @event('select', 'distributed', 'operation')
 def set_distributing(session, frame, rf, event):

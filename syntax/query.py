@@ -1,7 +1,6 @@
 """
 # Support functions for refraction query commands.
 """
-from . import projection
 from . import delta
 from . import types
 
@@ -33,7 +32,7 @@ def refract(session, frame, view, qtype, state, action):
 	lrf.focus[0].restore((0, 0, 1))
 	last = lrf.source.elements[-1]
 	lrf.focus[1].restore((0, len(qtype) + 1, len(qtype) + len(state) + 1))
-	session.dispatch_delta(projection.refresh(lrf, view, 0))
+	session.dispatch_delta(lrf.refresh(view, 0))
 
 	if not state:
 		session.keyboard.set('insert')
