@@ -666,7 +666,7 @@ def copy(session, frame, rf, event):
 
 	src = rf.source
 	start, position, stop = rf.focus[0].snapshot()
-	session.cache = src.elements[start:stop]
+	session.cache = list(src.select(start, stop))
 
 @event('cut')
 def cut(session, frame, rf, event):
@@ -686,6 +686,7 @@ def paste_after_line(session, frame, rf, event):
 	lo = rf.focus[0].get()
 	src = rf.source
 	src.insert_lines(lo+1, session.cache)
+	src.checkpoint()
 
 @event('paste', 'before')
 def paste_before_line(session, frame, rf, event):
@@ -696,6 +697,7 @@ def paste_before_line(session, frame, rf, event):
 	lo = rf.focus[0].get()
 	src = rf.source
 	src.insert_lines(lo, session.cache)
+	src.checkpoint()
 
 @event('insert', 'text')
 def insert_transfer_text(session, frame, rf, event):
