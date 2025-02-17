@@ -2094,7 +2094,7 @@ class Frame(Core):
 			left, top,
 		))
 
-		for pi in self.structure.r_indicators(si, rtypes=view.edges):
+		for pi in self.structure.r_indicators(si):
 			(x, y), itype, ic, bc = pi
 			ccell = self.theme['cursor-' + itype]
 			picell = Glyph(textcolor=ccell.cellcolor, codepoint=ord(ic))

@@ -383,10 +383,6 @@ class View(object):
 	# /whence/
 		# The beginning of each phrase in &image.
 		# `assert len(image) == len(whence)`
-	# /edges/
-		# The border type that is expected to be drawn around the &display.
-		# Used to restore the proper border character when frame indicators
-		# are reset.
 	# /version/
 		# The identifier of the Log commit that is currently being represented in &image. (when)
 	# /offset/
@@ -401,7 +397,6 @@ class View(object):
 	area: Area
 	image: Sequence[text.Phrase]
 	whence: Sequence[tuple[tuple[int,int], int]]
-	edges: Mapping[str, str]
 	define: object
 	version: object = (0, 0, None)
 	offset: int = 0
