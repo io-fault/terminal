@@ -2790,6 +2790,22 @@ class Session(Core):
 		for resource_ref in rd:
 			frame.deltas.extend(frame.refracting(resource_ref))
 
+	def trace(self, src, key, ev_cat, ev_id, ev_op):
+		"""
+		# Log the dispatched event.
+		"""
+
+		if src is self.transcript:
+			return
+
+		iaproc = '.'.join((ev_op.__module__, ev_op.__name__))
+		path = '/'.join(ev_id)
+		self.log(f"{key} -> {ev_cat}/{path} -> {iaproc}")
+
+	@staticmethod
+	def discard(*args):
+		pass
+
 	def dispatch(self, frame, refraction, view, key):
 		"""
 		# Perform the application instruction identified by &key.
@@ -2808,7 +2824,7 @@ class Session(Core):
 				ev_category, ev_identifier, ev_args = xev
 
 			ev_op = self.events[ev_category](ev_identifier)
-			self.log(f"{key!r} -> {ev_category}/{'/'.join(ev_identifier)} -> {ev_op!r}")
+			self.trace(refraction.source, key, ev_category, ev_identifier, ev_op)
 			ev_op(self, frame, refraction, key, *ev_args) # User Event Operation
 		except Exception as operror:
 			self.keyboard.reset('control')

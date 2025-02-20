@@ -23,7 +23,9 @@ from . import types
 from . import elements
 from .system import IOManager
 
-restricted = {}
+restricted = {
+	'--trace-instructions': ('set-add', 'instructions', 'traces'),
+}
 restricted.update(
 	('-' + str(i), ('sequence-append', i, 'vertical-divisions'))
 	for i in range(1, 10)
@@ -129,6 +131,7 @@ def main(inv:process.Invocation) -> process.Exit:
 		'vertical-position': '1',
 		'horizontal-size': None,
 		'vertical-size': None,
+		'traces': set(),
 	}
 
 	remainder = recognition.merge(
@@ -161,6 +164,8 @@ def main(inv:process.Invocation) -> process.Exit:
 		path, device
 	)
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
+	if 'instructions' not in config['traces']:
+		editor.trace = editor.discard
 
 	fi = 0
 	if remainder:
