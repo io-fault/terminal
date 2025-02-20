@@ -308,6 +308,67 @@ class Position(object):
 			# After of range, so only adjust offset
 			self.offset -= quantity
 
+	def insert(self, offset, quantity):
+		"""
+		# Change the position to recognize that &quantity units at &offset
+		# were added. Insertions within or adjacent to the range expand the range.
+		"""
+
+		position = self.get()
+		if offset <= position:
+			position += quantity
+
+		if offset < self.datum:
+			# Push range forward.
+			self.datum += quantity
+		else:
+			# Range adjacent insertion, extend by quantity.
+			if offset <= self.datum + self.magnitude:
+				self.magnitude += quantity
+
+		self.set(position)
+
+	def delete(self, offset, quantity):
+		"""
+		# Change the position to recognize that &quantity units at &offset
+		# were removed. Deletions that overlap with the range reduce its
+		# size by the intersection.
+		"""
+
+		roffset = offset - self.datum
+		end = roffset + quantity
+
+		# Handle offset independently of the range.
+		# Subsequent set()'s adjust accordingly.
+		if self.offset >= roffset:
+			# Offset is effected.
+			if self.offset >= end:
+				self.update(-quantity)
+			else:
+				self.offset = roffset
+		position = self.get()
+
+		if roffset >= self.magnitude:
+			# Deletion entirely after range.
+			return
+		elif end < 0:
+			# Deletion entirely before range.
+			self.datum -= quantity
+			self.set(position)
+			return
+
+		# Reduce magnitude by the overlapping area.
+		assert end >= 0
+		overlap = min(end, self.magnitude) - max(0, roffset)
+		self.magnitude -= overlap
+
+		if roffset > 0:
+			# Deletion after datum, magnitude already reduced.
+			return
+
+		self.datum += roffset
+		self.set(position)
+
 	def changed(self, offset, quantity):
 		"""
 		# Adjust the position to accomodate for a change that occurred
@@ -319,14 +380,10 @@ class Position(object):
 
 		roffset = offset - self.datum
 
-		if roffset < 0:
-			# Offset indirectly updated by datum's change.
-			self.datum += quantity
-		elif roffset > self.magnitude:
-			self.update(quantity)
-		else:
-			self.update(quantity)
-			self.magnitude += quantity
+		if quantity > 0:
+			return self.insert(offset, quantity)
+		elif quantity < 0:
+			return self.delete(offset, -quantity)
 
 	def relation(self):
 		"""

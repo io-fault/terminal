@@ -116,3 +116,97 @@ def test_Reformulations_structure_fields(test):
 		('inclusion-space', " "),
 		('inclusion-identifier', "extension"),
 	]
+
+def test_Position_insert(test):
+	"""
+	# - &module.Position.insert
+	"""
+
+	p = module.Position()
+	start = (10, 15, 20)
+	p.restore(start)
+
+	p.insert(0, 0)
+	p.insert(21, 0)
+	test/p.snapshot() == (10, 15, 20)
+
+	# No magnitude change, offset all by one.
+	one_samples = [
+		(0, 1),
+		(5, 1),
+		(9, 1),
+	]
+	for args in one_samples:
+		p.restore((10, 15, 20))
+		p.insert(*args)
+		test/p.snapshot() == (11, 16, 21)
+
+	for offset in range(10, 16):
+		for size in range(11):
+			p.restore(start)
+			p.insert(offset, size)
+			test/p.snapshot() == (10, 15 + size, 20 + size)
+
+	for offset in range(16, 21):
+		for size in range(11):
+			p.restore(start)
+			p.insert(offset, size)
+			test/p.snapshot() == (10, 15, 20 + size)
+
+def test_Position_delete(test):
+	"""
+	# - &module.Position.delete
+	"""
+
+	p = module.Position()
+	start = (10, 15, 20)
+	p.restore(start)
+
+	# Zeros
+	for i in range(21):
+		p.delete(i, 0)
+		test/p.snapshot() == (10, 15, 20)
+
+	# After, no changes.
+	p.delete(20, 1)
+	test/p.snapshot() == start
+
+	p.delete(0, 1)
+	test/p.snapshot() == (9, 14, 19)
+
+	# Delete fully contained before cursor.
+	for i in range(4):
+		p.restore(start)
+		p.delete(10+i, 1)
+		test/p.snapshot() == (10, 14, 19)
+
+	# Delete fully contained after cursor.
+	for i in range(4):
+		p.restore(start)
+		p.delete(16+i, 1)
+		test/p.snapshot() == (10, 15, 19)
+
+	# Trailing Overlap
+	p.restore(start)
+	p.delete(19, 2)
+	test/p.snapshot() == (10, 15, 19)
+
+	# Leading Overlap
+	p.restore(start)
+	p.delete(9, 2)
+	test/p.snapshot() == (9, 13, 18)
+
+	# Internal intersection
+	p.restore(start)
+	p.delete(12, 4)
+	test/p.snapshot() == (10, 12, 16)
+
+	# Total
+	p.restore(start)
+	p.delete(10, 10)
+	test/p.snapshot() == (10, 10, 10)
+
+	# Exceeding
+	p.restore(start)
+	p.delete(5, 25)
+	test/p.snapshot() == (5, 5, 5)
