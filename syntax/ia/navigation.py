@@ -148,7 +148,7 @@ def cursor_former_element(session, frame, rf, event, quantity=1):
 
 @event('vertical', 'paging')
 def configure_paging(session, frame, rf, event, quantity=1):
-	height = view.display.height
+	height = rf.area.height
 	delta = height // 8
 	top = rf.visible[0]
 	rf.focus[0].restore(top + delta, rf.focus[0].get(), top + height - delta)
@@ -273,10 +273,9 @@ def event_select_absolute(session, frame, rf, event):
 
 	ay, ax = session.device.cursor_cell_status()
 	div, trf = frame.target(ay, ax)
-	view = trf._view
 
-	sy = view.area.y_offset
-	sx = view.area.x_offset
+	sy = rf.area.top_offset
+	sx = rf.area.left_offset
 	rx = ax - sx
 	ry = ay - sy
 	ry += trf.visible[0]
@@ -391,7 +390,7 @@ def pan_backward_cells(session, frame, rf, event, quantity=3, target=None, shift
 	target.visibility[1].datum = i
 
 @event('view', 'vertical', 'forward')
-def scroll_forward_unit(session, frame, rf, event, quantity=1, target=None, shift=chr(0x21E7)):
+def scroll_forward_lines(session, frame, rf, event, quantity=1, target=None, shift=chr(0x21E7)):
 	"""
 	# Adjust the vertical position of the window forward by the
 	# given quantity.
@@ -405,7 +404,7 @@ def scroll_forward_unit(session, frame, rf, event, quantity=1, target=None, shif
 	target.scroll(quantity.__add__)
 
 @event('view', 'vertical', 'backward')
-def scroll_backward_unit(session, frame, rf, event, quantity=1, target=None, shift=chr(0x21E7)):
+def scroll_backward_lines(session, frame, rf, event, quantity=1, target=None, shift=chr(0x21E7)):
 	"""
 	# Adjust the vertical position of the window backward by the
 	# given quantity. (Moves view port).
@@ -438,9 +437,9 @@ def scroll(session, frame, rf, event):
 
 	frame.deltas.append(cursor_target)
 	if quantity < 0:
-		return scroll_forward_unit(session, frame, rf, event, -quantity, target=cursor_target)
+		return scroll_forward_lines(session, frame, rf, event, -quantity, target=cursor_target)
 	else:
-		return scroll_backward_unit(session, frame, rf, event, quantity, target=cursor_target)
+		return scroll_backward_lines(session, frame, rf, event, quantity, target=cursor_target)
 
 @event('view', 'vertical', 'forward', 'third')
 def scroll_forward_many(session, frame, rf, event, quantity=1, target=None):
@@ -451,8 +450,7 @@ def scroll_forward_many(session, frame, rf, event, quantity=1, target=None):
 
 	ay, ax = session.device.cursor_cell_status()
 	fi, rf = frame.target(ay, ax)
-	view = rf._view
-	q = ((view.area.lines // 3) or 1) * quantity
+	q = ((rf.area.lines // 3) or 1) * quantity
 	rf.scroll(q.__add__)
 	frame.deltas.append(rf)
 
@@ -465,8 +463,7 @@ def scroll_backward_many(session, frame, rf, event, quantity=1, target=None):
 
 	ay, ax = session.device.cursor_cell_status()
 	fi, rf = frame.target(ay, ax)
-	view = rf._view
-	q = ((view.area.lines // 3) or 1) * quantity
+	q = ((rf.area.lines // 3) or 1) * quantity
 	rf.scroll((-q).__add__)
 	frame.deltas.append(rf)
 

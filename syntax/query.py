@@ -15,7 +15,7 @@ def refract(session, frame, prompt, qtype, state, action):
 	src.commit()
 
 	prompt.activate = action
-	prompt._view.version = src.version()
+	prompt.version = src.version()
 
 	prompt.focus[0].restore((0, 0, 1))
 	prompt.focus[1].restore((len(qtype) + 1, len(qtype) + 1, len(qtype) + len(state) + 1))
