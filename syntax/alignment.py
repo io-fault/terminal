@@ -35,15 +35,15 @@ def insert(total, visible, position, offset, quantity, *, max=max):
 
 	if position == 0 and total < visible:
 		# No adjustements when on first page.
-		if total + quantity > visible:
+		if total > visible:
 			# Transition to last page.
-			return max(0, (total + quantity) - visible)
+			return max(0, total - visible)
 		else:
 			return position
 
-	if position + visible >= total:
+	if position + visible >= (total - quantity):
 		# Last page insertion, force alignment.
-		return max(0, (total + quantity) - visible)
+		return max(0, total - visible)
 	elif offset < position:
 		return position + quantity
 	else:
@@ -57,19 +57,19 @@ def delete(total, visible, position, offset, quantity, *, max=max, min=min):
 	# Calculate the change in the view's &position necessary to
 	# maintain the image after the deletion is performed.
 	"""
-	assert quantity <= total
+	assert quantity <= (total - quantity)
 
 	if position == 0:
 		# No adjustements when on first page.
 		return position
 
 	d_end = offset + quantity
-	max_p = max(0, (total - quantity) - visible)
+	max_p = max(0, total - visible)
 
 	if d_end < position:
 		position -= quantity
 	else:
-		if position + visible >= total:
+		if position + visible >= (total - quantity):
 			# Last page deletion, force alignment.
 			return max_p
 

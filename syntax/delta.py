@@ -6,6 +6,36 @@ import itertools
 from typing import Protocol
 from fault.context.tools import struct
 
+class Summary(Protocol):
+	"""
+	# Interface for communicating changes to lines and codepoints.
+
+	# Used by &Log.track to communicate change summaries for cursor motion
+	# and view stabilization.
+
+	# [ Engineering ]
+	# Implementing this using an abstraction that received changes the same way
+	# that a log's storage target does was not entirely trivial. Line deltas
+	# could be easily summarized, but reconstructing the codepoint deltas from
+	# &Update.apply's usage required multiple levels of reconstruction.
+
+	# Creating an explicit protocol is somewhat undiresable, but using an abstraction
+	# that required such tight coupling to &Update.apply's implementation appeared
+	# inferior. Additionally, this provides a relevant location for checkpoint or
+	# commit reporting given the need.
+	"""
+
+	def line_delta(self, ln_offset:int, deleted:int, inserted:int):
+		"""
+		# Report that lines were &deleted and &inserted at &ln_offset.
+		"""
+
+	def codepoint_delta(self, ln_offset:int, cp_offset:int, deleted:int, inserted:int):
+		"""
+		# Report that codepoints were &deleted and &inserted
+		# at &cp_offset in the line identified by &ln_offset.
+		"""
+
 class Record(Protocol):
 	"""
 	# An indvidial record of change.
@@ -41,6 +71,11 @@ class Record(Protocol):
 		# Reconstruct &self to perform an ineffective operation.
 		"""
 
+	def track(self, target):
+		"""
+		# Communicate the change to &target.
+		"""
+
 	def apply(self, target):
 		"""
 		# Perform the change to the given &target.
@@ -59,6 +94,7 @@ class Checkpoint(Record):
 
 	# Used to delimit &Record groups for &Log.undo and &Log.redo.
 	"""
+
 	when: object
 
 	@property
@@ -76,6 +112,9 @@ class Checkpoint(Record):
 
 	def invert(self):
 		return self
+
+	def track(self, target):
+		pass
 
 	def apply(self, target):
 		return Checkpoint
@@ -107,6 +146,7 @@ class Update(Record):
 	# /deletion/
 		# Data that is removed before the record is applied.
 	"""
+
 	element: int
 	insertion: object
 	deletion: object
@@ -140,6 +180,11 @@ class Update(Record):
 			self.insertion,
 			self.position,
 		)
+
+	def track(self, target):
+		icp = len(self.insertion or ())
+		dcp = len(self.deletion or ())
+		target.codepoint_delta(self.element, self.position, dcp, icp)
 
 	def apply(self, target):
 		e = target[self.element]
@@ -251,6 +296,7 @@ class Lines(Record):
 	# /deletion/
 		# Data that is removed before the insertion.
 	"""
+
 	element: int
 	insertion: object
 	deletion: object
@@ -279,6 +325,11 @@ class Lines(Record):
 			self.deletion,
 			self.insertion,
 		)
+
+	def track(self, target):
+		dln = len(self.deletion or ())
+		iln = len(self.insertion or ())
+		target.line_delta(self.element, dln, iln)
 
 	def apply(self, target, *, len=len, list=list):
 		d = len(self.deletion)
@@ -397,6 +448,22 @@ class Log(object):
 
 		self.records.append(record)
 		self.count += 1
+		return self
+
+	def pending(self):
+		"""
+		# Return the uncommitted deltas.
+		"""
+
+		return self.records[self.committed:self.count]
+
+	def track(self, target):
+		"""
+		# Update &target by reporting the change summaries.
+		"""
+
+		for x in self.records[self.committed:self.count]:
+			x.track(target)
 		return self
 
 	def apply(self, target):

@@ -429,28 +429,8 @@ class Position(object):
 
 @dataclass(match_args=False, eq=False)
 class View(object):
-	"""
-	# A displayed view of a &Refraction.
-
-	# [ Elements ]
-	# /area/
-		# The bounding rectangle that the &image is drawn within.
-	# /image/
-		# Phrase sequence to be rendered to the &area of the screen.
-	# /whence/
-		# The beginning of each phrase in &image.
-		# `assert len(image) == len(whence)`
-	# /version/
-		# The identifier of the Log commit that is currently being represented in &image. (when)
-	# /offset/
-		# The identifier of the element that is first seen in &image. (where)
-	"""
-
 	# Placeholder insertion used to compensate for image changes.
-	Empty = text.Phrase([
-		text.Words((0, "", text.Glyph(codepoint=-1, cellcolor=0x000000)))
-	])
-
+	Empty: text.Phrase
 	area: Area
 	image: Sequence[text.Phrase]
 	whence: Sequence[tuple[tuple[int,int], int]]
@@ -1574,6 +1554,13 @@ class Line(object):
 
 		return lnc[len(lnc)-tc:]
 
+	def ln_count(self) -> int:
+		"""
+		# The number of lines.
+		"""
+
+		return 1
+
 @tools.struct()
 class Reformulations(object):
 	"""
@@ -1722,7 +1709,8 @@ class Reformulations(object):
 	@staticmethod
 	def represent_line_form(linefmt: format.Lines) -> str:
 		"""
-		# The indented-line isolation method.
+		# Construct the string representation for identifying and
+		# configuring the indented-line isolation method.
 		"""
 
 		symbols = {

@@ -133,8 +133,6 @@ class Resource(Core):
 		# The sequence of lines being modified.
 	# /modifications/
 		# The log of changes applied to &elements.
-	# /cursors/
-		# The collection of cursors tracking changes to the resource.
 	"""
 
 	origin: types.Reference
@@ -144,7 +142,7 @@ class Resource(Core):
 	modifications: delta.Log
 
 	status: object
-	cursors: Mapping[types.Position, types.Position]
+	views: object
 
 	def __init__(self, origin, forms):
 		self.origin = origin
@@ -154,7 +152,7 @@ class Resource(Core):
 		self.modifications = delta.Log()
 		self.snapshot = self.modifications.snapshot()
 		self.status = None
-		self.cursors = {}
+		self.views = weakref.WeakSet()
 
 	def ln_count(self) -> int:
 		"""
@@ -279,25 +277,36 @@ class Resource(Core):
 
 		return self.modifications.redo(self.elements, quantity)
 
-	def commit(self, collapse=True):
+	def commit(self, collapse=True, checkpoint=False):
 		"""
 		# Apply pending modifications.
 		"""
 
-		log = self.modifications.apply(self.elements)
+		log = self.modifications
+
+		deltas = log.pending()
+		views = list(self.views)
+		for dsrc in deltas:
+			dsrc.apply(self.elements)
+			for rf in views:
+				dsrc.track(rf)
+
 		if collapse:
 			log.collapse()
-		return log.commit()
+
+		log.commit()
+
+		if checkpoint:
+			log.checkpoint()
+
+		return log
 
 	def checkpoint(self, collapse=True):
 		"""
 		# Apply, commit, and checkpoint the log.
 		"""
 
-		log = self.modifications.apply(self.elements)
-		if collapse:
-			log.collapse()
-		return log.commit().checkpoint()
+		return self.commit(collapse=collapse, checkpoint=True)
 
 	def insert_codepoints(self, lo, offset, string):
 		"""
@@ -410,14 +419,13 @@ class Resource(Core):
 			# Defaults to an empty string.
 		"""
 
-		lines = list(self.select(lo, lo+1+count))
-		combined = withstring.join(li.ln_content for li in lines)
+		li = self.sole(lo)
+		lines = list(self.select(lo+1, lo+1+count))
+		combined = withstring + withstring.join(li.ln_content for li in lines)
 
 		(self.modifications
-			.write(delta.Update(lo, combined, self.elements[lo][4:], (4)))
-			.write(delta.Lines(lo+1, [], [self.elements[lo+1]])))
-
-		return (lo+1, -len(lines))
+			.write(delta.Update(lo, combined, "", (4) + len(li.ln_content)))
+			.write(delta.Lines(lo+1, [], list(self.elements[lo+1:lo+1+count]))))
 
 	def split(self, lo, offset):
 		"""
@@ -432,8 +440,6 @@ class Resource(Core):
 		(self.modifications
 			.write(delta.Update(lo, "", nlstr, offset + (4)))
 			.write(delta.Lines(lo+1, [lf.ln_sequence(nl)], [])))
-
-		return (lo, 2)
 
 	def splice_text(self, ln_format, lo:int, co:int, text:str, ln_level=0):
 		"""
@@ -518,6 +524,17 @@ class Resource(Core):
 			.write(delta.Lines(lo, rlines, [])))
 
 		return len(rlines)
+
+	def truncate(self):
+		"""
+		# Remove all lines.
+
+		# [ Returns ]
+		# The number of lines removed.
+		"""
+
+		lines = self.delete_lines(0, self.ln_count())
+		self.ln_initialize()
 
 	def delete_lines(self, start:int, stop:int):
 		"""
@@ -812,7 +829,8 @@ class Resource(Core):
 
 class Refraction(Core):
 	"""
-	# The elements and status of a selected resource.
+	# Where input meets output. The primary interface state for manipulating
+	# and displaying the typed syntax content of a &Resource.
 
 	# [ Elements ]
 	# /source/
@@ -831,6 +849,14 @@ class Refraction(Core):
 		# Action associated with return and enter.
 		# Defaults to &None.
 		# &.ia.types.Selection intercepts will eliminate the need for this.
+	# /area/
+		# The display context of the &image.
+	# /image/
+		# The &Phrase sequence of the current display.
+	# /whence/
+		# The positions in &image that align with the horizontal view state.
+	# /version/
+		# The version of &source that is currently being represented in &image.
 	# /system_execution_status/
 		# Status of system processes executed by commands targeting the instance.
 	"""
@@ -842,6 +868,11 @@ class Refraction(Core):
 	visible: Sequence[int]
 	activate = None
 	cancel = None
+	area: Area
+	image: Sequence[types.Phrase]
+	whence: Sequence[tuple[tuple[int,int], int]]
+	version: object = (0, 0, None)
+	Empty: types.Phrase
 
 	def current(self, depth):
 		d = self.source.elements
@@ -885,18 +916,29 @@ class Refraction(Core):
 		self.visibility = (types.Position(), types.Position())
 		self.query = {} # Query state; last search, seek, etc.
 		# View related state.
-		self.dimensions = None
 		self.limits = (0, 0)
 		self.visible = [0, 0]
 
-	def configure(self, dimensions):
+		# At configure.
+		self.dimensions = None
+		self._view = None
+
+	def configure(self, define, area):
 		"""
 		# Configure the refraction for a display connection at the given dimensions.
 		"""
 
+		self.source.views.add(self)
+		self.define = define
+		self.area = area
+		self.Empty = types.text.Phrase([
+			types.text.Words((0, "", self.forms.lf_theme['empty']))
+		])
+		self._view = types.View(self.Empty, area, [], [], define)
+
 		vv, hv = self.visibility
-		width = dimensions.span
-		height = dimensions.lines
+		width = area.span
+		height = area.lines
 
 		vv.magnitude = height
 		hv.magnitdue = width
@@ -904,7 +946,7 @@ class Refraction(Core):
 		hv.offset = min(6, width // 20) or -1
 
 		self.limits = (vv.offset, hv.offset)
-		self.dimensions = dimensions
+		self.dimensions = area
 
 		return self
 
@@ -974,7 +1016,6 @@ class Refraction(Core):
 					continue
 				else:
 					v.set(li.ln_offset)
-					self.vertical_changed(li.ln_offset)
 					h.restore((i, i, i + termlength))
 					return
 
@@ -992,47 +1033,14 @@ class Refraction(Core):
 		page_offset = lo - (width // 2)
 		self.scroll(lambda x: page_offset)
 
-	def delta(self, offset, change, *, max=max,
-			ainsert=alignment.insert,
-			adelete=alignment.delete,
-		):
+	def recursor(self):
 		"""
-		# Adjust view positioning to compensate for changes in &elements and
-		# propagate to parallels to maintain their views.
-
-		# Executed on the target refraction after a change is performed.
+		# Constrain the cursor and apply margin scrolls.
 		"""
 
 		src = self.source
 		total = src.ln_count()
-
-		if change > 0:
-			op = ainsert
-			sign = +1
-			total -= change
-		else:
-			op = adelete
-			sign = -1
-			total += (-change)
-
-		for rf, v in getattr(self, 'parallels', ((self, None),)):
-			assert rf.source is src
-			position = rf.visible[0]
-			visible = rf.dimensions.lines
-			rf.visible[0] = op(total, visible, position, offset, sign*change)
-
-		return self
-
-	def vertical_changed(self, lo, *,
-			backward=alignment.backward,
-			forward=alignment.forward,
-		):
-		"""
-		# Constrain the focus and apply margin scrolls.
-		"""
-
-		src = self.source
-		total = src.ln_count()
+		lo = self.focus[0].get()
 
 		# Constrain vertical and identify indentation level (bol).
 		ll = bol = 0
@@ -1059,7 +1067,7 @@ class Refraction(Core):
 		edge = self.dimensions.lines
 		if rln <= climit:
 			# Backwards
-			position, rscroll, area = backward(total, edge, current, sunit)
+			position, rscroll, area = alignment.backward(total, edge, current, sunit)
 			if lo < position:
 				self.visible[0] = max(0, lo - (edge // 2))
 			else:
@@ -1067,7 +1075,7 @@ class Refraction(Core):
 		else:
 			if rln >= edge - climit:
 				# Forwards
-				position, rscroll, area = forward(total, edge, current, sunit)
+				position, rscroll, area = alignment.forward(total, edge, current, sunit)
 				if not (position + edge) > lo:
 					self.visible[0] = min(total - edge, lo - (edge // 2))
 				else:
@@ -1118,6 +1126,9 @@ class Refraction(Core):
 		h = max(0, h)
 
 		areas, ef = self.fields(self.focus[0].get())
+		if not areas:
+			return 0, slice(0, 0)
+
 		i = self.field_index(areas, h)
 
 		if quantity < 0:
@@ -1193,7 +1204,10 @@ class Refraction(Core):
 		# Get the current working line.
 		"""
 
-		return self.source.sole(self.focus[0].get())
+		try:
+			return self.source.sole(self.focus[0].get())
+		except IndexError:
+			return self.forms.ln_interpret("", offset=self.focus[0].get())
 
 	def phrase(self, offset):
 		"""
@@ -1250,7 +1264,7 @@ class Refraction(Core):
 		selection = src.delete_codepoints(lo, start, stop)
 		return (lo, start, [selection])
 
-	def render(self, view, *lines):
+	def render(self, *lines):
 		"""
 		# Update the &view representations of &lines from &self.source.
 
@@ -1258,24 +1272,67 @@ class Refraction(Core):
 		# Screen delta.
 		"""
 
+		view = self._view
 		start_of_view, left = self.visible
 		src = self.source
-		count = src.ln_count()
 		rline = self.forms.render
 		gline = self.source.sole
 
 		for lo in lines:
 			rlo = lo - start_of_view
+			if rlo < 0 or rlo >= view.area.lines:
+				# Filter out of view lines.
+				continue
+
 			try:
-				line = gline(lo)
+				li = gline(lo)
 			except IndexError:
-				line = self.forms.ln_interpret("")
-			ph = next(rline((line,)))
+				li = self.forms.ln_interpret("")
+
+			ph = next(rline((li,)))
 			area = slice(rlo, rlo+1)
 			view.update(area, (ph,))
 			yield from view.render(area)
 
-	def update(self, view, changes, *,
+	def line_delta(self, ln_offset, deleted, inserted):
+		"""
+		# Update the line cursor and view area.
+		"""
+
+		count = self.source.ln_count()
+		di = inserted - deleted
+
+		if di:
+			if di > 0:
+				self.visible[0] = alignment.insert(
+					count, self.area.lines, self.visible[0], ln_offset, di)
+			else:
+				self.visible[0] = alignment.delete(
+					count, self.area.lines, self.visible[0], ln_offset, -di)
+
+		cursor = self.focus[0]
+		lcurrent = cursor.get()
+
+		if deleted:
+			cursor.delete(ln_offset, deleted)
+		if inserted:
+			cursor.insert(ln_offset, inserted)
+
+	def codepoint_delta(self, ln_offset, cp_offset, deleted, inserted):
+		"""
+		# Update the codepoint cursor.
+		"""
+
+		lo_cursor = self.focus[0].get()
+		if lo_cursor == ln_offset:
+			cp_offset -= (4)
+			cursor = self.focus[1]
+			if deleted:
+				cursor.delete(cp_offset, deleted)
+			if inserted:
+				cursor.insert(cp_offset, inserted)
+
+	def update(self, changes, *,
 			len=len, min=min, max=max, sum=sum, list=list,
 			isinstance=isinstance, enumerate=enumerate,
 		):
@@ -1297,6 +1354,7 @@ class Refraction(Core):
 		# to render a new image.
 		"""
 
+		view = self._view
 		src = self.source
 		va = view.area
 		dvh = self.visibility[1].datum
@@ -1305,13 +1363,11 @@ class Refraction(Core):
 			# irregular, leave suboptimal for the moment.
 			view.pan_relative(slice(0, None), dvh - view.horizontal_offset)
 			view.horizontal_offset = dvh
-			yield from self.refresh(view, self.visible[0])
+			yield from self.refresh(self.visible[0])
 			return
 
 		# Future state; view.offset is current.
 		visible = va.lines
-		start_of_view = self.visible[0]
-		end_of_view = start_of_view + visible
 		total = src.ln_count()
 
 		# Reconstruct total so that view changes can be tracked as they were.
@@ -1323,42 +1379,45 @@ class Refraction(Core):
 		dimage = [] # Display (move) instructions to adjust for the delta.
 		image_size = len(view.image)
 
+		start_of_view = self.visible[0]
+		end_of_view = start_of_view + visible
+		is_last_page = end_of_view == total
+
 		for r in dr:
 			index = r.element or 0
 			if isinstance(r, delta.Update):
 				# Note updates for translating.
 				updates.append(index)
 				continue
+			elif not isinstance(r, delta.Lines):
+				# Likely Checkpoint instance.
+				continue
 
-			if image_size < 4:
-				# When lines are inserted or removed,
-				# Refresh when the remaining image is small.
-				yield from self.refresh(view, start_of_view)
-				return
+			ni = len(r.insertion or ())
+			nd = len(r.deletion or ())
+			di = ni - nd
+
+			if di == 0:
+				# Line replacements.
+				updates.extend(r.element + i for i in range(ni))
+				continue
 
 			vo = view.offset
 			whence = index - vo
 			ve = vo + visible
 
 			if ve >= vt and vo > 0:
-				# When on last page and first is not last.
+				# When on last page *and* first is not last.
 				dins = alignment.stop_relative_insert
 				ddel = alignment.stop_relative_delete
-				last_page = True
+				was_last_page = True
 			else:
 				dins = alignment.start_relative_insert
 				ddel = alignment.start_relative_delete
-				last_page = False
-
-			nd = len(r.deletion or ())
-			ni = len(r.insertion or ())
-			di = ni - nd
-			# Identify the available lines before applying the change to &vt.
-			limit = min(visible, vt)
-			vt += di
+				was_last_page = False
 
 			if di == 0:
-				# No change in elements length.
+				# Updates.
 				assert nd == ni
 				updates.extend(range(index, index + ni))
 				continue
@@ -1369,8 +1428,12 @@ class Refraction(Core):
 					if index <= v:
 						updates[i] += di
 
-			if not isinstance(r, delta.Lines) or (index >= ve and not last_page):
-				# Filter non-lines or out of scope changes.
+			# Identify the available lines before applying the change to &vt.
+			limit = min(visible, vt)
+			vt += di
+
+			# Filter out of view changes.
+			if index >= ve or (index + abs(di) < vo):
 				continue
 
 			if nd:
@@ -1380,14 +1443,14 @@ class Refraction(Core):
 					# Adjust view offset and identify view local deletion.
 					d = max(0, whence + nd)
 					w = 0
-					if not last_page:
+					if not was_last_page:
 						view.offset -= (nd - d)
 				else:
 					assert whence >= 0
 					w = whence
 					d = min(nd, visible - whence)
 
-				if last_page:
+				if was_last_page:
 					view.offset -= nd
 					# Apply prior to contraining &d to the available area.
 					# In negative &whence cases, &view.offset has already
@@ -1406,10 +1469,10 @@ class Refraction(Core):
 					s = view.delete(w, d)
 					image_size -= d
 					dimage.append((ddel(view.area, s.start, s.stop),))
-			elif ni:
+			if ni:
 				# Insertion
 
-				if last_page:
+				if was_last_page:
 					view.offset += ni
 					d = min(visible, ni)
 				elif whence < 0:
@@ -1427,20 +1490,20 @@ class Refraction(Core):
 			else:
 				assert False # Never; continued at `di == 0`.
 		else:
-			# Initialize last_page for zero change cases.
+			# Initialize was_last_page for zero change cases.
 			# Usually, scroll operations.
 			ve = view.offset + visible
 			if ve >= total and view.offset > 0:
-				last_page = True
+				was_last_page = True
 			else:
-				last_page = False
+				was_last_page = False
 
 		# After the deltas have been translated and enqueued
 
 		dv = start_of_view - view.offset
 		if abs(dv) >= visible or image_size < 4:
 			# Refresh when scrolling everything out.
-			yield from self.refresh(view, start_of_view)
+			yield from self.refresh(start_of_view)
 			return
 
 		if dv:
@@ -1461,12 +1524,12 @@ class Refraction(Core):
 		# Trim or Compensate
 		displayed = len(view.image)
 		available = min(visible, total)
+
 		if displayed > visible:
-			# Trim.
 			view.trim()
 			dimage.append(view.compensate())
-		elif displayed < available:
-			if last_page:
+		elif displayed <= available:
+			if was_last_page:
 				stop = start_of_view + (available - displayed)
 				s = view.prefix(list(self.iterphrases(start_of_view, stop)))
 				view.offset += s.stop - s.start
@@ -1478,7 +1541,7 @@ class Refraction(Core):
 				dimage.append(view.render(s))
 
 			# Pad with Empty if necessary.
-			yield from view.compensate()
+			dimage.append(view.compensate())
 
 		# Transmit delta.
 		for x in dimage:
@@ -1488,9 +1551,9 @@ class Refraction(Core):
 		for lo in updates:
 			# Translated line indexes. (past to present)
 			if lo >= start_of_view and lo < end_of_view:
-				yield from self.render(view, lo)
+				yield from self.render(lo)
 
-	def refresh(self, view:View, whence:int):
+	def refresh(self, whence:int=0):
 		"""
 		# Overwrite &view.image with the elements in &rf
 		# starting at the absolute offset &whence.
@@ -1499,11 +1562,12 @@ class Refraction(Core):
 		# to be current.
 		"""
 
+		view = self._view
 		visible = view.area.lines
 		phrases = list(self.iterphrases(whence, whence+visible))
 		pad = visible - len(phrases)
 		if pad > 0:
-			phrases.extend([view.Empty] * pad)
+			phrases.extend([self.Empty] * pad)
 		view.update(slice(0, visible), phrases)
 		view.trim()
 		view.offset = whence
@@ -1523,6 +1587,19 @@ class Frame(Core):
 		# User assigned identifier for a frame.
 	# /deltas/
 		# Enqueued display deltas.
+	# /paths/
+		# The vertical-relative division indexes. Translates into
+		# the flat division index used by most containers on &Frame.
+	# /areas/
+		# The areas of the frame identified by their division index.
+	# /views/
+		# The location, content, prompt triples that populate the divisions.
+	# /vertical/
+		# The focused column of the frame. First element of a division path.
+	# /division/
+		# The focused row of the vertical. Second element of a division path.
+	# /focus/
+		# The Refraction that is currently receiving events.
 	"""
 
 	area: Area
@@ -1531,9 +1608,9 @@ class Frame(Core):
 	vertical: int
 	division: int
 	focus: Refraction
-	view: View
 
-	refractions: Sequence[Refraction]
+	areas: Sequence[Area]
+	views: Sequence[tuple[Refraction, Refraction, Refraction]]
 	returns: Sequence[Refraction|None]
 
 	def __init__(self, define, theme, fs, keyboard, area, index=None, title=None):
@@ -1550,15 +1627,13 @@ class Frame(Core):
 		self.vertical = 0
 		self.division = 0
 		self.focus = None
-		self.view = None
 
 		self.paths = {} # (vertical, division) -> element-index
-		self.headings = []
 		self.panes = []
 		self.views = []
-		self.refractions = []
 		self.returns = []
 		self.parallels = {}
+
 		self.deltas = []
 
 	def refracting(self, ref:Reference, *sole) -> Iterable[Refraction]:
@@ -1570,10 +1645,9 @@ class Frame(Core):
 
 		return self.parallels.get(ref.ref_path, sole)
 
-	def attach(self, dpath, rf) -> types.View:
+	def attach(self, dpath, rf):
 		"""
-		# Assign the &rf to the view associated with
-		# the &division of the &vertical.
+		# Assign the &rf to the division identified by &dpath.
 
 		# [ Returns ]
 		# A view instance whose refresh method should be dispatched
@@ -1582,78 +1656,68 @@ class Frame(Core):
 
 		src = rf.source
 		vi = self.paths[dpath]
-		current = self.refractions[vi]
-		self.returns[vi] = current
-		view = self.views[vi]
-		self.parallels[current.source.origin.ref_path].discard((current, view))
+		l, c, p = self.views[vi]
 
-		self.refractions[vi] = rf
+		self.returns[vi] = c
+		self.parallels[c.source.origin.ref_path].discard(c)
+
+		self.views[vi] = (l, rf, p)
 		mirrors = self.parallels[src.origin.ref_path]
-		mirrors.add((rf, view))
+		mirrors.add(rf)
 		rf.parallels = weakref.proxy(mirrors)
 
-		if (self.vertical, self.division) == dpath:
-			self.refocus()
-
 		# Configure and refresh.
-		rf.configure(view.area)
-		view.offset = rf.visible[0]
-		view.horizontal_offset = rf.visible[1]
-		view.version = src.version()
-		vslice = view.vertical(rf)
-		view.update(slice(0, None), list(rf.iterphrases(vslice.start, vslice.stop)))
+		rf.configure(self.define, self.areas[vi][1])
+		rf._view.offset = rf.visible[0]
+		rf._view.horizontal_offset = rf.visible[1]
+		rf._view.version = src.version()
+		vslice = rf._view.vertical(rf)
+		rf._view.update(slice(0, None), list(rf.iterphrases(vslice.start, vslice.stop)))
 
-		return view
+		return rf._view.refresh()
 
 	def chpath(self, dpath, reference, *, snapshot=(0, 0, None)):
 		"""
 		# Update the refraction's location.
 		"""
 
-		header = self.headings[self.paths[dpath]]
-		header.truncate()
-		header.offset = 0
-		header.version = snapshot
-
-		from dataclasses import replace
-		fctx = self.filesystem.lf_fields
-		fctx = replace(fctx, separation=(lambda: reference.ref_context))
-		fs_lf = replace(self.filesystem, lf_fields=fctx)
-
+		vi = self.paths[dpath]
+		l, c, p = self.views[vi]
 		lines = location.determine(reference.ref_context, reference.ref_path)
-		lines = map(fs_lf.ln_interpret, lines)
-		header.update(slice(0, 2), list(fs_lf.render(lines)))
-		return header.render(slice(0, 2))
 
-	def chresource(self, path, refraction):
+		l.source.delete_lines(0, l.source.ln_count())
+		l.source.extend_lines(list(map(l.forms.ln_interpret, lines)))
+		l.source.commit()
+
+		return l.refresh()
+
+	def chresource(self, dpath, refraction):
 		"""
 		# Change the resource associated with the &division and &vertical
 		# to the one identified by &path.
 		"""
 
-		yield from self.attach(path, refraction).refresh()
-		yield from self.chpath(path, refraction.source.origin)
+		yield from self.attach(dpath, refraction)
+		yield from self.chpath(dpath, refraction.source.origin)
 
-	def fill(self, refractions):
+	def fill(self, views):
 		"""
-		# Fill the views with the given &refractions overwriting any.
+		# Fill the divisions with the given &views overwriting any.
 		"""
 
-		self.refractions[:] = refractions
+		self.views[:] = views
 		self.parallels.clear()
 
 		# Align returns size.
-		n = len(self.refractions)
+		n = len(self.views)
 		self.returns[:] = self.returns[:n]
 		if len(self.returns) < n:
 			self.returns.extend([None] * (n - len(self.returns)))
 
-		for ((v, d), rf, view) in zip(self.panes, self.refractions, self.views):
-			view.Empty = types.text.Phrase([
-				types.text.Words((0, "", rf.forms.lf_theme['empty']))
-			])
-			rf.configure(view.area)
-			self.parallels[rf.source.origin.ref_path].add((rf, view))
+		for av, vv in zip(self.areas, self.views):
+			for a, v in zip(av, vv):
+				v.configure(self.define, a)
+				self.parallels[v.source.origin.ref_path].add(v)
 
 	def remodel(self, area=None, divisions=None):
 		"""
@@ -1670,44 +1734,33 @@ class Frame(Core):
 		self.structure.configure(area, divisions)
 
 		self.parallels = collections.defaultdict(set)
+
+		# Rebuild division path indexes.
 		self.panes = list(self.structure.iterpanes())
 		self.paths = {p: i for i, p in enumerate(self.panes)}
 
-		self.views = list(
-			View(Area(*ctx), [], [], {'top': 'weak'}, self.define)
-			for ctx in self.structure.itercontexts(area)
-		)
+		self.areas = list(zip(
+			itertools.starmap(Area, self.structure.itercontexts(area, section=1)), # location
+			itertools.starmap(Area, self.structure.itercontexts(area)), # content
+			itertools.starmap(Area, self.structure.itercontexts(area, section=3)), # prompt
+		))
 
-		# Resource Locations
-		self.headings = list(
-			View(Area(*ctx), [], [], {'bottom': 'weak'}, self.define)
-			for ctx in self.structure.itercontexts(area, section=1)
-		)
-
-		# Command Prompts, zero heights by default.
-		self.footers = list(
-			View(Area(*ctx), [], [], {'top': 'weak'}, self.define)
-			for ctx in self.structure.itercontexts(area, section=3)
-		)
-
-	def refresh(self):
+	def refresh(self, *, ichain=itertools.chain.from_iterable):
 		"""
 		# Refresh the view images.
 		"""
 
-		for rf, view in zip(self.refractions, self.views):
-			rf.refresh(view, rf.visible[0])
-			view.version = rf.source.version()
+		for v in ichain(self.views):
+			v.refresh()
 
 	def resize(self, area):
 		"""
 		# Window size changed; remodel and render the new frame.
 		"""
 
-		rfcopy = list(self.refractions)
+		rfcopy = list(self.views)
 		self.area = area
 		self.remodel(area)
-
 		self.fill(rfcopy)
 		self.refocus()
 		self.refresh()
@@ -1719,18 +1772,17 @@ class Frame(Core):
 
 		previous = self.returns[self.paths[dpath]]
 		if previous is not None:
-			yield from self.attach(dpath, previous).refresh()
+			yield from self.attach(dpath, previous)
 			yield from self.chpath(dpath, previous.source.origin)
+			self.focus = previous
 
-	def render(self, screen):
+	def render(self, screen, *, ichain=itertools.chain.from_iterable):
 		"""
-		# Render a complete frame using the current view image state.
+		# Render a complete frame using the current view state.
 		"""
 
-		for p, rf, v, f in zip(self.panes, self.refractions, self.views, self.footers):
-			yield from self.chpath(p, rf.source.origin)
-			yield from v.render(slice(0, v.height))
-			yield from f.render(slice(0, f.height))
+		for v in ichain(self.views):
+			yield from v._view.render(slice(0, v._view.height))
 
 		aw = self.area.span
 		ah = self.area.lines
@@ -1741,12 +1793,10 @@ class Frame(Core):
 
 	def select(self, dpath):
 		"""
-		# Get the &Refraction and &View pair at the given
-		# vertical-divsion &dpath.
+		# Get the &Refraction's associated with the division path.
 		"""
 
-		i = self.paths[dpath]
-		return (self.refractions[i], self.views[i])
+		return self.views[self.paths[dpath]]
 
 	def refocus(self):
 		"""
@@ -1767,18 +1817,17 @@ class Frame(Core):
 
 			self.vertical, self.division = path
 
-		self.focus, self.view = self.select(path)
+		self.focus = self.select(path)[1]
 
 	def resize_footer(self, dpath, height):
 		"""
 		# Adjust the size, &height, of the footer for the given &dpath.
 		"""
 
-		rf, v = self.select(dpath)
-		f = self.footers[self.paths[dpath]]
+		l, rf, f = self.select(dpath)
 
 		d = self.structure.set_margin_size(dpath[0], dpath[1], 3, height)
-		f.area = f.area.resize(d, 0)
+		f._view.area = f._view.area.resize(d, 0)
 
 		# Initial opening needs to include the border size.
 		if height - d == 0:
@@ -1788,13 +1837,13 @@ class Frame(Core):
 			# height set to zero. Compensate for border.
 			d -= self.structure.fm_border_width
 
-		v.area = v.area.resize(-d, 0)
-		rf.configure(v.area)
+		rf._view.area = rf._view.area.resize(-d, 0)
+		rf.configure(self.define, rf._view.area)
 
-		f.area = f.area.move(-d, 0)
+		f._view.area = f._view.area.move(-d, 0)
 		# &render will emit the entire image, so make sure the footer is trimmed.
-		f.trim()
-		f.compensate()
+		f._view.trim()
+		f._view.compensate()
 		return d
 
 	def fill_areas(self, patterns, *, Area=Area, ord=ord):
@@ -1822,14 +1871,14 @@ class Frame(Core):
 		state = self.focus.query.get(type, None) or ''
 
 		# Update session state.
-		view = self.footers[vi]
+		prompt = self.views[vi][2]
 		if extension is not None:
 			context = type + ' ' + extension
 		else:
 			context = type
 
 		# Make footer visible if the view is empty.
-		if view.height == 0:
+		if prompt._view.height == 0:
 			self.resize_footer(dpath, 1)
 			session.dispatch_delta(
 				self.fill_areas(
@@ -1837,10 +1886,7 @@ class Frame(Core):
 				)
 			)
 
-		self.focus, self.view = (
-			refract(session, self, view, context, state, issue),
-			view,
-		)
+		self.focus = refract(session, self, prompt, context, state, issue)
 
 	def relocate(self, session, dpath):
 		"""
@@ -1849,16 +1895,13 @@ class Frame(Core):
 		"""
 
 		vi = self.paths[dpath]
-		ref = self.refractions[vi].source.origin
-		lf = session.load_type('filesystem')
+		location_rf, content, prompt = self.views[vi]
+
+		location.configure_cursor(location_rf)
 
 		# Update session state.
-		view = self.headings[vi]
-		self.focus, self.view = (
-			location.refract(lf, view, ref.ref_context, ref.ref_path, location.open),
-			view,
-		)
-
+		self.focus = location_rf
+		self.focus.activate = location.open
 		self.focus.annotation = annotations.Filesystem('open',
 			self.focus.forms,
 			self.focus.source,
@@ -1872,16 +1915,12 @@ class Frame(Core):
 		"""
 
 		vi = self.paths[dpath]
-		ref = self.refractions[vi].source.origin
-		lf = session.load_type('filesystem')
+		location_rf, content, prompt = self.views[vi]
 
-		# Update session state.
-		view = self.headings[vi]
-		self.focus, self.view = (
-			location.refract(lf, view, ref.ref_context, ref.ref_path, location.save),
-			view,
-		)
+		location.configure_cursor(location_rf)
 
+		self.focus = location_rf
+		self.focus.activate = location.save
 		self.focus.annotation = annotations.Filesystem('save',
 			self.focus.forms,
 			self.focus.source,
@@ -1895,37 +1934,27 @@ class Frame(Core):
 		"""
 
 		rf = self.focus
-		view = self.view
 		dpath = (self.vertical, self.division)
+		vi = self.paths[dpath]
+		vl, vc, vp = self.views[vi]
 
-		if self.footers[self.paths[dpath]] is view:
+		if rf is vp:
 			# Overwrite the prompt.
 			d = self.close_prompt(dpath)
 			assert d < 0
-			vo = self.view.offset
-			vh = self.view.height
-			end = vo + vh
-			start = end + d
-			vrange = slice(vh + d, vh)
-			self.view.update(vrange, list(rf.iterphrases(start, end)))
-			yield from self.view.render(vrange)
-			yield from self.view.compensate()
+			yield from vc.refresh()
 			return
 
 		self.refocus()
 		if rf is self.focus:
-			# Not a location or command; check annotation.
+			# Previous focus was not a location or prompt; check annotation.
 			if rf.annotation is not None:
 				rf.annotation.close()
 				rf.annotation = None
 			return
 
 		# Restore location.
-		src = rf.source
-		rf.visibility[0].datum = view.offset
-		rf.visibility[1].datum = view.horizontal_offset
-		rf.visible[:] = (view.offset, view.horizontal_offset)
-		yield from self.chpath(dpath, self.focus.source.origin, snapshot=src.version())
+		yield from self.chpath(dpath, self.focus.source.origin)
 
 	def close_prompt(self, dpath):
 		"""
@@ -1934,17 +1963,15 @@ class Frame(Core):
 		"""
 
 		d = 0
-		index = self.paths[dpath]
-		f = self.footers[index]
-
+		vi = self.paths[dpath]
+		location, content, prompt = self.views[vi]
 		rf = self.focus
-		fv = self.view
 
-		if f.height > 0:
+		if prompt._view.height > 0:
 			d = self.resize_footer(dpath, 0)
 
 		# Prompt was focused.
-		if fv is f:
+		if rf is prompt:
 			self.refocus()
 
 		return d
@@ -1961,7 +1988,16 @@ class Frame(Core):
 
 		v, d, s = self.structure.address(left, top)
 		i = self.paths[(v, d)]
-		return ((v, d, s), self.refractions[i], self.views[i])
+
+		l, c, p = self.views[i]
+		if s == 1:
+			rf = l
+		elif s == 3:
+			rf = p
+		else:
+			rf = c
+
+		return ((v, d, s), rf)
 
 	@staticmethod
 	def cursor_cell(positions):
@@ -1985,15 +2021,13 @@ class Frame(Core):
 			# between first and last characters
 			return 'cursor-offset-active'
 
-	def indicate(self, focus, view):
+	def indicate(self, focus):
 		"""
 		# Render the (cursor) status indicators.
 
 		# [ Parameters ]
 		# /focus/
 			# The &Refraction whose position indicators are being drawn.
-		# /view/
-			# The &.types.View connected to the refraction.
 
 		# [ Returns ]
 		# Iterable of screen deltas.
@@ -2002,6 +2036,7 @@ class Frame(Core):
 		src = focus.source
 		fai = focus.annotation
 		lf = focus.forms
+		view = focus._view
 		rx, ry = (0, 0)
 		ctx = view.area
 		vx, vy = (ctx.left_offset, ctx.top_offset)
@@ -2344,6 +2379,8 @@ class Session(Core):
 				ilines = lines.structure(codec.structure(self.buffer_data(1024, f)))
 				cpr = map(lf.ln_sequence, (types.Line(-1, il, lc) for il, lc in ilines))
 				src.elements = sequence.Segments(cpr)
+				if src.ln_count() == 0:
+					src.ln_initialize()
 		except FileNotFoundError:
 			self.log("Resource does not exist: " + str(path))
 		except Exception as load_error:
@@ -2457,6 +2494,33 @@ class Session(Core):
 		self.types[sti] = lf
 		return lf
 
+	def fs_forms(self, source, pathcontext):
+		"""
+		# Allocate and configure the syntax type for editing the path in &source.
+
+		# [ Parameters ]
+		# /source/
+			# The &Resource instance holding the location content.
+		# /pathcontext/
+			# The &types.Reference.ref_context of the division's content resource.
+
+		# [ Returns ]
+		# The &types.Reformulations instance that can represent the selected
+		# file path (second line) relative to the first line &source.
+		"""
+
+		from dataclasses import replace
+
+		# Base filesystem type.
+		lf = self.load_type(source.origin.ref_type)
+
+		pathctx = (lambda: pathcontext@source.sole(0).ln_content)
+
+		# Override the separation context to read the first line of &source.
+		pathfields = replace(lf.lf_fields, separation=pathctx)
+
+		return lf.replace(lf_fields=pathfields)
+
 	def reference(self, path):
 		"""
 		# Construct a &Reference instance from &path resolving types according to
@@ -2471,13 +2535,45 @@ class Session(Core):
 			path,
 		)
 
+	def allocate_prompt_resource(self):
+		ref = Reference(
+			self.process.identity,
+			'lambda',
+			'.prompt',
+			# Point at a division path allowing use as a resource.
+			files.root@'/dev',
+			files.root@'/dev/null',
+		)
+
+		return Resource(ref, self.load_type('lambda'))
+
+	def allocate_location_resource(self, reference):
+		ref = Reference(
+			self.process.identity,
+			'filesystem',
+			'.location',
+			# Point at a division path allowing use as a resource.
+			files.root@'/dev',
+			files.root@'/dev/null',
+		)
+
+		src = Resource(ref, self.load_type('filesystem'))
+		location.configure_path(src, reference.ref_context, reference.ref_path)
+		src.forms = self.fs_forms(src, reference.ref_context)
+		return src
+
 	def refract(self, path):
 		"""
 		# Construct a &Refraction for the resource identified by &path.
 		# A &Resource instance is created if the path has not been loaded.
 		"""
 
-		return Refraction(self.import_resource(self.reference(path)))
+		source = self.import_resource(self.reference(path))
+		return (
+			Refraction(self.allocate_location_resource(source.origin)),
+			Refraction(source),
+			Refraction(self.allocate_prompt_resource()),
+		)
 
 	def log(self, *lines):
 		"""
@@ -2504,7 +2600,8 @@ class Session(Core):
 
 		rsrc = self.transcript
 		log = rsrc.modifications
-		rsrc.extend_lines(lines)
+		slines = map(rsrc.forms.lf_lines.level, lines)
+		rsrc.extend_lines(rsrc.forms.ln_interpret(lc, level=il) for il, lc in slines)
 		rsrc.commit()
 
 		# Initialization cases where a frame is not available.
@@ -2512,16 +2609,15 @@ class Session(Core):
 		if frame is None:
 			return
 
-		for trf, v in frame.refracting(rsrc.origin):
-			if trf == frame.focus:
+		for trf in frame.refracting(rsrc.origin):
+			if trf is frame.focus:
 				# Update handled by main loop.
 				continue
 
-			trf.seek(rsrc.ln_count(), 0)
-			changes = rsrc.changes(v.version)
-			tupdate = trf.update(v, changes)
+			changes = rsrc.changes(trf._view.version)
+			tupdate = trf.update(changes)
 			#tupdate = trf.refresh(v, 0)
-			v.version = trf.source.version()
+			trf._view.version = trf.source.version()
 			self.dispatch_delta(tupdate)
 
 	def resize(self):
@@ -2673,7 +2769,7 @@ class Session(Core):
 			fi = self.allocate(layout, title=frame_id or None)
 			f = self.frames[fi]
 			f.fill(map(self.refract, resources))
-			f.returns[:divcount] = map(self.refract, returns)
+			f.returns[:divcount] = (rf for (l, rf, p) in map(self.refract, returns))
 
 			# Populate View images.
 			f.refresh()
@@ -2689,13 +2785,14 @@ class Session(Core):
 
 		for f in self.frames:
 			frame_id = f.title
-			resources = [rf.source.origin.ref_path for rf in f.refractions]
+			resources = [rf.source.origin.ref_path for (l, rf, p) in f.views]
 			returns = [rf.source.origin.ref_path for rf in f.returns if rf is not None]
 
 			yield (frame_id, f.structure.layout, resources, returns)
 
 	def chresource(self, frame, path):
-		self.dispatch_delta(frame.chresource((frame.vertical, frame.division), self.refract(path)))
+		srcswitch = frame.chresource((frame.vertical, frame.division), self.refract(path)[1])
+		self.dispatch_delta(srcswitch)
 
 	def error(self, context, exception):
 		"""
@@ -2806,7 +2903,7 @@ class Session(Core):
 	def discard(*args):
 		pass
 
-	def dispatch(self, frame, refraction, view, key):
+	def dispatch(self, frame, refraction, key):
 		"""
 		# Perform the application instruction identified by &key.
 		"""
@@ -2825,17 +2922,22 @@ class Session(Core):
 
 			ev_op = self.events[ev_category](ev_identifier)
 			self.trace(refraction.source, key, ev_category, ev_identifier, ev_op)
+
+			ln_cursor = refraction.focus[0]
+			current = ln_cursor.get()
 			ev_op(self, frame, refraction, key, *ev_args) # User Event Operation
+			if current != ln_cursor.get():
+				refraction.recursor()
 		except Exception as operror:
 			self.keyboard.reset('control')
 			self.error('Operation Failure', operror)
 			del operror
 
 		# Find parallel refractions that may require updates.
-		yield from frame.refracting(refraction.source.origin, (refraction, view))
+		yield from frame.refracting(refraction.source.origin, refraction)
 		if frame.deltas:
-			for drf, dview in frame.deltas:
-				yield from frame.refracting(drf.source.origin, (drf, dview))
+			for drf in frame.deltas:
+				yield from frame.refracting(drf.source.origin, drf)
 			del frame.deltas[:]
 
 	def cycle(self):
@@ -2847,7 +2949,7 @@ class Session(Core):
 		device = self.device
 		screen = device.screen
 
-		status = list(frame.indicate(frame.focus, frame.view))
+		status = list(frame.indicate(frame.focus))
 		restore = [(area, screen.select(area)) for area, _ in status]
 		self.dispatch_delta(status)
 		device.render_pixels()
@@ -2866,13 +2968,13 @@ class Session(Core):
 			# Get the next event from the device. Blocking.
 			key = device.key()
 
-			for (rf, view) in self.dispatch(frame, frame.focus, frame.view, key):
+			for rf in self.dispatch(frame, frame.focus, key):
 				src = rf.source
 				current = src.version()
-				voffsets = [view.offset, view.horizontal_offset]
-				if current != view.version or rf.visible != voffsets:
-					self.dispatch_delta(rf.update(view, src.changes(view.version)))
-					view.version = current
+				voffsets = [rf._view.offset, rf._view.horizontal_offset]
+				if current != rf._view.version or rf.visible != voffsets:
+					self.dispatch_delta(rf.update(src.changes(rf._view.version)))
+					rf._view.version = current
 		except Exception as derror:
 			self.error("Rendering Failure", derror)
 			del derror

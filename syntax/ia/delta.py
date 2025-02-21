@@ -54,11 +54,8 @@ def insert_character_units(session, frame, rf, event, quantity=1):
 	lo, co = (x.get() for x in rf.focus)
 	src = rf.source
 	string = session.device.transfer_text() * quantity
-
 	src.insert_codepoints(lo, co, string)
 	src.commit()
-
-	rf.focus[1].changed(co, len(string))
 
 @event('insert', 'capture')
 def insert_captured_control(session, frame, rf, event, quantity=1):
@@ -89,7 +86,6 @@ def insert_captured_control(session, frame, rf, event, quantity=1):
 	src.insert_codepoints(lo, co, istr)
 	src.commit()
 
-	rf.focus[1].changed(co, len(istr))
 	session.keyboard.revert()
 
 @event('insert', 'capture', 'key')
@@ -106,7 +102,6 @@ def insert_captured_key(session, frame, rf, event, quantity=1):
 	src.insert_codepoints(lo, co, istr)
 	src.commit()
 
-	rf.focus[1].changed(co, len(istr))
 	session.keyboard.revert()
 
 @event('insert', 'capture', 'control')
@@ -123,7 +118,6 @@ def insert_captured_control_character_unit(session, frame, rf, event, quantity=1
 	src.insert_codepoints(lo, co, string)
 	src.commit()
 
-	rf.focus[1].changed(co, len(string))
 	session.keyboard.revert()
 
 @event('replace', 'capture')
@@ -175,7 +169,6 @@ def insert_string_argument(session, frame, rf, event, string, *, quantity=1):
 	string = string * quantity
 
 	src.insert_codepoints(lo, co, string)
-	rf.focus[1].changed(co, len(string))
 
 @event('delete', 'unit', 'former')
 def delete_characters_behind(session, frame, rf, event, quantity=1):
@@ -192,8 +185,6 @@ def delete_characters_behind(session, frame, rf, event, quantity=1):
 	removed = src.delete_codepoints(lo, start, co)
 	src.commit()
 
-	rf.focus[1].changed(start, -len(removed))
-
 @event('delete', 'unit', 'current')
 def delete_characters_ahead(session, frame, rf, event, quantity=1):
 	"""
@@ -209,9 +200,6 @@ def delete_characters_ahead(session, frame, rf, event, quantity=1):
 	removed = src.delete_codepoints(lo, co, stop)
 	src.commit()
 
-	rf.focus[1].changed(co, -len(removed))
-	rf.focus[1].update(len(removed))
-
 @event('delete', 'element', 'former')
 def delete_previous_line(session, frame, rf, event, quantity=1):
 	return delete_current_line(session, frame, rf, event, quantity, -1)
@@ -226,8 +214,6 @@ def delete_current_line(session, frame, rf, event, quantity=1, offset=0):
 
 	if offset < 0:
 		rf.focus[0].changed(lo, -quantity)
-	rf.delta(lo, -deletion_count)
-	rf.vertical_changed(rf.focus[0].get())
 
 @event('delete', 'backward', 'adjacent', 'class')
 def delete_previous_field(session, frame, rf, event):
@@ -249,8 +235,6 @@ def delete_previous_field(session, frame, rf, event):
 
 	removed = src.delete_codepoints(li.ln_offset, word.start, co)
 	src.commit()
-
-	rf.focus[1].changed(word.start, -len(removed))
 
 @event('horizontal', 'replace', 'unit')
 def replace_character_unit(session, frame, rf, event):
@@ -338,8 +322,6 @@ def delete_to_beginning_of_line(session, frame, rf, event):
 	src.delete_codepoints(lo, 0, co)
 	src.checkpoint()
 
-	rf.focus[1].changed(0, -co)
-
 @event('delete', 'following')
 def delete_to_end_of_line(session, frame, rf, event):
 	"""
@@ -376,10 +358,7 @@ def open_newline_behind(session, frame, rf, event, quantity=1):
 	src.insert_lines(lo, [types.Line(-1, il, "")] * quantity)
 	src.commit()
 
-	rf.focus[0].changed(lo, quantity)
-	rf.focus[0].update(-1)
-	rf.vertical_changed(max(0, lo - 1))
-	rf.focus[1].set(il)
+	rf.focus[0].set(lo)
 	session.keyboard.set('insert')
 
 @event('open', 'ahead')
@@ -409,9 +388,7 @@ def open_newline_ahead(session, frame, rf, event, quantity=1):
 	src.insert_lines(lo + 1, [types.Line(-1, il, "")] * quantity)
 	src.commit()
 
-	rf.focus[0].changed(lo, quantity)
-	rf.vertical_changed(lo)
-	rf.focus[1].set(il)
+	rf.focus[0].set(lo + 1)
 	session.keyboard.set('insert')
 
 @event('open', 'first')
@@ -426,7 +403,6 @@ def open_first(session, frame, rf, event, quantity=1):
 	src.checkpoint()
 
 	rf.focus[0].set(0)
-	rf.vertical_changed(0)
 	session.keyboard.set('insert')
 
 @event('open', 'last')
@@ -442,7 +418,6 @@ def open_last(session, frame, rf, event, quantity=1):
 	src.checkpoint()
 
 	rf.focus[0].set(lo)
-	rf.vertical_changed(lo)
 	session.keyboard.set('insert')
 
 @event('move', 'range', 'ahead')
@@ -470,7 +445,6 @@ def move_vertical_range_ahead(session, frame, rf, event):
 	if before:
 		position -= vr
 	rf.focus[0].restore((position, position-1, position + vr))
-	rf.vertical_changed(position-1)
 
 @event('move', 'range', 'behind')
 def move_vertical_range_behind(session, frame, rf, event):
@@ -496,7 +470,6 @@ def move_vertical_range_behind(session, frame, rf, event):
 	if before:
 		position -= vr
 	rf.focus[0].restore((position, position, position + vr))
-	rf.vertical_changed(position)
 
 def replicate_vertical_range(session, frame, rf, event, offset, quantity=1):
 	"""
@@ -506,11 +479,7 @@ def replicate_vertical_range(session, frame, rf, event, offset, quantity=1):
 	start, lo, stop = rf.focus[0].snapshot()
 	src = rf.source
 
-	dl = src.replicate_lines(lo, start, stop)
-
-	rf.focus[0].changed(lo, dl)
-	rf.delta(lo, dl)
-	rf.vertical_changed(lo)
+	dl = src.replicate_lines(lo+offset, start, stop)
 
 @event('copy', 'range', 'ahead')
 def copy_vertical_range_ahead(session, frame, rf, event, quantity=1):
@@ -558,18 +527,8 @@ def delete_vertical_range_lines(session, frame, rf, event):
 	d = src.delete_lines(start, stop)
 	src.checkpoint()
 
-	rf.focus[0].changed(start, -d)
-	if position < start:
-		rf.focus[0].set(position)
-	elif position < stop:
-		rf.focus[0].set(start)
-
-	rf.focus[0].limit(0, len(src.elements))
-	rf.delta(start, -d)
-	rf.vertical_changed(rf.focus[0].get())
-
 @event('delete', 'horizontal', 'range')
-def delete_unit_range(session, frame, rf, event):
+def delete_codepoint_range(session, frame, rf, event):
 	"""
 	# Remove the horizontal range of the current line.
 	"""
@@ -580,24 +539,6 @@ def delete_unit_range(session, frame, rf, event):
 
 	src.delete_codepoints(lo, start, stop)
 	src.commit()
-
-	rf.focus[1].changed(start, -(stop - start))
-	if p >= start and p < stop:
-		rf.focus[1].set(start)
-	elif p < start:
-		rf.focus[1].set(p)
-
-@event('delete')
-def delete_selection(session, frame, rf, event):
-	"""
-	# Remove the vertical range if the number of lines in the range is greater than zero.
-	# Otherwise, remove the horizontal range.
-	"""
-
-	if rf.focus[0].magnitude > 0:
-		delete_element_v(session, frame, rf, event)
-	else:
-		delete_unit_range(session, frame, rf, event)
 
 @event('horizontal', 'substitute', 'range')
 def subrange(session, frame, rf, event):
@@ -612,7 +553,6 @@ def subrange(session, frame, rf, event):
 	src.delete_codepoints(lo, start, stop)
 	src.commit()
 
-	rf.focus[1].restore((start, start, start))
 	session.keyboard.set('insert')
 
 @event('horizontal', 'substitute', 'again')
@@ -624,7 +564,10 @@ def subagain(session, frame, rf, event, *, islice=itertools.islice):
 	lo = rf.focus[0].get()
 	start, p, stop = rf.focus[1].snapshot()
 	src = rf.source
+
 	last = src.last_insertion()
+	if not isinstance(last, str):
+		return
 
 	src.substitute_codepoints(lo, start, stop, last)
 	src.checkpoint()
@@ -643,7 +586,6 @@ def split_line_at_cursor(session, frame, rf, event):
 
 	d = src.split(lo, offset)
 	src.commit()
-	rf.delta(*d)
 
 @event('line', 'join')
 def join_line_with_following(session, frame, rf, event, quantity=1):
@@ -656,7 +598,6 @@ def join_line_with_following(session, frame, rf, event, quantity=1):
 
 	d = src.join(lo, quantity)
 	src.commit()
-	rf.delta(*d)
 
 @event('copy')
 def copy(session, frame, rf, event):
@@ -713,9 +654,6 @@ def insert_transfer_text(session, frame, rf, event):
 	lo, co, r = src.splice_text(src.forms.lf_lines, lo, co, text)
 	src.checkpoint()
 
-	rf.focus[0].set(lo)
-	rf.focus[1].set(co)
-
 @event('insert', 'annotation')
 def insert_annotation(session, frame, rf, event):
 	"""
@@ -732,7 +670,6 @@ def insert_annotation(session, frame, rf, event):
 
 	src.insert_codepoints(lo, co, string)
 	src.commit()
-	rf.focus[1].changed(co, len(string))
 
 @event('elements', 'dispatch')
 def dispatch_system_command(session, frame, rf, event):

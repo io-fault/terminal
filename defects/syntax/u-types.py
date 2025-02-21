@@ -98,19 +98,21 @@ def alloc_lambda_forms():
 		fields.segmentation(4, 4),
 	)
 
-def test_Reformulations_structure_fields(test):
+def test_Reformulations_fields(test):
 	"""
-	# - &module.Reformulations.structure_fields
+	# - &module.Reformulations
 	"""
 
 	lf = alloc_lambda_forms()
 	test/str(lf) == "syntax://lambda/lf->ht/utf-8"
+	mkline = lf.ln_interpret
+	sfields = (lambda x: list(lf.lf_fields.isolate(lf.lf_fields.separation, x)))
 
-	test/lf.structure_fields(lf.mkline("test.")) == [
+	test/sfields(mkline("test.")) == [
 		('inclusion-identifier', "test"),
 		('inclusion-router', "."),
 	]
-	test/lf.structure_fields(lf.mkline("test; extension")) == [
+	test/sfields(mkline("test; extension")) == [
 		('inclusion-identifier', "test"),
 		('inclusion-terminator', ";"),
 		('inclusion-space', " "),

@@ -4,39 +4,27 @@
 from . import delta
 from . import types
 
-def refract(session, frame, view, qtype, state, action):
+def refract(session, frame, prompt, qtype, state, action):
 	"""
 	# Construct a Refraction for representing a query.
 	"""
 
-	from .elements import Resource, Refraction
-	from fault.system import files
-	ref = types.Reference(
-		session.host,
-		'/../',
-		'query-instructions',
-		files.root@'/dev',
-		files.root@'/dev/void',
-	)
+	src = prompt.source
+	src.delete_lines(0, src.ln_count())
+	src.extend_lines(map(src.forms.ln_interpret, [qtype + ' ' + state]))
+	src.commit()
 
-	meta = Resource(ref, session.load_type('lambda'))
-	lf = meta.forms
-	meta.extend_lines(map(lf.ln_interpret, [qtype + ' ' + state]))
-	meta.commit()
-	lrf = Refraction(meta)
-	lrf.configure(view.area)
-	lrf.activate = action # location.open or location.save
-	view.version = lrf.source.version()
+	prompt.activate = action
+	prompt._view.version = src.version()
 
-	# Set the range to all lines and place the cursor on the relative path..
-	lrf.focus[0].restore((0, 0, 1))
-	last = lrf.source.elements[-1]
-	lrf.focus[1].restore((0, len(qtype) + 1, len(qtype) + len(state) + 1))
-	session.dispatch_delta(lrf.refresh(view, 0))
+	prompt.focus[0].restore((0, 0, 1))
+	prompt.focus[1].restore((len(qtype) + 1, len(qtype) + 1, len(qtype) + len(state) + 1))
+	prompt.visible[0] = 0
+	session.dispatch_delta(prompt.refresh())
 
 	if not state:
 		session.keyboard.set('insert')
-	return lrf
+	return prompt
 
 def joinlines(decoder, linesep='\n', character=''):
 	# Used in conjunction with an incremental decoder to collapse line ends.
@@ -154,7 +142,6 @@ def transform(session, frame, rf, system):
 	src.commit()
 
 	rf.focus[0].magnitude = 0
-	rf.delta(start, start + len(lines))
 
 	i = Insertion(rf, (start, 0, ''), readlines)
 	lfb = src.forms.lf_codec.sequence
@@ -218,11 +205,11 @@ def issue(session, frame, rf, event):
 	# Select and execute the target action.
 	"""
 
-	target, view = frame.select((frame.vertical, frame.division))
+	l, target, p = frame.select((frame.vertical, frame.division))
 	src = rf.source
 	command, string = ' '.join(x.ln_content for x in src.select(0, src.ln_count())).split(' ', 1)
 	index[command](session, frame, target, string)
-	frame.deltas.append((target, view))
+	frame.deltas.append(target)
 
 def find(session, frame, rf, string):
 	"""

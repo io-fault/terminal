@@ -66,7 +66,7 @@ class IO(object):
 @dataclass()
 class Insertion(IO):
 	"""
-	# IO state managing reads into a refraction.
+	# IO state managing asynchronous reads into resource writes.
 	"""
 
 	target: elements.Refraction
@@ -89,19 +89,11 @@ class Insertion(IO):
 
 		rf = self.target
 		src = rf.source
-		lf = src.forms
+		flines = src.forms.lf_lines
 
 		lo, co, leading = self.cursor
-		self.cursor = src.splice_text(lf.lf_lines, lo, co, leading + lines_txt, ln_level=self.level)
+		self.cursor = src.splice_text(flines, lo, co, leading + lines_txt, ln_level=self.level)
 		src.commit()
-		dl = self.cursor[0] - lo
-		rf.delta(lo, dl)
-
-		vp = rf.focus[0]
-		vp.magnitude += dl
-		if vp.get() >= lo:
-			vp.update(dl)
-			rf.vertical_changed(vp.get())
 
 	def final(self):
 		src = self.target.source

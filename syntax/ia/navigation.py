@@ -139,14 +139,12 @@ def cursor_latter_element(session, frame, rf, event, quantity=1):
 	v = rf.focus[0]
 	ln = v.get() + quantity
 	v.set(min(ln, rf.source.ln_count()))
-	rf.vertical_changed(ln)
 
 @event('vertical', 'backward', 'unit')
 def cursor_former_element(session, frame, rf, event, quantity=1):
 	v = rf.focus[0]
 	ln = v.get() + -quantity
 	v.set(max(0, ln))
-	rf.vertical_changed(ln)
 
 @event('vertical', 'paging')
 def configure_paging(session, frame, rf, event, quantity=1):
@@ -183,8 +181,6 @@ def v_seek_start(session, frame, rf, event):
 	else:
 		rf.focus[0].move(0, 1)
 
-	rf.vertical_changed(rf.focus[0].get())
-
 @event('vertical', 'stop')
 def v_seek_stop(session, frame, rf, event):
 	"""
@@ -206,8 +202,6 @@ def v_seek_stop(session, frame, rf, event):
 			rf.focus[0].restore((start, stop-1, stop))
 	else:
 		rf.focus[0].move(1, -1)
-
-	rf.vertical_changed(rf.focus[0].get())
 
 @event('horizontal', 'jump', 'string')
 def select_unit_string(session, frame, rf, event, string, *, quantity=1):
@@ -239,7 +233,6 @@ def move_next_void(session, frame, rf, event, quantity=1):
 		lo = ln.ln_offset
 
 	rf.focus[0].set(lo)
-	rf.vertical_changed(lo)
 
 @event('vertical', 'void', 'backward')
 def move_previous_void(session, frame, rf, event):
@@ -252,7 +245,6 @@ def move_previous_void(session, frame, rf, event):
 		lo = ln.ln_offset
 
 	rf.focus[0].set(lo)
-	rf.vertical_changed(lo)
 
 @event('horizontal', 'select', 'line')
 def span_line(session, frame, rf, event):
@@ -280,7 +272,8 @@ def event_select_absolute(session, frame, rf, event):
 	"""
 
 	ay, ax = session.device.cursor_cell_status()
-	div, trf, view = frame.target(ay, ax)
+	div, trf = frame.target(ay, ax)
+	view = trf._view
 
 	sy = view.area.y_offset
 	sx = view.area.x_offset
@@ -293,13 +286,17 @@ def event_select_absolute(session, frame, rf, event):
 	frame.division = div[1]
 	trf.focus[0].set(ry)
 
-	li = trf.source.sole(ry)
-	phrase = trf.phrase(ry)
-	cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
-	h = phrase.tell(cp, *phrase.m_codepoint)
-	trf.focus[1].set(h - li.ln_level)
+	try:
+		li = trf.source.sole(ry)
+	except IndexError:
+		trf.focus[1].set(0)
+	else:
+		phrase = trf.phrase(ry)
+		cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
+		h = phrase.tell(cp, *phrase.m_codepoint)
+		trf.focus[1].set(h - li.ln_level)
 
-	frame.refocus()
+	frame.focus = trf
 
 @event('horizontal', 'select', 'series')
 def select_series(session, frame, rf, event):
@@ -424,10 +421,10 @@ def scroll_backward_unit(session, frame, rf, event, quantity=1, target=None, shi
 @event('view', 'horizontal', 'pan')
 def pan(session, frame, rf, event):
 	ay, ax = session.device.cursor_cell_status()
-	cursor_target, view = frame.target(ay, ax)[1:3]
+	fi, cursor_target = frame.target(ay, ax)
 	quantity = session.device.quantity()
 
-	frame.deltas.append((cursor_target, view))
+	frame.deltas.append(cursor_target)
 	if quantity < 0:
 		return pan_forward_cells(session, frame, rf, event, -quantity, target=cursor_target)
 	else:
@@ -436,10 +433,10 @@ def pan(session, frame, rf, event):
 @event('view', 'vertical', 'scroll')
 def scroll(session, frame, rf, event):
 	ay, ax = session.device.cursor_cell_status()
-	cursor_target, view = frame.target(ay, ax)[1:3]
+	fi, cursor_target = frame.target(ay, ax)
 	quantity = session.device.quantity()
 
-	frame.deltas.append((cursor_target, view))
+	frame.deltas.append(cursor_target)
 	if quantity < 0:
 		return scroll_forward_unit(session, frame, rf, event, -quantity, target=cursor_target)
 	else:
@@ -453,10 +450,11 @@ def scroll_forward_many(session, frame, rf, event, quantity=1, target=None):
 	"""
 
 	ay, ax = session.device.cursor_cell_status()
-	fi, rf, view = frame.target(ay, ax)
+	fi, rf = frame.target(ay, ax)
+	view = rf._view
 	q = ((view.area.lines // 3) or 1) * quantity
 	rf.scroll(q.__add__)
-	frame.deltas.append((rf, view))
+	frame.deltas.append(rf)
 
 @event('view', 'vertical', 'backward', 'third')
 def scroll_backward_many(session, frame, rf, event, quantity=1, target=None):
@@ -466,10 +464,11 @@ def scroll_backward_many(session, frame, rf, event, quantity=1, target=None):
 	"""
 
 	ay, ax = session.device.cursor_cell_status()
-	fi, rf, view = frame.target(ay, ax)
+	fi, rf = frame.target(ay, ax)
+	view = rf._view
 	q = ((view.area.lines // 3) or 1) * quantity
 	rf.scroll((-q).__add__)
-	frame.deltas.append((rf, view))
+	frame.deltas.append(rf)
 
 @event('view', 'vertical', 'start')
 def scroll_first(session, frame, rf, event, *, quantity=1):
@@ -478,9 +477,9 @@ def scroll_first(session, frame, rf, event, *, quantity=1):
 	"""
 
 	ay, ax = session.device.cursor_cell_status()
-	fi, rf, view = frame.target(ay, ax)
+	fi, rf = frame.target(ay, ax)
 	rf.scroll((0).__mul__)
-	frame.deltas.append((rf, view))
+	frame.deltas.append(rf)
 
 @event('view', 'vertical', 'stop')
 def scroll_last(session, frame, rf, event, *, quantity=1):
@@ -489,10 +488,10 @@ def scroll_last(session, frame, rf, event, *, quantity=1):
 	"""
 
 	ay, ax = session.device.cursor_cell_status()
-	fi, rf, view = frame.target(ay, ax)
+	fi, rf = frame.target(ay, ax)
 	offset = rf.source.ln_count()
 	rf.scroll(lambda x: offset)
-	frame.deltas.append((rf, view))
+	frame.deltas.append(rf)
 
 @event('find', 'configure')
 def s_rq_find(session, frame, rf, event):

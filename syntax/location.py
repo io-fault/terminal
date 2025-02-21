@@ -1,11 +1,7 @@
 """
 # Syntax type methods for structuring and rendering location fields.
 """
-import os.path
-import functools
 from fault.system import files
-
-from . import types
 
 def determine(context, path):
 	"""
@@ -66,14 +62,14 @@ def open(session, frame, rf, event):
 
 	# Construct reference and load dependencies.
 	dpath = (frame.vertical, frame.division)
-	new = session.refract(compose(li.ln_content for li in src.select(0, 2)))
+	ref = session.reference(compose(li.ln_content for li in src.select(0, 2)))
+	src = session.import_resource(ref)
+	new = rf.__class__(src)
 
-	session.dispatch_delta(frame.attach(dpath, new).refresh())
+	session.dispatch_delta(frame.attach(dpath, new))
 	session.keyboard.set('control')
 	frame.refocus()
 
-	del src.elements[:]
-	rf.visible[0] = 0
 	session.dispatch_delta(frame.chpath(dpath, new.source.origin, snapshot=src.version()))
 
 def save(session, frame, rf, event):
@@ -96,48 +92,14 @@ def save(session, frame, rf, event):
 	session.store_resource(target.source)
 	session.keyboard.set('control')
 
-	# Location heading.
-	del src.elements[:]
-	rf.visible[0] = 0
-	session.dispatch_delta(frame.chpath(dpath, target.source.origin, snapshot=src.version()))
-
-def refract(lf, view, pathcontext, path, action):
-	"""
-	# Construct a Refraction for representing a location path.
-	"""
-
-	# Create the refraction on demand as there is little need
-	# for maintaining cursor and visibility state across use.
-	# Only relevant state is the per-view resource history.
-
-	# Unused, but make available for invariant.
-	# Repeat Session.relocate operations will result in reconstructing
-	# the location refraction.
-	meta = types.Reference(
-		None,
-		'/../resource-indicator',
-		'resource-location',
-		files.root@'/dev',
-		files.root@'/dev/void',
-	)
-
-	from dataclasses import replace
-	from .elements import Refraction, Resource
-	src = Resource(meta, lf)
-	src.extend_lines(map(lf.ln_interpret, determine(pathcontext, path)))
+def configure_path(src, pathcontext, path):
+	src.delete_lines(0, src.ln_count())
+	src.extend_lines(map(src.forms.ln_interpret, determine(pathcontext, path)))
 	src.commit()
 
-	rf = Refraction(src)
-	pathfields = replace(lf.lf_fields, separation=(lambda: pathcontext@src.sole(0).ln_content))
-	rf.forms = lf.replace(lf_fields=pathfields)
-	rf.configure(view.area)
-	rf.activate = action # location.open or location.save
-	view.version = src.version()
-
+def configure_cursor(rf):
 	# Set the range to all lines and place the cursor on the relative path..
 	rf.focus[0].restore((0, 1, 2))
-	last = src.sole(1)
+	last = rf.source.sole(1)
 	name = last.ln_content.rfind('/') + 1
 	rf.focus[1].restore((name, name, last.ln_length))
-
-	return rf

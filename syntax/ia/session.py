@@ -113,7 +113,8 @@ def s_close_resource(session, frame, rf, event):
 	"""
 
 	session.delete_resource(rf.source)
-	session.chresource(frame, rf.source.origin.ref_path@'/dev/null')
+	devnull = rf.source.origin.ref_path@'/dev/null'
+	session.chresource(frame, devnull)
 	session.keyboard.set('control')
 	frame.refocus()
 
