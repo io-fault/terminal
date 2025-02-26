@@ -70,23 +70,25 @@ def test_Log_update(test):
 
 def test_Log_collapse_inserts(test):
 	ds, l = sample1()
-	l.write(module.Update(0, "", "", 4))
-	# No need to apply as it's empty.
+	l.write(module.Update(0, "1", "", 4))
+	l.apply(ds)
 	l.commit()
 
 	# Combine with the empty update.
-	l.write(module.Update(0, "append", "", 4))
+	l.write(module.Update(0, "append", "", 5))
 	l.apply(ds)
 	l.collapse()
-	test/ds == ["initappend"]
+	test/ds == ["init1append"]
 	test/l.committed == l.count
 	test/len(l.records) == 2
 
 	# Check that the combined record gives the same result.
-	l.undo(ds, 1)
+	for d in l.undo(1):
+		d.apply(ds)
 	test/ds == []
-	l.redo(ds, 1)
-	test/ds == ["initappend"]
+	for d in l.redo(1):
+		d.apply(ds)
+	test/ds == ["init1append"]
 
 def test_Log_collapse_deletes(test):
 	"""
