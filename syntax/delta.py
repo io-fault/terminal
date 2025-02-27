@@ -559,7 +559,7 @@ class Log(object):
 		assert self.committed == len(self.records)
 		return self
 
-	def undo(self, target, quantity=1):
+	def undo(self, quantity=1):
 		"""
 		# Retract delta records effecting &target until the given &quantity
 		# of checkpoints have been traversed or the beginning of the log has been
@@ -577,7 +577,7 @@ class Log(object):
 		for i in range(self.committed-1, -1, -1):
 			r = self.records[i]
 			transfer.append(r)
-			if r.retract(target) is Checkpoint:
+			if r.__class__ is Checkpoint:
 				quantity -= 1
 				if quantity == 0:
 					break
@@ -589,7 +589,7 @@ class Log(object):
 		assert self.committed <= self.count
 		self.future[0:0] = transfer # First needs to be last.
 
-		return self
+		return [x.invert() for x in transfer]
 
 	def redo(self, target, quantity=1):
 		"""
@@ -611,8 +611,6 @@ class Log(object):
 			transfer.append(r)
 
 		transfer.reverse()
-		for r in transfer:
-			r.apply(target)
 
 		xfer = len(transfer)
 		self.committed += xfer
@@ -622,4 +620,4 @@ class Log(object):
 		del self.future[:xfer]
 		assert self.committed <= self.count
 
-		return self
+		return transfer

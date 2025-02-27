@@ -102,11 +102,15 @@ class Insertion(IO):
 			src.insert_codepoints(lo, co, remainder)
 
 		# Remove final empty line.
-		li = src.sole(lo)
-		if not li.ln_content:
-			src.delete_lines(lo, lo+1)
+		try:
+			li = src.sole(lo)
+		except IndexError:
+			pass
+		else:
+			if not li.ln_content:
+				src.delete_lines(lo, lo+1)
 
-		src.checkpoint()
+			src.checkpoint()
 
 	def interrupt(self):
 		# Force a zero read to cause &transition to cancel and finalize.

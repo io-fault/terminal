@@ -13,7 +13,7 @@ from typing import Optional, Protocol, Literal, Callable
 
 from ..cells import text
 from ..cells.text import Phrase, Redirect, Words, Unit
-from ..cells.types import Area, Glyph, Device, Line as LineStyle
+from ..cells.types import Area, Glyph, Pixels, Device, Line as LineStyle
 
 class Annotation(Protocol):
 	"""
@@ -426,6 +426,75 @@ class Position(object):
 
 		start, pos, stop = map(adjustment.__add__, self.snapshot())
 		return (start, stop)
+
+@tools.struct()
+class Status(object):
+	"""
+	# Descriptor providing details on the view's position, cursor location,
+	# and the recent changes to the positions.
+	"""
+
+	focus: object
+	# Copy area as it is possible for the focus to remain while its area changed.
+	area: Area
+	mode: str
+	version: object
+	cursor_line: Sequence[Glyph|Pixels]
+
+	# View position.
+	v_line_offset: int
+	v_cell_offset: int
+
+	# Cursor line offsets.
+	ln_cursor_offset: int
+	ln_range_start: int
+	ln_range_stop: int
+
+	# Cursor cell offsets.
+	cl_cursor_start: int
+	cl_cursor_stop: int
+	cl_range_start: int
+	cl_range_stop: int
+
+	def line(self):
+		return (
+			self.ln_range_start,
+			self.ln_cursor_offset,
+			self.ln_range_stop,
+		)
+
+	def cell(self):
+		return (
+			self.cl_range_start,
+			self.cl_cursor_start,
+			self.cl_range_stop,
+		)
+
+	from dataclasses import astuple as _get_fields
+
+	def __sub__(self, operand):
+		p = [
+			(None if i is o or i == o else o)
+			for i, o in zip(self._get_fields()[:5], operand._get_fields()[:5])
+		]
+
+		d = (
+			i - o
+			for i, o in zip(self._get_fields()[5:], operand._get_fields()[5:])
+		)
+		return self.__class__(*p, *d)
+
+	def __add__(self, operand):
+		p = [
+			o or i
+			for i, o in zip(self._get_fields()[:5], operand._get_fields()[:5])
+		]
+
+		d = (
+			i + o
+			for i, o in zip(self._get_fields()[5:], operand._get_fields()[5:])
+		)
+		return self.__class__(*p, *d)
 
 class Model(object):
 	"""

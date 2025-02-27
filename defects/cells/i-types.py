@@ -138,6 +138,14 @@ def test_Area_hash(test):
 	test/d[v3] == 3
 	test/d[v4] == 4
 
+	# New instances.
+	n1 = module.Area(0, 0, 0, 0)
+	n2 = module.Area(1, 1, 0, 0)
+	test/False == (n1 is v1)
+	test/False == (n2 is v2)
+	test/d[n1] == 1
+	test/d[n2] == 2
+
 def test_Glyph_instances(test):
 	empty = module.Glyph()
 	test/empty.codepoint == -1

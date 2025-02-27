@@ -24,7 +24,7 @@ def operation_not_found(session, frame, rf, event):
 
 	pass
 
-@event('terminal', 'focus', 'acquire')
+@event('terminal', 'focus', 'gained')
 def application_focused(session, frame, rf, event):
 	"""
 	# Received explicit focus in event.
@@ -32,7 +32,7 @@ def application_focused(session, frame, rf, event):
 
 	pass
 
-@event('terminal', 'focus', 'release')
+@event('terminal', 'focus', 'lost')
 def application_switched(session, frame, rf, event):
 	"""
 	# Received explicit focus out event.
@@ -45,7 +45,7 @@ def perform_selected_action(session, frame, rf, event, hold=False):
 		action = rf.activate
 		r = action(session, frame, rf, event)
 		if not hold:
-			session.dispatch_delta(frame.cancel())
+			frame.cancel()
 			session.keyboard.set('control')
 		return r
 	elif session.keyboard.mapping == 'insert':
@@ -239,10 +239,10 @@ def refresh_view_image(session, frame, rf, event):
 	session.log(
 		f"View: {rf.v_line_offset!r} -> {rf.v_cell_offset!r} {rf.version!r} {rf.area!r}",
 		f"Cursor: {rf.focus[0].snapshot()!r}",
-		f"Refraction: {rf.visibility[0].snapshot()!r}",
+		f"Refraction: {rf.visible!r}",
 		f"Lines: {rf.source.ln_count()}, {rf.source.version()}",
 	)
-	session.dispatch_delta(rf.refresh(rf.visible[0]))
+	frame.deltas.extend(rf.refresh(rf.visible[0]))
 
 @event('select', 'distributed', 'operation')
 def set_distributing(session, frame, rf, event):

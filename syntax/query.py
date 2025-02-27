@@ -207,9 +207,13 @@ def issue(session, frame, rf, event):
 
 	l, target, p = frame.select((frame.vertical, frame.division))
 	src = rf.source
-	command, string = ' '.join(x.ln_content for x in src.select(0, src.ln_count())).split(' ', 1)
+	prompt_string = ' '.join(x.ln_content for x in src.select(0, src.ln_count()))
+	try:
+		command, string = prompt_string.split(' ', 1)
+	except ValueError:
+		command = prompt_string
+		string = ''
 	index[command](session, frame, target, string)
-	frame.deltas.append(target)
 
 def find(session, frame, rf, string):
 	"""
@@ -312,6 +316,16 @@ def rewrite(session, frame, rf, command):
 
 	src.checkpoint()
 
+def toggle_trace(session, frame, rf, command):
+	"""
+	# Turn event tracing on or off.
+	"""
+
+	if session.trace is session.discard:
+		del session.trace
+	else:
+		session.trace = session.discard
+
 index = {
 	'seek': seek,
 	'search': find,
@@ -319,4 +333,5 @@ index = {
 	'system': execute,
 	'system-map': transform,
 	'transmit': transmit,
+	'trace': toggle_trace,
 }

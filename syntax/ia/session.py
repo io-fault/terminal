@@ -10,9 +10,14 @@ def open_session_log(session, frame, rf, event):
 	# Attach the session transcript to the selected division.
 	"""
 
-	from ..elements import Refraction
-	sd = frame.chresource((frame.vertical, frame.division), Refraction(session.transcript))
-	session.dispatch_delta(sd)
+	rf = session.chresource(frame, session.transcript.origin.ref_path)
+	frame.refocus()
+	l = rf.source.ln_count()
+	rf.focus[0].set(l-1)
+	rf.scroll(lambda x: max(0, l - rf.area.lines))
+	assert rf is session.focus.focus
+	assert rf.frame_visible == True
+	assert rf.source is session.transcript
 
 @event('close')
 def close_session(session, frame, rf, event):
@@ -46,7 +51,7 @@ def cancel(session, frame, rf, event):
 	"""
 
 	session.keyboard.set('control')
-	session.dispatch_delta(session.focus.cancel())
+	session.focus.cancel()
 
 @event('screen', 'refresh')
 def screen_refresh(session, frame, rf, event, *, quantity=1):

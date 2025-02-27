@@ -54,6 +54,8 @@ def insert_character_units(session, frame, rf, event, quantity=1):
 	lo, co = (x.get() for x in rf.focus)
 	src = rf.source
 	string = session.device.transfer_text() * quantity
+	if lo == 0 and src.ln_count() == 0:
+		src.ln_initialize()
 	src.insert_codepoints(lo, co, string)
 	src.commit()
 
@@ -83,6 +85,8 @@ def insert_captured_control(session, frame, rf, event, quantity=1):
 	lo, co = (x.get() for x in rf.focus)
 	src = rf.source
 
+	if lo == 0 and src.ln_count() == 0:
+		src.ln_initialize()
 	src.insert_codepoints(lo, co, istr)
 	src.commit()
 
@@ -99,6 +103,8 @@ def insert_captured_key(session, frame, rf, event, quantity=1):
 	string = session.device.key()
 	istr = string * quantity
 
+	if lo == 0 and src.ln_count() == 0:
+		src.ln_initialize()
 	src.insert_codepoints(lo, co, istr)
 	src.commit()
 
@@ -115,6 +121,8 @@ def insert_captured_control_character_unit(session, frame, rf, event, quantity=1
 	string = session.device.transfer_text()
 	string = string * quantity
 
+	if lo == 0 and src.ln_count() == 0:
+		src.ln_initialize()
 	src.insert_codepoints(lo, co, string)
 	src.commit()
 

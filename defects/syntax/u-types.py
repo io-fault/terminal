@@ -1,5 +1,35 @@
 from ...syntax import types as module
 
+def test_Status_arithmetic(test):
+	"""
+	# - &module.Status.__sub__
+	# - &module.Status.__add__
+	"""
+
+	vs = module.Status(None, None, None, None, None, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	test/(vs - vs) == vs
+
+	vs1 = module.Status(None, None, None, None, None, 1, 0, 0, 0, 0, 0, 0, 0, 0)
+	test/(vs1 - vs).v_line_offset == 1
+
+	vs1 = module.Status(None, None, None, None, None, 1, 2, 0, 0, 0, 0, 0, 0, 0)
+	test/(vs1 - vs).v_cell_offset == 2
+
+	# Difference with and area being that they were changed at all.
+	vs2 = module.Status('focus', None, None, None, None, 1, 0, 0, 0, 0, 0, 0, 0, 0)
+	test/(vs - vs2).focus == 'focus'
+
+	vs3 = module.Status('focus', 'area', 'mode', None, None, 1, 0, 0, 0, 0, 0, 0, 0, 0)
+	dv = vs - vs3
+	test/dv.focus == 'focus'
+	test/dv.area == 'area'
+	test/dv.mode == 'mode'
+
+	# vs being an empty delta
+	test/(vs3 + vs) == vs3
+	test/(vs1 + vs).v_line_offset == 1
+	test/(vs1 + vs1).v_line_offset == 2
+
 def test_Model_set_margin_size(test):
 	"""
 	# - &module.Model.set_margin_size

@@ -69,8 +69,7 @@ def open(session, frame, rf, event):
 	session.dispatch_delta(frame.attach(dpath, new))
 	session.keyboard.set('control')
 	frame.refocus()
-
-	session.dispatch_delta(frame.chpath(dpath, new.source.origin, snapshot=src.version()))
+	frame.chpath(dpath, new.source.origin, snapshot=src.version())
 
 def save(session, frame, rf, event):
 	"""

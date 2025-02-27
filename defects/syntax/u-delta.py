@@ -37,7 +37,8 @@ def test_Log_insert(test):
 
 def test_Log_undo(test):
 	ds, l = sample1()
-	l.undo(ds, 1)
+	for d in l.undo(1):
+		d.apply(ds)
 	test/ds == []
 
 def test_Log_redo(test):
@@ -46,7 +47,10 @@ def test_Log_redo(test):
 	l.write(module.Lines(2, ["suffix"], []))
 	l.apply(ds)
 	l.commit()
-	l.undo(ds, 1).redo(ds, 1)
+	for d in l.undo(1):
+		d.apply(ds)
+	for d in l.redo(1):
+		d.apply(ds)
 	test/ds == ["replace", "init", "suffix"]
 
 def test_Log_checkpoint(test):
@@ -56,7 +60,8 @@ def test_Log_checkpoint(test):
 	l.apply(ds)
 	l.commit()
 	test/ds[1] == "after-cp"
-	l.undo(ds, 1)
+	for d in l.undo(1):
+		d.apply(ds)
 	test.isinstance(l.future[-1], module.Checkpoint)
 	test/ds == ["init"]
 
@@ -110,9 +115,11 @@ def test_Log_collapse_deletes(test):
 	test/len(l.records) == 2 # Eliminated one.
 
 	# Check that the combined record gives the same result.
-	l.undo(ds, 1)
+	for d in l.undo(1):
+		d.apply(ds)
 	test/ds == []
-	l.redo(ds, 1)
+	for d in l.redo(1):
+		d.apply(ds)
 	test/ds == ["initapp"]
 
 def test_Log_collapsed_since(test):
