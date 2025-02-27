@@ -559,7 +559,7 @@ class Model(object):
 						if ds[0] and ry <= ds[0]:
 							# Header
 							s = 1
-						elif ds[1] and ry >= dd[1] + ds[1]:
+						elif ds[1] and ry >= dd[1] - ds[1]:
 							# Footer
 							s = 3
 						else:
