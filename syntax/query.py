@@ -224,6 +224,7 @@ def find(session, frame, rf, string):
 	rf.query['search'] = string
 	ctl = rf.forward(len(rf.source.elements), v.get(), h.maximum)
 	rf.find(ctl, string)
+	rf.recursor()
 
 def seek(session, frame, rf, string):
 	"""

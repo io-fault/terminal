@@ -531,6 +531,7 @@ def find_previous_string(session, frame, rf, event):
 	v, h = rf.focus
 	term = rf.query.get('search') or rf.horizontal_selection_text()
 	rf.find(rf.backward(rf.source.ln_count(), v.get(), h.minimum), term)
+	rf.recursor()
 
 @event('find', 'next')
 def find_next_string(session, frame, rf, event):
@@ -541,3 +542,4 @@ def find_next_string(session, frame, rf, event):
 	v, h = rf.focus
 	term = rf.query.get('search') or rf.horizontal_selection_text()
 	rf.find(rf.forward(rf.source.ln_count(), v.get(), h.maximum), term)
+	rf.recursor()
