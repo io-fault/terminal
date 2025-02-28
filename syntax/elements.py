@@ -1644,17 +1644,23 @@ class Refraction(Core):
 		except IndexError:
 			li = types.Line(ln, 0, "")
 
-		h.limit(0, len(li.ln_content))
+		ll = len(li.ln_content)
+		h.limit(0, ll)
+
+		if h.get() >= ll - len(li.ln_trail):
+			phc = lf.cursor
+		else:
+			phc = lf.compose
 
 		# Prepare phrase and cells.
 		lfields = lf.lf_fields.partial()(li)
 		if fai is not None:
 			fai.update(li.ln_content, lfields)
-			caf = lf.compose(types.Line(ln, 0, ""), annotations.delimit(fai))
-			phrase = lf.compose(li, lfields)
-			phrase = types.Phrase(itertools.chain(lf.compose(li, lfields), caf))
+			caf = phc(types.Line(ln, 0, ""), annotations.delimit(fai))
+			phrase = phc(li, lfields)
+			phrase = types.Phrase(itertools.chain(phc(li, lfields), caf))
 		else:
-			phrase = types.Phrase(lf.compose(li, lfields))
+			phrase = types.Phrase(phc(li, lfields))
 
 		# Translate codepoint offsets to cell offsets.
 		m_cell = phrase.m_cell

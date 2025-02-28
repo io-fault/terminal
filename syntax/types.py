@@ -1671,13 +1671,34 @@ class Reformulations(object):
 			for ft, fc in fields
 		)
 
+	def cursor(self, line, fields) -> Iterable[Words]:
+		"""
+		# Construct a Phrase instance representing the structured line
+		# for display with a cursor.
+		"""
+
+		tg = self.lf_theme.get # Returns the requested key for already resolved Cells.
+
+		if line.ln_content:
+			itype = 'indentation'
+		else:
+			itype = 'indentation-only'
+
+		content = Phrase.segment(
+			(tg(ft, ft), self.lf_units(fc))
+			for ft, fc in fields
+		)
+
+		yield from self.redirect_indentation(itype, line.ln_level)
+		yield from self.redirect_exceptions(content)
+		yield Redirect((1, ' ', tg('line-termination'), '\n'))
+
 	def compose(self, line, fields) -> Iterable[Words]:
 		"""
 		# Construct a Phrase instance representing the structured line.
 		"""
 
 		tg = self.lf_theme.get # Returns the requested key for already resolved Cells.
-		tws = line.ln_trail
 
 		if line.ln_content:
 			itype = 'indentation'
@@ -1699,7 +1720,7 @@ class Reformulations(object):
 
 		yield from self.redirect_indentation(itype, line.ln_level)
 		yield from self.redirect_exceptions(content)
-		yield from self.redirect_trail(tws)
+		yield from self.redirect_trail(line.ln_trail)
 
 	def __str__(self):
 		return ''.join(x[1] for x in self.i_format())
