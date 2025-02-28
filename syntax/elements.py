@@ -288,14 +288,15 @@ class Resource(Core):
 		for dsrc in deltas:
 			dsrc.apply(self.elements)
 			for rf in views:
+				img = rf.image
 				dsrc.track(rf)
 				df = list(rf.v_update(dsrc))
 				if rf.frame_visible:
 					# Update all image states, but don't dispatch to the display
 					# if it's not frame_visible.
 					rf.deltas.extend(df)
-				rf.visible[0] = rf.v_line_offset
-				rf.visible[1] = rf.v_cell_offset
+				rf.visible[0] = img.line_offset
+				rf.visible[1] = img.cell_offset
 				rf.recursor()
 
 		return slog
@@ -921,22 +922,6 @@ class Refraction(Core):
 		new.forms = lf
 		return new
 
-	@property
-	def v_cell_offset(self):
-		return self.image.cell_offset
-
-	@v_cell_offset.setter
-	def v_cell_offset(self, v):
-		self.image.cell_offset = v
-
-	@property
-	def v_line_offset(self):
-		return self.image.line_offset
-
-	@v_line_offset.setter
-	def v_line_offset(self, v):
-		self.image.line_offset = v
-
 	def __init__(self, resource):
 		self.area = types.Area(0, 0, 0, 0)
 		self.define = ord
@@ -1305,7 +1290,7 @@ class Refraction(Core):
 		# Screen delta.
 		"""
 
-		start_of_view = self.v_line_offset
+		start_of_view = self.image.line_offset
 		src = self.source
 		rline = self.forms.render
 		gline = self.source.sole
@@ -1420,7 +1405,7 @@ class Refraction(Core):
 
 		# Current view image status. (Past)
 		index = ds.element or 0
-		vo = self.v_line_offset
+		vo = img.line_offset
 		whence = index - vo
 		ve = vo + v_lines
 
@@ -1444,8 +1429,8 @@ class Refraction(Core):
 		if dt > 0 and index < vo:
 			# Change did not overlap with image at all.
 			# Only adjust image position accordingly.
-			self.v_line_offset += dt
-			assert self.v_line_offset >= 0
+			img.line_offset += dt
+			assert img.line_offset >= 0
 			return
 
 		ni = len(ds.insertion or ())
@@ -1483,7 +1468,7 @@ class Refraction(Core):
 				d = max(0, whence + nd)
 				w = 0
 				if not scroll_lock:
-					self.v_line_offset -= (nd - d)
+					img.line_offset -= (nd - d)
 			else:
 				# No change in view position.
 				assert whence >= 0 and whence < v_lines
@@ -1496,20 +1481,20 @@ class Refraction(Core):
 
 			if scroll_lock:
 				# Scroll lock, last page.
-				self.v_line_offset -= nd
+				img.line_offset -= nd
 
 				# Apply prior to contraining &d to the available area.
-				# In negative &whence cases, &self.v_line_offset has already
+				# In negative &whence cases, &img.line_offset has already
 				# been adjusted for the changes before the view.
-				if self.v_line_offset <= 0:
+				if img.line_offset <= 0:
 					# Delete caused transition to first page. Clamp image offset to 0.
-					self.v_line_offset = 0
+					img.line_offset = 0
 					scroll_lock = False
 					yield from self.refresh()
 				else:
 					yield ddel(self.area, dslice.start, dslice.stop)
-					stop = self.v_line_offset + (dslice.stop - dslice.start)
-					s = img.prefix(self.iterphrases(self.v_line_offset, stop))
+					stop = img.line_offset + (dslice.stop - dslice.start)
+					s = img.prefix(self.iterphrases(img.line_offset, stop))
 					yield from self.v_render(s)
 			else:
 				yield ddel(self.area, dslice.start, dslice.stop)
@@ -1517,11 +1502,11 @@ class Refraction(Core):
 		# Insertion
 		if ni:
 			if scroll_lock:
-				self.v_line_offset += ni
+				img.line_offset += ni
 				i = min(v_lines, ni)
 			elif whence < 0:
 				# Nothing but offset updates.
-				self.v_line_offset += ni
+				img.line_offset += ni
 				return
 			else:
 				i = max(0, min(v_lines - whence, ni))
@@ -1539,8 +1524,8 @@ class Refraction(Core):
 			yield from self.v_render(s)
 
 		# Compensate. Orientation independent.
-		tail = self.v_line_offset + img.count()
-		stop = self.v_line_offset + v_lines
+		tail = img.line_offset + img.count()
+		stop = img.line_offset + v_lines
 		s = img.suffix(self.iterphrases(tail, stop))
 		yield from self.v_render(s)
 
@@ -1571,7 +1556,7 @@ class Refraction(Core):
 		ry = self.area.top_offset
 		limit = self.area.span
 		voffset = larea.start # Context seek offset.
-		hoffset = self.v_cell_offset
+		hoffset = self.image.cell_offset
 		img = self.image
 
 		cv = []
@@ -1594,7 +1579,7 @@ class Refraction(Core):
 		"""
 		# Refresh the view image with &whence being the beginning of the new view.
 
-		# The &self.v_line_offset is updated to &whence, but &self.visible is presumed
+		# The &img.line_offset is updated to &whence, but &self.visible is presumed
 		# to be current.
 		"""
 
@@ -1641,7 +1626,7 @@ class Refraction(Core):
 		rx, ry = (0, 0)
 		ctx = self.area
 		vx, vy = (ctx.left_offset, ctx.top_offset)
-		hoffset = self.v_cell_offset
+		hoffset = self.image.cell_offset
 		top, left = self.visible
 		hedge, edge = (ctx.span, ctx.lines)
 		empty_cell = self.forms.lf_theme['empty'].inscribe(ord(' '))
@@ -1800,8 +1785,9 @@ class Frame(Core):
 
 		# Configure and refresh.
 		rf.configure(self.deltas, self.define, self.areas[vi][1])
-		rf.v_line_offset = rf.visible[0]
-		rf.v_cell_offset = rf.visible[1]
+		img = rf.image
+		img.line_offset = rf.visible[0]
+		img.cell_offset = rf.visible[1]
 
 		return rf.refresh(rf.visible[0])
 

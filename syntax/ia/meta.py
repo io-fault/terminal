@@ -236,8 +236,9 @@ def refresh_view_image(session, frame, rf, event):
 	# Redraw the view's image.
 	"""
 
+	img = rf.image
 	session.log(
-		f"View: {rf.v_line_offset!r} -> {rf.v_cell_offset!r} {rf.version!r} {rf.area!r}",
+		f"View: {img.line_offset!r} -> {img.cell_offset!r} {rf.version!r} {rf.area!r}",
 		f"Cursor: {rf.focus[0].snapshot()!r}",
 		f"Refraction: {rf.visible!r}",
 		f"Lines: {rf.source.ln_count()}, {rf.source.version()}",
