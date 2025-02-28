@@ -4,7 +4,7 @@
 import operator
 import itertools
 import functools
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from .types import Glyph
 
@@ -348,15 +348,36 @@ class Phrase(tuple):
 	"""
 	# A sequence &Words providing translation interfaces for codepoints, cells, and character
 	# units.
+
+	# [ Elements ]
+	# /origin/
+		# The first address of any &Phrase instance.
 	"""
 	__slots__ = ()
 
-	def render(self, *, Define=ord):
+	origin = ((0, 0), 0)
+
+	def render(self, *, origin=(0, 0), Define=ord):
 		"""
 		# Generate the cells that would represent the words of the phrase.
 		"""
 
 		for word in self:
+			yield from word.render(Define)
+
+	def render_slice(self, Define, origin):
+		"""
+		# Generate the cells that would represent the words of the phrase.
+		"""
+
+		if origin[1] > 0:
+			# Split initial word.
+			yield self[origin[0]].split(origin[1])[1].render(Define)
+			i = origin[0] + 1
+		else:
+			i = origin[0]
+
+		for word in self[i:]:
 			yield from word.render(Define)
 
 	@staticmethod
@@ -649,3 +670,199 @@ class Phrase(tuple):
 		wi, ci = position
 		offset = uoffset(self[wi], ci)
 		return offset + sum(ulength(self[i]) for i in range(wi))
+
+class Image(object):
+	"""
+	# A &Phrase sequence backed view for display.
+
+	# [ Elements ]
+	# /line_offset/
+		# The line offset that the image currently reflects. Must be updated
+		# by the controller when position changes (scrolls) have occurred.
+	# /cell_offset/
+		# The cell offset, span, that the image currently reflects. Must be updated
+		# by the controller after performing any of the pan methods.
+
+		# Insertions of any kind will have their corresponding &whence record
+		# configured by seeking &cell_offset automatically.
+	# /phrase/
+		# The list of Phrases currently in the image.
+	# /whence/
+		# The position of the corresponding &phrase index.
+	"""
+
+	__slots__ = ('line_offset', 'cell_offset', 'phrase', 'whence')
+
+	line_offset: int
+	cell_offset: int
+	phrase: Sequence[Phrase]
+	whence: Sequence[tuple[tuple[int, int], int]]
+
+	def __init__(self, line_offset=0, cell_offset=0, Sequence=list):
+		self.line_offset = line_offset
+		self.cell_offset = cell_offset
+		self.phrase = Sequence()
+		self.whence = Sequence()
+
+	def count(self) -> int:
+		"""
+		# Number of phrase instances currently present in the image.
+		"""
+
+		assert len(self.phrase) == len(self.whence)
+		return len(self.phrase)
+
+	def all(self) -> slice:
+		"""
+		# Construct a slice to all phrases in the image.
+		"""
+
+		return slice(0, len(self.phrase))
+
+	def truncate(self, index=None):
+		"""
+		# Delete the phrases after and including &index.
+		"""
+
+		del self.phrase[index:]
+		del self.whence[index:]
+
+	def pan_relative(self, larea, offset:int, *, islice=itertools.islice):
+		"""
+		# Update the image's whence column by advancing the positions with &offset.
+		# The seek is performed relative to the current positions.
+
+		# Only adjusts the &whence vector contents. &offset must
+		# be independently updated.
+		"""
+
+		wcopy = self.whence[larea]
+		ipairs = zip(wcopy, islice(self.phrase, larea.start, larea.stop))
+
+		self.whence[larea] = (
+			ph.seek(w[0], offset-w[1], *ph.m_cell)
+			for w, ph in ipairs
+		)
+
+	def pan_forward(self, larea, offset:int):
+		"""
+		# Advance the camera's position horizontally using &pan_relative.
+		"""
+
+		return self.pan_relative(larea, offset)
+
+	def pan_backward(self, larea, offset:int):
+		"""
+		# Withdraw the camera's position horizontally using &pan_relative.
+		"""
+
+		return self.pan_relative(larea, -offset)
+
+	def pan_absolute(self, larea:slice, offset:int, *, islice=itertools.islice):
+		"""
+		# Update the &whence of the phrases identified by &larea.
+		# The seek is performed relative to the beginning of the phrase.
+
+		# Only adjusts the &whence vector contents. &offset must
+		# be independently updated.
+		"""
+
+		wcopy = self.whence[larea]
+		ipairs = zip(wcopy, islice(self.phrase, larea.start, larea.stop))
+
+		self.whence[larea] = (
+			ph.seek(ph.origin[0], offset, *ph.m_cell)
+			for w, ph in ipairs
+		)
+
+	def update(self, larea:slice, phrases:Iterable[Phrase]):
+		"""
+		# Set the given &phrases to the designated &area of &image.
+		"""
+
+		self.phrase[larea] = phrases
+		self.whence[larea] = (
+			ph.seek(ph.origin[0], self.cell_offset, *ph.m_cell)
+			for ph in self.phrase[larea]
+		)
+		return larea
+
+	def prefix(self, phrases:Iterable[Phrase]):
+		"""
+		# Insert &phrases at the start of the image and adjust the offset
+		# by the number inserted.
+
+		# [ Returns ]
+		# Slice to phrases that were prepended to the image.
+		"""
+
+		count = len(self.phrase)
+		self.phrase[0:0] = phrases
+		count = len(self.phrase) - count
+		self.whence[0:0] = [Phrase.origin] * count
+
+		larea = slice(0, count)
+		if self.cell_offset:
+			self.pan_absolute(larea, self.cell_offset)
+
+		return larea
+
+	def suffix(self, phrases:Iterable[Phrase]):
+		"""
+		# Insert &phrases at the end of the image and return the &slice
+		# that needs to be updated.
+
+		# [ Returns ]
+		# Slice to phrases that were appended to the image.
+		"""
+
+		il = len(self.phrase)
+		self.phrase.extend(phrases)
+		count = len(self.phrase) - il
+		self.whence.extend([Phrase.origin] * count)
+
+		larea = slice(il, il + count)
+		if self.cell_offset:
+			self.pan_absolute(larea, self.cell_offset)
+		return larea
+
+	def delete(self, index, count):
+		"""
+		# Remove &count elements at the view relative &index.
+
+		# [ Returns ]
+		# Slice to the real deleted area.
+		"""
+
+		stop = min(len(self.phrase), index + count)
+		larea = slice(index, stop)
+		del self.phrase[larea]
+		del self.whence[larea]
+
+		return larea
+
+	def insert(self, index, phrases:Iterable[Phrase]):
+		"""
+		# Insert &phrases at &index displacing, but not deleting, surrounding phrases.
+
+		# [ Returns ]
+		# Slice to the inserted area.
+		"""
+
+		count = len(self.phrase)
+		self.phrase[index:index] = phrases
+		count = len(self.phrase) - count
+		self.whence[index:index] = [Phrase.origin] * count
+
+		larea = slice(index, index + count)
+		if self.cell_offset:
+			self.pan_absolute(larea, self.cell_offset)
+		return larea
+
+	def render(self, define, larea=slice(0, None), list=list, zip=zip):
+		"""
+		# Render the image relative lines specified by &larea.
+		"""
+
+		for (ph, w) in zip(self.phrase[larea], self.whence[larea]):
+			yield ph.render(w[0], cell_limit, Define=define)

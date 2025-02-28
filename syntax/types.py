@@ -12,7 +12,7 @@ from collections.abc import Sequence, Mapping, Iterable
 from typing import Optional, Protocol, Literal, Callable
 
 from ..cells import text
-from ..cells.text import Phrase, Redirect, Words, Unit
+from ..cells.text import Phrase, Redirect, Words, Unit, Image
 from ..cells.types import Area, Glyph, Pixels, Device, Line as LineStyle
 
 class Annotation(Protocol):

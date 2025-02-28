@@ -386,7 +386,8 @@ def pan_forward_cells(session, frame, rf, event, quantity=3, target=None, shift=
 		target = rf
 
 	target.visible[1] += quantity
-	target.vi_pan_forward(target.vi_all(), quantity)
+	img = target.image
+	img.pan_forward(img.all(), quantity)
 	target.v_cell_offset = target.visible[1]
 	frame.deltas.extend(target.v_render())
 
@@ -405,7 +406,8 @@ def pan_backward_cells(session, frame, rf, event, quantity=3, target=None, shift
 	i = max(0, target.visible[1] - quantity)
 
 	target.visible[1] = i
-	target.vi_pan_absolute(target.vi_all(), i)
+	img = target.image
+	img.pan_absolute(img.all(), i)
 	target.v_cell_offset = target.visible[1]
 	frame.deltas.extend(target.v_render())
 

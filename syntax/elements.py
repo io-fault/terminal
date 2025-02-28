@@ -870,14 +870,13 @@ class Refraction(Core):
 		# The version of &source that is currently being represented.
 	# /system_execution_status/
 		# Status of system processes executed by commands targeting the instance.
-	# /v_image/
+	# /image/
 		# The &Phrase sequence of the current display.
-	# /v_whence/
-		# The positions in &image that align with the horizontal view state.
 	"""
 
 	area: types.Area
 	source: Resource
+	image: types.Image
 	annotation: Optional[types.Annotation]
 	focus: Sequence[object]
 	limits: Sequence[int]
@@ -889,10 +888,6 @@ class Refraction(Core):
 	version: object = (0, 0, None)
 
 	v_empty: types.Phrase
-	v_cell_offset: int
-	v_line_offset: int
-	v_image: Sequence[types.Phrase]
-	v_whence: Sequence[tuple[tuple[int,int], int]]
 
 	def current(self, depth):
 		d = self.source.elements
@@ -926,10 +921,28 @@ class Refraction(Core):
 		new.forms = lf
 		return new
 
+	@property
+	def v_cell_offset(self):
+		return self.image.cell_offset
+
+	@v_cell_offset.setter
+	def v_cell_offset(self, v):
+		self.image.cell_offset = v
+
+	@property
+	def v_line_offset(self):
+		return self.image.line_offset
+
+	@v_line_offset.setter
+	def v_line_offset(self, v):
+		self.image.line_offset = v
+
 	def __init__(self, resource):
-		self.frame_visible = False
 		self.area = types.Area(0, 0, 0, 0)
 		self.define = ord
+		self.deltas = []
+		self.frame_visible = False
+
 		self.source = resource
 		self.forms = resource.forms
 		self.annotation = None
@@ -944,13 +957,7 @@ class Refraction(Core):
 		self.v_empty = types.text.Phrase([
 			types.text.Words((0, "", self.forms.lf_theme['empty']))
 		])
-		self.v_cell_offset = 0
-		self.v_line_offset = 0
-		self.v_image = []
-		self.v_whence = []
-
-		# Overwritten by configure.
-		self.deltas = []
+		self.image = types.Image()
 
 	def v_status(self, mode='control') -> types.Status:
 		"""
@@ -1316,7 +1323,7 @@ class Refraction(Core):
 
 			ph = next(rline((li,)))
 			larea = slice(rlo, rlo+1)
-			self.vi_update(larea, (ph,))
+			self.image.update(larea, (ph,))
 			yield from self.v_render(larea)
 
 	def line_delta(self, ln_offset, deleted, inserted):
@@ -1351,6 +1358,7 @@ class Refraction(Core):
 		# the set of visible elements.
 		"""
 
+		img = self.image
 		to = delta(self.visible[0])
 
 		# Limit to edges.
@@ -1375,21 +1383,21 @@ class Refraction(Core):
 			# View's position is before the refraction's.
 			# Advance offset after aligning the image.
 			eov = to + self.area.lines
-			self.vi_delete(0, dv)
+			img.delete(0, dv)
 			self.deltas.append(alignment.scroll_backward(self.area, dv))
-			s = self.vi_suffix(list(self.iterphrases(eov-dv, eov)))
+			s = img.suffix(self.iterphrases(eov-dv, eov))
 			self.deltas.extend(self.v_render(s))
 		else:
 			# View's position is beyond the refraction's.
 			# Align the image with prefix.
 			assert dv < 0
 
-			s = self.vi_prefix(list(self.iterphrases(to, to-dv)))
-			self.vi_trim()
+			s = img.prefix(self.iterphrases(to, to-dv))
+			img.truncate(self.area.lines)
 			self.deltas.append(alignment.scroll_forward(self.area, -dv))
 			self.deltas.extend(self.v_render(s))
 
-		self.v_line_offset = to
+		img.line_offset = to
 		self.visible[0] = to
 
 	def v_update(self, ds, *,
@@ -1401,6 +1409,7 @@ class Refraction(Core):
 		# synchronize the display.
 		"""
 
+		img = self.image
 		src = self.source
 		va = self.area
 		v_lines = va.lines
@@ -1446,7 +1455,7 @@ class Refraction(Core):
 			# No change in size, update the area.
 			assert nd == ni
 			s = slice(max(0, index - vo), min(ve, index - vo + ni))
-			self.vi_update(s, self.iterphrases(index, index+ni))
+			img.update(s, self.iterphrases(index, index+ni))
 			yield from self.v_render(s)
 			return
 
@@ -1480,10 +1489,10 @@ class Refraction(Core):
 				assert whence >= 0 and whence < v_lines
 				w = whence
 				# Limit local deletion to the lines in the view.
-				d = min(nd, len(self.v_image) - whence)
+				d = min(nd, img.count() - whence)
 
 			# Bounded deletion.
-			dslice = self.vi_delete(w, d)
+			dslice = img.delete(w, d)
 
 			if scroll_lock:
 				# Scroll lock, last page.
@@ -1500,7 +1509,7 @@ class Refraction(Core):
 				else:
 					yield ddel(self.area, dslice.start, dslice.stop)
 					stop = self.v_line_offset + (dslice.stop - dslice.start)
-					s = self.vi_prefix(list(self.iterphrases(self.v_line_offset, stop)))
+					s = img.prefix(self.iterphrases(self.v_line_offset, stop))
 					yield from self.v_render(s)
 			else:
 				yield ddel(self.area, dslice.start, dslice.stop)
@@ -1517,56 +1526,23 @@ class Refraction(Core):
 			else:
 				i = max(0, min(v_lines - whence, ni))
 
-			s = self.vi_insert(whence, i)
+			s = img.insert(whence, self.iterphrases(index, index+i))
 			yield dins(va, s.start, s.stop)
-			self.vi_update(s, self.iterphrases(index, index+i))
+
+			# Remove excess from image.
 			if scroll_lock:
-				self.vi_truncate(len(self.v_image) - v_lines)
+				trimmed = img.count() - v_lines
+				img.delete(0, img.count() - v_lines)
+				s = slice(s.start - trimmed, s.stop - trimmed)
 			else:
-				self.vi_trim()
+				img.truncate(v_lines)
 			yield from self.v_render(s)
 
 		# Compensate. Orientation independent.
-		tail = self.v_line_offset + len(self.v_image)
+		tail = self.v_line_offset + img.count()
 		stop = self.v_line_offset + v_lines
-		s = self.vi_suffix(list(self.iterphrases(tail, stop)))
+		s = img.suffix(self.iterphrases(tail, stop))
 		yield from self.v_render(s)
-
-		assert len(self.v_image) == va.lines
-
-	def vi_all(self):
-		return slice(0, len(self.v_image))
-
-	def vi_update(self, larea, phrases):
-		"""
-		# Set the given &phrases to the designated &area of &image.
-		"""
-
-		self.v_image[larea] = phrases
-		self.v_whence[larea] = [
-			ph.seek((0, 0), self.v_cell_offset, *ph.m_cell)
-			for ph in phrases
-		]
-
-	def vi_truncate(self, whence=None):
-		"""
-		# Delete the phrases cached in &image.
-		"""
-
-		del self.v_image[whence:]
-		del self.v_whence[whence:]
-
-	def vi_trim(self):
-		"""
-		# Limit the image to the display's height.
-		"""
-
-		d = self.area.lines
-		del self.v_image[d:]
-		del self.v_whence[d:]
-
-		assert len(self.v_image) == self.area.lines
-		assert len(self.v_whence) == self.area.lines
 
 	def vi_compensate(self):
 		"""
@@ -1574,131 +1550,14 @@ class Refraction(Core):
 		"""
 
 		# Pad end with empty lines.
-		start = len(self.v_image)
-		d = self.area.lines - start
-		self.v_image.extend([self.v_empty] * d)
-		self.v_whence.extend([((0, 0), 0)] * d)
-
-		assert len(self.v_image) == self.area.lines
-		assert len(self.v_whence) == self.area.lines
-
-		return slice(start, len(self.v_image))
-
-	def vi_pan_relative(self, larea, offset, *, islice=itertools.islice):
-		"""
-		# Update the image's whence column by advancing the positions with &offset.
-		# The seek is performed relative to the current positions.
-
-		# Only adjusts the &v_whence vector contents. &v_cell_offset must
-		# be independently updated.
-		"""
-
-		wcopy = self.v_whence[larea]
-		ipairs = zip(wcopy, islice(self.v_image, larea.start, larea.stop))
-		self.v_whence[larea] = (
-			ph.seek(w[0], offset-w[1], *ph.m_cell)
-			for w, ph in ipairs
-		)
-
-	def vi_pan_forward(self, larea, offset):
-		"""
-		# Advance the camera's position horizontally using &v_pan_relative.
-		"""
-
-		return self.vi_pan_relative(larea, offset)
-
-	def vi_pan_backward(self, larea, offset):
-		"""
-		# Withdraw the camera's position horizontally using &v_pan_relative.
-		"""
-
-		return self.vi_pan_relative(larea, -offset)
-
-	def vi_pan_absolute(self, larea, offset, *, islice=itertools.islice):
-		"""
-		# Update the &whence of the phrases identified by &larea.
-		# The seek is performed relative to the beginning of the phrase.
-
-		# Only adjusts the &v_whence vector contents. &v_cell_offset must
-		# be independently updated.
-		"""
-
-		wcopy = self.v_whence[larea]
-		ipairs = zip(wcopy, islice(self.v_image, larea.start, larea.stop))
-
-		self.v_whence[larea] = (
-			ph.seek((0, 0), offset, *ph.m_cell)
-			for w, ph in ipairs
-		)
-
-	def vi_prefix(self, phrases):
-		"""
-		# Insert &phrases at the start of the image and adjust the offset
-		# by the number inserted.
-
-		# [ Returns ]
-		# Slice to be updated.
-		"""
-
-		count = len(phrases)
-		self.v_image[0:0] = phrases
-		self.v_whence[0:0] = [((0, 0), 0) for x in range(len(phrases))]
-
-		larea = slice(0, len(phrases))
-		if self.v_cell_offset:
-			self.vi_pan_absolute(larea, self.v_cell_offset)
-
-		return larea
-
-	def vi_suffix(self, phrases):
-		"""
-		# Insert &phrases at the end of the image and return the &slice
-		# that needs to be updated.
-
-		# [ Returns ]
-		# Slice to be updated.
-		"""
-
-		count = len(phrases)
-		il = len(self.v_image)
-		self.v_image.extend(phrases)
-		self.v_whence.extend([((0, 0), 0)] * count)
-
-		larea = slice(il, il + count)
-		if self.v_cell_offset:
-			self.vi_pan_absolute(larea, self.v_cell_offset)
-		return larea
-
-	def vi_delete(self, index, count):
-		"""
-		# Remove &count elements at the view relative &index.
-
-		# [ Returns ]
-		# Slice to the deleted area needing to be updated.
-		"""
-
-		stop = index + count
-		isize = len(self.v_image)
-		del self.v_image[index:stop]
-		del self.v_whence[index:stop]
-
-		return slice(index, stop)
-
-	def vi_insert(self, index, count):
-		"""
-		# Insert &count empty phrases at the view relative &index.
-
-		# [ Returns ]
-		# Slice to the inserted area needing to be updated.
-		"""
-
-		self.v_image[index:index] = [self.v_empty] * count
-		self.v_whence[index:index] = [((0, 0), 0)] * count
-
-		larea = slice(index, index + count)
-		if self.v_cell_offset:
-			self.vi_pan_absolute(larea, self.v_cell_offset)
-		return larea
+		img = self.image
+		v_lines = self.area.lines
+		i_count = img.count()
+		d = v_lines - i_count
+		if d < 0:
+			img.truncate(v_lines)
+			d = 0
+		return img.suffix([self.v_empty] * d)
 
 	def v_render(self, larea=slice(0, None), *, min=min, max=max, len=len, list=list, zip=zip):
 		"""
@@ -1713,10 +1572,11 @@ class Refraction(Core):
 		limit = self.area.span
 		voffset = larea.start # Context seek offset.
 		hoffset = self.v_cell_offset
+		img = self.image
 
 		cv = []
 
-		for (phrase, w) in zip(self.v_image[larea], self.v_whence[larea]):
+		for (phrase, w) in zip(img.phrase[larea], img.whence[larea]):
 			cells = list(phrase.render(Define=self.define))
 			visible = min(limit, max(0, len(cells) - hoffset))
 			v = limit - visible
@@ -1738,12 +1598,12 @@ class Refraction(Core):
 		# to be current.
 		"""
 
+		img = self.image
 		visible = self.area.lines
-		phrases = list(self.iterphrases(whence, whence+visible))
-		larea = slice(0, len(phrases))
-		self.vi_truncate()
-		self.vi_suffix(phrases)
-		self.v_line_offset = whence
+		phrases = self.iterphrases(whence, whence+visible)
+		img.truncate()
+		img.suffix(phrases)
+		img.line_offset = whence
 		self.visible[0] = whence
 
 		return self.v_render(slice(0, visible))
@@ -2100,12 +1960,10 @@ class Frame(Core):
 			d -= self.structure.fm_border_width
 
 		rf.configure(rf.deltas, rf.define, rf.area.resize(-d, 0))
-		rf.vi_trim()
 		rf.vi_compensate()
 
 		f.area = f.area.move(-d, 0)
 		# &render will emit the entire image, so make sure the footer is trimmed.
-		f.vi_trim()
 		f.vi_compensate()
 		return d
 
