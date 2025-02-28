@@ -233,7 +233,7 @@ def stop_relative_insert(area, start, stop):
 		area.__class__(
 			area.top_offset + 0,
 			area.left_offset + 0,
-			start - d,
+			start,
 			area.span
 		),
 		area.__class__(

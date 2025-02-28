@@ -1501,26 +1501,29 @@ class Refraction(Core):
 
 		# Insertion
 		if ni:
+			if whence < 0:
+				# No change in image, update offset and exit.
+				img.line_offset += ni
+				return
+
 			if scroll_lock:
 				img.line_offset += ni
 				i = min(v_lines, ni)
-			elif whence < 0:
-				# Nothing but offset updates.
-				img.line_offset += ni
-				return
 			else:
 				i = max(0, min(v_lines - whence, ni))
 
 			s = img.insert(whence, self.iterphrases(index, index+i))
-			yield dins(va, s.start, s.stop)
 
 			# Remove excess from image.
 			if scroll_lock:
 				trimmed = img.count() - v_lines
-				img.delete(0, img.count() - v_lines)
-				s = slice(s.start - trimmed, s.stop - trimmed)
+				img.delete(0, trimmed)
+				s = slice(max(0, s.start - trimmed), s.stop - trimmed)
 			else:
 				img.truncate(v_lines)
+				s = slice(s.start, min(s.stop, v_lines))
+
+			yield dins(va, s.start, s.stop)
 			yield from self.v_render(s)
 
 		# Compensate. Orientation independent.
