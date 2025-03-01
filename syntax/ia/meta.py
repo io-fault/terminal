@@ -187,8 +187,7 @@ def startofline_insert_mode_switch(session, frame, rf, event):
 
 	rf.source.checkpoint()
 
-	lo = rf.focus[0].get()
-	rf.focus[1].set(rf.source.sole(lo).ln_level)
+	rf.focus[1].set(0)
 	session.keyboard.set('insert')
 	rf.whence = -2
 
