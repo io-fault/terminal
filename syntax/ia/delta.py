@@ -173,6 +173,7 @@ def insert_string_argument(session, frame, rf, event, string, *, quantity=1):
 	# Insert a string at the current cursor position disregarding &event.
 	"""
 
+	src = rf.source
 	lo, co = (x.get() for x in rf.focus)
 	string = string * quantity
 
