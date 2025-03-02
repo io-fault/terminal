@@ -6,6 +6,7 @@ import fcntl
 import sys
 import codecs
 import signal
+import errno
 
 from collections.abc import Mapping, Sequence
 from typing import Callable, Iterator
@@ -117,17 +118,19 @@ class Insertion(IO):
 		self.system_operation = (lambda fd, rs: b'')
 
 	def transition(self, scheduler, log, link):
-		xfer = self.system_operation(link.event.port, self.read_size)
-		while len(xfer) == self.read_size:
-			log.append((self, xfer))
-			xfer = self.system_operation(link.event.port, self.read_size)
-
-		if not xfer:
-			# EOF
-			scheduler.cancel(link)
-			scheduler.enqueue(self.final)
-		else:
-			log.append((self, xfer))
+		try:
+			xfer = b'\x00'
+			while len(xfer) > 0:
+				xfer = self.system_operation(link.event.port, self.read_size)
+				log.append((self, xfer))
+			else:
+				scheduler.cancel(link)
+				scheduler.enqueue(self.final)
+				return
+		except OSError as err:
+			if err.errno != errno.EAGAIN:
+				scheduler.cancel(link)
+				raise
 
 @dataclass()
 class Transmission(IO):
