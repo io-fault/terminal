@@ -88,20 +88,8 @@ def execute(session, frame, rf, system):
 	co = rf.focus[1].get()
 	readlines = Decode('utf-8').decode
 
-	if lo >= src.ln_count():
-		src.ln_initialize()
-		src.commit()
-	target_line = src.sole(lo)
-
-	i = Insertion(rf, (lo, co, ''), readlines)
-	i.level = target_line.ln_level
-	if i.level:
-		# Maintain initial indentation context on first line,
-		# and make sure that there is a line to write into.
-		src.insert_lines(lo, [src.forms.ln_interpret("", level=i.level)])
-		src.commit()
-
-	pid = session.io.invoke(c, i, None, inv)
+	ins = Insertion(rf, (lo, co, ''), readlines)
+	pid = session.io.invoke(c, ins, None, inv)
 	ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
 	rf.annotate(ca)
 

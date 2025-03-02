@@ -22,7 +22,7 @@ from . import ia
 from . import types
 from . import fields
 
-from .types import Model, Reference, Area, Glyph, Device, System
+from .types import Model, Reference, Area, Glyph, Device, System, Image, Annotation
 
 class Core(object):
 	"""
@@ -284,9 +284,11 @@ class Resource(Core):
 
 		slog = self.modifications
 		views = list(self.views)
+		srclines = self.elements
 
 		for dsrc in deltas:
-			dsrc.apply(self.elements)
+			dsrc.apply(srclines)
+
 			for rf in views:
 				img = rf.image
 				dsrc.track(rf)
@@ -297,7 +299,9 @@ class Resource(Core):
 					rf.deltas.extend(df)
 				rf.visible[0] = img.line_offset
 				rf.visible[1] = img.cell_offset
-				rf.recursor()
+
+		for rf in views:
+			rf.recursor()
 
 		return slog
 
@@ -458,6 +462,16 @@ class Resource(Core):
 			.write(delta.Update(lo, "", nlstr, offset + (4)))
 			.write(delta.Lines(lo+1, [lf.ln_sequence(nl)], [])))
 
+	def displace_cursors(self, lo, ln_count, co, cp_count):
+		"""
+		# Insert a &delta.Cursor record causing the cursor to move
+		# in the context of a commit.
+		"""
+
+		# co+(4) for parity with regular changes.
+		(self.modifications
+			.write(delta.Cursor(lo, ln_count, co+(4), cp_count)))
+
 	def splice_text(self, ln_format, lo:int, co:int, text:str, ln_level=0):
 		"""
 		# Insert &text in the line &lo at the indentation relative character &co.
@@ -514,7 +528,14 @@ class Resource(Core):
 		if wholes:
 			# Carry the tail in the first line.
 			suffix = self.substitute_codepoints(lo, co, target_line.ln_length, fcontent)
+			end_of_insert = len(wholes[-1])
 			wholes[-1] = wholes[-1] + suffix
+
+			# Force cursors at &lo to beginning of next line.
+			eol = co + len(fcontent)
+			# Codepoint offset must be zero here. Otherwise, deletion is
+			# identified as occurring past the cursor.
+			self.displace_cursors(lo, +1, 0, -eol)
 
 			# Identify indentation boundaries and structure the line.
 			ln_i = self.forms.ln_interpret # Universal
@@ -524,6 +545,10 @@ class Resource(Core):
 			# Insert and identify the new codepoint offset in the final line.
 			dl = self.insert_lines(lo+1, slines)
 			co = slines[-1].ln_length - len(suffix)
+
+			# Restore cursors that were offset.
+			self.displace_cursors(lo+dl, -1, 0, 0)
+			self.displace_cursors(lo+dl, 0, 0, end_of_insert)
 		else:
 			self.insert_codepoints(lo, co, fcontent)
 			co = co + len(fcontent)
@@ -875,17 +900,16 @@ class Refraction(Core):
 		# The &Phrase sequence of the current display.
 	"""
 
-	area: types.Area
+	area: Area
 	source: Resource
-	image: types.Image
-	annotation: Optional[types.Annotation]
+	image: Image
+	annotation: Optional[Annotation]
 	focus: Sequence[object]
 	limits: Sequence[int]
 	visible: Sequence[int]
 	activate = None
 	cancel = None
 	define: Callable[[str], int]
-	area: Area
 	version: object = (0, 0, None)
 
 	v_empty: types.Phrase
@@ -1053,23 +1077,35 @@ class Refraction(Core):
 
 		src = self.source
 		total = src.ln_count()
+		ln_pos, cp_pos = self.focus
+		cp_offset = cp_pos.get()
 
-		# Constrain vertical and identify indentation level (bol).
-		lo = self.focus[0].get()
+		lo = ln_pos.get()
+
 		if lo < 0 or total < 1:
+			# Constrain cursor to beginning of first line.
 			lo = 0
+			cp_offset = 0
 		elif lo >= total:
+			# Constraint cursor to end of last line.
 			lo = max(0, total - 1)
-		self.focus[0].set(lo)
+			cp_offset = -1
+
+		ln_pos.set(lo)
 
 		try:
-			line = src.sole(lo)
+			li = src.sole(lo)
 		except IndexError:
 			self.focus[1].restore((0, 0, 0))
 			return
+		else:
+			# If cursor was pushed beyond the available lines,
+			# change the position to be at the end of all content.
+			if cp_offset == -1:
+				cp_pos.set(li.ln_length)
 
 		# Constrain cell cursor.
-		ll = line.ln_length
+		ll = li.ln_length
 		h = self.focus[1]
 		h.datum = max(0, h.datum)
 		h.magnitude = min(ll, h.magnitude)
@@ -1422,7 +1458,7 @@ class Refraction(Core):
 				return
 
 		if not isinstance(ds, delta.Lines):
-			# Checkpoint or before image Update.
+			# Checkpoint, Cursor or before image Update.
 			return
 		assert isinstance(ds, delta.Lines)
 

@@ -357,6 +357,68 @@ class Lines(Record):
 	def combine(self, following):
 		return None
 
+@struct()
+class Cursor(Record):
+	"""
+	# Change
+
+	# [ Elements ]
+	# /element/
+		# The element being changed.
+	# /insertion/
+		# Data that is inserted upon application.
+	# /deletion/
+		# Data that is removed before the insertion.
+	"""
+
+	element: int
+	lines: int
+	codepoint_offset: int
+	codepoints: int
+
+	@property
+	def change(self):
+		return self.lines
+
+	@property
+	def span(self, *, len=len, max=max):
+		return (self.element, max(len(self.insertion), len(self.deletion)))
+
+	def size(self, encoding, *, sum=sum, map=map, len=len):
+		return 0
+
+	def invert(self):
+		"""
+		# Recreate the record where insertion and deletion are swapped.
+		"""
+
+		return self.__class__(
+			self.element + self.lines,
+			-self.lines,
+			self.codepoint_offset + self.codepoints,
+			-self.codepoints,
+		)
+
+	def track(self, target):
+		if self.codepoints > 0:
+			target.codepoint_delta(self.element, self.codepoint_offset, 0, self.codepoints)
+		elif self.codepoints < 0:
+			target.codepoint_delta(self.element, self.codepoint_offset, -self.codepoints, 0)
+
+		if self.lines > 0:
+			target.line_delta(self.element, 0, self.lines)
+		elif self.lines < 0:
+			target.line_delta(self.element, -self.lines, 0)
+
+	def apply(self, target, *, len=len, list=list):
+		pass
+
+	def retract(self, target, *, len=len, list=list):
+		pass
+
+	def combine(self, following):
+		return None
+
 class Log(object):
 	"""
 	# The &Record vector tracking the changes.
