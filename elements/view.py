@@ -7,6 +7,7 @@ from typing import Optional, Callable
 
 from ..cells import alignment
 
+from . import annotations
 from . import storage
 from .types import Core, Annotation, Position, Status
 from .types import Reformulations, Line
@@ -800,7 +801,7 @@ class Refraction(Core):
 			# between first and last characters
 			return 'cursor-offset-active'
 
-	def indicate(self, mode='control'):
+	def indicate(self, mode='control', delimit=annotations.delimit):
 		"""
 		# Render the cursor line.
 		"""
@@ -838,7 +839,7 @@ class Refraction(Core):
 		lfields = lf.lf_fields.partial()(li)
 		if fai is not None:
 			fai.update(li.ln_content, lfields)
-			caf = phc(Line(ln, 0, ""), annotations.delimit(fai))
+			caf = phc(Line(ln, 0, ""), delimit(fai))
 			phrase = phc(li, lfields)
 			phrase = Phrase(itertools.chain(phc(li, lfields), caf))
 		else:
