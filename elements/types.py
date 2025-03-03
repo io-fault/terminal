@@ -15,6 +15,13 @@ from ..cells import text
 from ..cells.text import Phrase, Redirect, Words, Unit, Image
 from ..cells.types import Area, Glyph, Pixels, Device, Line as LineStyle
 
+class Core(object):
+	"""
+	# Core element type.
+
+	# Common base class for all instructable application elements.
+	"""
+
 class Annotation(Protocol):
 	"""
 	# Interface for cursor annotation status displays conveying additional

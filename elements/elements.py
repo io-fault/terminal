@@ -22,14 +22,7 @@ from . import ia
 from . import types
 from . import fields
 
-from .types import Model, Reference, Area, Glyph, Device, System, Image, Annotation
-
-class Core(object):
-	"""
-	# Common properties and features.
-
-	# Currently, only used to identify a user interface element.
-	"""
+from .types import Core, Model, Reference, Area, Glyph, Device, System, Image, Annotation
 
 class Execution(Core):
 	"""
