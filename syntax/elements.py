@@ -11,10 +11,10 @@ from fault.context import tools
 from fault.system import files
 from fault.system.query import home
 
+from ..cells import alignment
 from . import symbols
 from . import location
 from . import annotations
-from . import alignment
 from . import types
 from . import sequence
 from . import delta
