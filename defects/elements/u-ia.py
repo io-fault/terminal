@@ -1,7 +1,7 @@
 """
 # Test document IA fundamentals.
 """
-from ...syntax.ia import types as module
+from ...elements.ia import types as module
 
 def test_Index_constraints(test):
 	idx = module.Index('category', ['none'])

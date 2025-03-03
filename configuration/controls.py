@@ -1,7 +1,7 @@
 """
 # Key bindings for controlling terminal applications.
 """
-from ..syntax.ia.types import Mode, Selection
+from ..elements.ia.types import Mode, Selection
 
 km_shift = "Shift"
 km_control = "Control"

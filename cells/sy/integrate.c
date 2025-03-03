@@ -110,11 +110,11 @@ coprocess_invocation(void *ctx)
 	if (r != 0)
 		goto exit;
 
-	r = fault_python_import_controls(FACTOR_CONTEXT(".", "syntax.edit"), "main");
+	r = fault_python_import_controls(FACTOR_CONTEXT(".", "elements.edit"), "main");
 	if (r != 0)
 		goto exit;
 
-	ob = fault_python_execute(FACTOR_CONTEXT(".", "syntax.edit"), "main");
+	ob = fault_python_execute(FACTOR_CONTEXT(".", "elements.edit"), "main");
 	r = fault_python_exit_status(ob);
 
 	exit:

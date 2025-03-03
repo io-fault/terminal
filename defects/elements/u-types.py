@@ -1,4 +1,4 @@
-from ...syntax import types as module
+from ...elements import types as module
 
 def test_Status_arithmetic(test):
 	"""
@@ -103,7 +103,7 @@ def test_Line_properties(test):
 	test/li.ln_extension == 'ext'
 
 def alloc_lambda_forms():
-	from ...syntax import fields
+	from ...elements import fields
 	from fault.syntax import format
 	from ...configuration import types
 	from ...configuration import colors

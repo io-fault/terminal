@@ -2,7 +2,7 @@
 # Terminal configuration defaults.
 """
 import importlib
-from .. import languages
+from .. import syntax
 
 def load_syntax(typname, default='lambda'):
 	"""
@@ -30,7 +30,7 @@ def load_syntax(typname, default='lambda'):
 
 	if typname not in types.implementations:
 		try:
-			typmod = importlib.import_module(languages.__name__ + '.' + typname)
+			typmod = importlib.import_module(syntax.__name__ + '.' + typname)
 			types.implementations[typname] = ('keywords', typmod.profile)
 		except ImportError:
 			typname = default
