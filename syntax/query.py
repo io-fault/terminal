@@ -1,7 +1,6 @@
 """
 # Support functions for refraction query commands.
 """
-from . import delta
 from . import types
 
 def refract(session, frame, prompt, qtype, state, action):

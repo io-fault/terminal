@@ -10,14 +10,14 @@ import weakref
 from fault.context import tools
 from fault.system import files
 from fault.system.query import home
+from fault.syntax import delta
+from fault.syntax import sequence
 
 from ..cells import alignment
 from . import symbols
 from . import location
 from . import annotations
 from . import types
-from . import sequence
-from . import delta
 from . import ia
 from . import types
 from . import fields
