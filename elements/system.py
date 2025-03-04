@@ -8,8 +8,8 @@ import codecs
 import signal
 import errno
 
-from collections.abc import Mapping, Sequence
-from typing import Callable, Iterator
+from collections.abc import Mapping, Sequence, Iterable, Iterator
+from typing import Callable
 from dataclasses import dataclass
 
 from fault.context.tools import partial
@@ -19,8 +19,9 @@ from fault.system.kernel import Link
 from fault.system.kernel import Invocation
 from fault.system.kernel import Scheduler
 
-from . import elements
 from . import annotations
+from .types import Core, System
+from .view import Refraction
 
 Decode = codecs.getincrementaldecoder('utf-8')
 Encode = codecs.getincrementalencoder('utf-8')
@@ -70,7 +71,7 @@ class Insertion(IO):
 	# IO state managing asynchronous reads into resource writes.
 	"""
 
-	target: elements.Refraction
+	target: Refraction
 	cursor: tuple[int, int, str]
 	state: Callable
 
@@ -129,7 +130,7 @@ class Transmission(IO):
 	# IO state managing writes from an arbitrary iterator.
 	"""
 
-	target: elements.Refraction
+	target: Refraction
 	state: Iterator
 	data: bytes
 	total: int
@@ -181,7 +182,7 @@ class Transmission(IO):
 
 @dataclass()
 class Completion(IO):
-	target: elements.Refraction
+	target: Refraction
 	pid: int = None
 
 	interrupt_signal = signal.SIGKILL
@@ -324,3 +325,84 @@ class IOManager(object):
 			raise
 
 		return pid
+
+class Execution(Core):
+	"""
+	# System process execution status and interface.
+
+	# [ Elements ]
+	# /identity/
+		# The identity of the system that operations are dispatched on.
+		# The object that is used to identify an &Execution instance within a &Session.
+	# /encoding/
+		# The encoding to use for environment variables and argument vectors.
+		# This may *not* be consistent with the preferred filesystem encoding.
+	# /environment/
+		# The set of environment variables needed when performing operations
+		# *within* the system context.
+		# Only when host execution is being performed will this be the set of
+		# environment variables passed into the Invocation.
+	# /executable/
+		# The host local, absolute, filesystem path to the executable
+		# used by &interface.
+	# /interface/
+		# The local system command, argument vector, to use to dispatch
+		# operations in the system context.
+	"""
+
+	identity: System
+
+	encoding: str
+	executable: str
+	interface: Sequence[str]
+	environment: Mapping[str, str]
+
+	def __str__(self):
+		return ''.join(x[1] for x in self.i_status())
+
+	def i_status(self):
+		yield from self.identity.i_format(self.pwd())
+
+	def export(self, kv_iter:Iterable[tuple[str,str]]):
+		"""
+		# Update the environment variables present when execution is performed.
+		"""
+
+		self.environment.update(kv_iter)
+
+	def getenv(self, name) -> str:
+		"""
+		# Return the locally configured environment variable identified by &name.
+		"""
+
+		return self.environment[name]
+
+	def setenv(self, name, value):
+		"""
+		# Locally configure the environment variable identified by &name to &value.
+		"""
+
+		self.environment[name] = value
+
+	def pwd(self):
+		"""
+		# Return the value of the locally configured (system/environ)`PWD`.
+		"""
+
+		return self.environment['PWD']
+
+	def chdir(self, path: str, *, default=None) -> str|None:
+		"""
+		# Locally set (system/environ)`PWD` and return the old value or &default if unset.
+		"""
+
+		current = self.environment.get('PWD', default)
+		self.environment['PWD'] = path
+		return current
+
+	def __init__(self, identity:System, encoding, ifpath, argv):
+		self.identity = identity
+		self.environment = {}
+		self.encoding = encoding
+		self.executable = ifpath
+		self.interface = argv
