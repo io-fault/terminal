@@ -56,8 +56,6 @@ class Refraction(Core):
 	define: Callable[[str], int]
 	version: object = (0, 0, None)
 
-	v_empty: Phrase
-
 	def current(self, depth):
 		d = self.source.elements
 		for i in range(depth):
@@ -107,9 +105,6 @@ class Refraction(Core):
 		self.limits = (0, 0)
 		self.visible = [0, 0]
 
-		self.v_empty = Phrase([
-			Words((0, "", self.forms.lf_theme['empty']))
-		])
 		self.image = Image()
 
 	def v_status(self, mode='control') -> Status:
@@ -418,7 +413,7 @@ class Refraction(Core):
 		"""
 
 		c = self.forms.render(self.source.select(start, stop))
-		e = itertools.repeat(self.v_empty)
+		e = itertools.repeat(self.forms.lf_empty_phrase)
 		return islice(itertools.chain(c, e), 0, stop - start)
 
 	def cu_codepoints(self, ln_offset, cp_offset, cu_offset) -> int:
@@ -728,7 +723,7 @@ class Refraction(Core):
 		if d < 0:
 			img.truncate(v_lines)
 			d = 0
-		return img.suffix([self.v_empty] * d)
+		return img.suffix([self.forms.lf_empty_phrase] * d)
 
 	def v_render(self, larea=slice(0, None), *, min=min, max=max, len=len, list=list, zip=zip):
 		"""
@@ -736,7 +731,7 @@ class Refraction(Core):
 		# the &larea reflecting the current &image state.
 		"""
 
-		ec = self.v_empty[0][-1].inscribe(ord(' '))
+		ec = self.forms.lf_empty_phrase[0][-1].inscribe(ord(' '))
 		AType = self.area.__class__
 		rx = self.area.left_offset
 		ry = self.area.top_offset

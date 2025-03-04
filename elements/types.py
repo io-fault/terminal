@@ -1471,6 +1471,16 @@ class Reformulations(object):
 	lf_units: Callable[[str], Iterable[tuple[int, str]]]
 
 	@property
+	def lf_empty_phrase(self) -> Phrase:
+		"""
+		# An empty Phrase configured with &lf_theme.
+		"""
+
+		return Phrase([
+			Words((0, "", self.lf_theme['empty']))
+		])
+
+	@property
 	def lf_encoding(self) -> str:
 		"""
 		# Encoding identifier.
