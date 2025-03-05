@@ -76,7 +76,7 @@ main(int argc, const char *argv[])
 }
 
 #include <fault/python/bind.h>
-#define TARGET_MODULE FACTOR_CONTEXT(".", "syntax.edit")
+#define TARGET_MODULE FACTOR_CONTEXT(".", "elements.application")
 #define SYSTEM_ENTRY_POINT _coprocess_rewrite
 #define FAULT_PYTHON_CONTROL_IMPORTS
 #include <fault/python/execute.h>
@@ -110,11 +110,11 @@ coprocess_invocation(void *ctx)
 	if (r != 0)
 		goto exit;
 
-	r = fault_python_import_controls(FACTOR_CONTEXT(".", "elements.edit"), "main");
+	r = fault_python_import_controls(FACTOR_CONTEXT(".", "elements.application"), "main");
 	if (r != 0)
 		goto exit;
 
-	ob = fault_python_execute(FACTOR_CONTEXT(".", "elements.edit"), "main");
+	ob = fault_python_execute(FACTOR_CONTEXT(".", "elements.application"), "main");
 	r = fault_python_exit_status(ob);
 
 	exit:
