@@ -19,8 +19,7 @@ process.__signal_exit__ = (lambda x: None)
 
 from .. import configuration
 
-from . import types
-from . import elements
+from . import application
 from .system import IOManager
 
 restricted = {
@@ -143,8 +142,8 @@ def main(inv:process.Invocation) -> process.Exit:
 
 	configuration.load_sections()
 
-	host = elements.Execution(
-		types.System(
+	host = application.Execution(
+		application.System(
 			'system',
 			query.username(),
 			'',
@@ -157,8 +156,8 @@ def main(inv:process.Invocation) -> process.Exit:
 	host.export(os.environ.items())
 	host.chdir(str(wd))
 
-	device = types.Device()
-	editor = elements.Session(
+	device = application.Device()
+	editor = application.Session(
 		configuration, host,
 		IOManager.allocate(device.synchronize_io),
 		path, device
