@@ -22,6 +22,7 @@ from . import types
 from . import ia
 from . import types
 from . import fields
+from . import retention
 
 from .types import Core, Reference, Glyph, Device, System, Reformulations
 from .storage import Resource, delta
@@ -204,17 +205,15 @@ class Session(Core):
 		}
 
 	def load(self):
-		from .session import structure_frames as parse
 		with open(self.fs_snapshot) as f:
-			fspecs = parse(f.read())
+			fspecs = retention.structure_frames(f.read())
 		if self.frames:
 			self.frames = []
 		self.restore(fspecs)
 
 	def store(self):
-		from .session import sequence_frames as seq
 		with open(self.fs_snapshot, 'w') as f:
-			f.write(seq(self.snapshot()))
+			f.write(retention.sequence_frames(self.snapshot()))
 
 	def configure_logfile(self, logfile):
 		"""
