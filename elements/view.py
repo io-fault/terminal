@@ -804,13 +804,14 @@ class Refraction(Core):
 		src = self.source
 		fai = self.annotation
 		lf = self.forms
+		theme = lf.lf_theme
 		rx, ry = (0, 0)
 		ctx = self.area
 		vx, vy = (ctx.left_offset, ctx.top_offset)
 		hoffset = self.image.cell_offset
 		top, left = self.visible
 		hedge, edge = (ctx.span, ctx.lines)
-		empty_cell = self.forms.lf_theme['empty'].inscribe(ord(' '))
+		empty_cell = theme['empty'].inscribe(ord(' '))
 
 		# Get the cursor line.
 		v, h = self.focus
@@ -867,9 +868,9 @@ class Refraction(Core):
 
 		if cursor_start >= len(cells) - 1:
 			# End of line position.
-			ccell = self.forms.lf_theme['cursor-void']
+			ccell = theme['cursor-void']
 		else:
-			ccell = self.forms.lf_theme[self.cursor_cell(hs)]
+			ccell = theme[self.cursor_cell(hs)]
 
 		if mode == 'insert':
 			cells[cursor_start:cursor_stop] = [
