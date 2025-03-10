@@ -631,22 +631,15 @@ class Session(Core):
 		# Performs &resequence after deleting &frame from &frames.
 		"""
 
+		if frame == self.frame and len(self.frames) > 1:
+			self.reframe(max(0, frame-1))
+		else:
+			self.frame = None
+
 		del self.frames[frame]
 		self.resequence()
 
-		if not self.frames:
-			# Exit condition.
-			self.frame = None
-			self.device.update_frame_list()
-			return
-		else:
-			self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
-			if frame == self.frame:
-				# Switch to a different frame.
-				self.reframe(frame)
-			else:
-				# Off screen frame.
-				pass
+		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 
 	@staticmethod
 	def limit_resources(limit, rlist, null=files.root@'/dev/null'):
