@@ -187,7 +187,7 @@ static Py_hash_t
 area_hash(PyObj self)
 {
 	AreaObject ao = (AreaObject) self;
-	return _Py_HashBytes(&(ao->area), sizeof(struct CellArea));
+	return Py_HashBuffer(&(ao->area), sizeof(struct CellArea));
 }
 
 static PyObj
