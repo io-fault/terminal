@@ -57,6 +57,8 @@ class Session(Core):
 	# /placement/
 		# Invocation defined position and dimensions as a tuple pair.
 		# Defined by &__init__.Parameters.position and &__init__.Parameters.dimensions.
+	# /title/
+		# Session name overriding the filename.
 	"""
 
 	host: System
@@ -66,6 +68,7 @@ class Session(Core):
 
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	types: Mapping[files.Path, tuple[object, object]]
+	title: str = ''
 
 	@staticmethod
 	def integrate_theme(colors):
@@ -203,17 +206,6 @@ class Session(Core):
 			self.host.identity: self.host,
 			self.process.identity: self.process,
 		}
-
-	def load(self):
-		with open(self.fs_snapshot) as f:
-			fspecs = retention.structure_frames(f.read())
-		if self.frames:
-			self.frames = []
-		self.restore(fspecs)
-
-	def store(self):
-		with open(self.fs_snapshot, 'w') as f:
-			f.write(retention.sequence_frames(self.snapshot()))
 
 	def configure_logfile(self, logfile):
 		"""
@@ -460,16 +452,21 @@ class Session(Core):
 		src.forms = self.fs_forms(src, reference.ref_context)
 		return src
 
-	def refract(self, path):
+	def refract(self, path, addressing=None):
 		"""
 		# Construct a &Refraction for the resource identified by &path.
 		# A &Resource instance is created if the path has not been loaded.
 		"""
 
 		source = self.import_resource(self.reference(path))
+
+		rf = Refraction(source)
+		if addressing is not None:
+			rf.restore(addressing)
+
 		return (
 			Refraction(self.allocate_location_resource(source.origin)),
-			Refraction(source),
+			rf,
 			Refraction(self.allocate_prompt_resource()),
 		)
 
@@ -650,14 +647,14 @@ class Session(Core):
 		del rlist[limit:]
 		n = len(rlist)
 		if n < limit:
-			rlist.extend(null for x in range(limit - n))
+			rlist.extend((null, None) for x in range(limit - n))
 
 	def restore(self, frames):
 		"""
 		# Allocate and fill the &frames in order to restore a session.
 		"""
 
-		for frame_id, divcount, layout, resources, returns in frames:
+		for frame_id, vi, di, divcount, layout, resources, returns in frames:
 			# Align the resources and returns with the layout.
 			self.limit_resources(divcount, resources)
 			self.limit_resources(divcount, returns)
@@ -665,8 +662,10 @@ class Session(Core):
 			# Allocate a new frame and attach refractions.
 			fi = self.allocate(layout, title=frame_id or None)
 			f = self.frames[fi]
-			f.fill(map(self.refract, resources))
-			f.returns[:divcount] = (rf for (l, rf, p) in map(self.refract, returns))
+			f.vertical = vi
+			f.division = di
+			f.fill(self.refract(r, a) for r, a in resources)
+			f.returns[:divcount] = (rf for (l, rf, p) in (self.refract(r, a) for r, a in returns))
 			for rf in f.returns:
 				if rf is not None:
 					rf.frame_visible = False
@@ -685,10 +684,45 @@ class Session(Core):
 
 		for f in self.frames:
 			frame_id = f.title
-			resources = [rf.source.origin.ref_path for (l, rf, p) in f.views]
-			returns = [rf.source.origin.ref_path for rf in f.returns if rf is not None]
+			vi = f.vertical
+			di = f.division
+			resources = [
+				(rf.source.origin.ref_path, rf.snapshot())
+				for (l, rf, p) in f.views
+			]
+			returns = [
+				(rf.source.origin.ref_path, rf.snapshot())
+				for rf in f.returns if rf is not None
+			]
 
-			yield (frame_id, f.structure.layout, resources, returns)
+			yield (frame_id, vi, di, f.structure.layout, resources, returns)
+
+	def load(self):
+		with open(self.fs_snapshot) as f:
+			ri = retention.structure(f.read())
+			stitle, slines = next(ri)
+			fspecs = retention.structure_frames(ri)
+
+		self.title = stitle
+		fi, fcount = map(int, slines[0].split())
+
+		if self.frames:
+			self.frames = []
+		self.restore(fspecs)
+
+		if len(self.frames) != fcount:
+			self.log("WARNING: frame count inconsistent with frame records.")
+
+		self.reframe(fi)
+
+	def store(self):
+		sf = retention.sequence_frames(self.snapshot())
+
+		with open(self.fs_snapshot, 'w') as f:
+			f.write(retention.sequence([
+				(self.title, [str(self.frame) + ' ' + str(len(self.frames))]),
+			]))
+			f.write(retention.sequence(sf))
 
 	def chresource(self, frame, path):
 		dpath = (frame.vertical, frame.division)
@@ -1100,8 +1134,8 @@ def main(inv:process.Invocation) -> process.Exit:
 		layout, rfq = configure_frame(wd, path, config)
 		fi = editor.allocate(layout = layout)
 		editor.frames[fi].fill(map(editor.refract, rfq))
+		editor.reframe(fi)
 
-	editor.reframe(fi)
 	editor.log("Host: " + str(editor.host))
 	editor.log("Factor: " + __name__)
 	editor.log("Device: " + (config.get('interface-device') or "manager default"))

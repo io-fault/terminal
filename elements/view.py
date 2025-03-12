@@ -58,6 +58,32 @@ class Refraction(Core):
 	define: Callable[[str], int]
 	version: object = (0, 0, None)
 
+	def snapshot(self):
+		"""
+		# Acquire the view positions for session retention.
+		"""
+
+		yield self.image.line_offset
+		yield self.image.cell_offset
+		yield from self.focus[0].snapshot()
+		yield from self.focus[1].snapshot()
+
+	def restore(self, addressing):
+		"""
+		# Integrate the snapshot for restoring the session state.
+		"""
+
+		lo, co, \
+		lrstart, loffset, lrstop, \
+		crstart, coffset, crstop = addressing
+
+		self.focus[0].restore((lrstart, loffset, lrstop))
+		self.focus[1].restore((crstart, coffset, crstop))
+		self.visible[0] = lo
+		self.visible[1] = co
+		self.image.line_offset = lo
+		self.image.cell_offset = co
+
 	def current(self, depth):
 		d = self.source.elements
 		for i in range(depth):
@@ -1045,7 +1071,7 @@ class Frame(Core):
 		"""
 
 		for v in ichain(self.views):
-			v.refresh()
+			v.refresh(v.image.line_offset)
 
 	def resize(self, area):
 		"""
