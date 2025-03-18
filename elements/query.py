@@ -3,28 +3,6 @@
 """
 from . import types
 
-def refract(session, frame, prompt, qtype, state, action):
-	"""
-	# Construct a Refraction for representing a query.
-	"""
-
-	src = prompt.source
-	src.delete_lines(0, src.ln_count())
-	src.extend_lines(map(src.forms.ln_interpret, [qtype + ' ' + state]))
-	src.commit()
-
-	prompt.activate = action
-	prompt.version = src.version()
-
-	prompt.focus[0].restore((0, 0, 1))
-	prompt.focus[1].restore((len(qtype) + 1, len(qtype) + 1, len(qtype) + len(state) + 1))
-	prompt.visible[0] = 0
-	session.dispatch_delta(prompt.refresh())
-
-	if not state:
-		session.keyboard.set('insert')
-	return prompt
-
 def joinlines(decoder, linesep='\n', character=''):
 	# Used in conjunction with an incremental decoder to collapse line ends.
 	data = (yield None)
@@ -194,7 +172,9 @@ def issue(session, frame, rf, event):
 
 	l, target, p = frame.select((frame.vertical, frame.division))
 	src = rf.source
-	prompt_string = ' '.join(x.ln_content for x in src.select(0, src.ln_count()))
+	ctx, *commands = src.select(0, src.ln_count())
+
+	prompt_string = ' '.join(x.ln_content for x in commands)
 	try:
 		command, string = prompt_string.split(' ', 1)
 	except ValueError:

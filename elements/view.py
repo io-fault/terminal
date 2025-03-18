@@ -1189,27 +1189,42 @@ class Frame(Core):
 		# If no prompt is open, initialize it.
 		"""
 
-		from .query import refract, issue
+		from .query import issue
 		vi = self.paths[dpath]
 		state = self.focus.query.get(type, None) or ''
 
 		# Update session state.
 		prompt = self.views[vi][2]
 		if extension is not None:
-			context = type + ' ' + extension
+			qtype = type + ' ' + extension
 		else:
-			context = type
+			qtype = type
 
 		# Make footer visible if the view is empty.
 		if prompt.area.lines == 0:
-			self.resize_footer(dpath, 1)
+			self.resize_footer(dpath, 2)
 			session.focus.deltas.extend(
 				self.fill_areas(
 					self.structure.r_patch_footer(dpath[0], dpath[1])
 				)
 			)
 
-		self.focus = refract(session, self, prompt, context, state, issue)
+		self.focus = prompt
+
+		src = prompt.source
+		src.delete_lines(0, src.ln_count())
+		src.extend_lines(map(src.forms.ln_interpret, [str(session.host), qtype + ' ' + state]))
+		src.commit()
+
+		prompt.activate = issue
+		prompt.focus[0].restore((1, 1, 2))
+		prompt.focus[1].restore((len(qtype) + 1, len(qtype) + 1, len(qtype) + len(state) + 1))
+		self.deltas.extend(prompt.refresh(0))
+
+		if not state:
+			session.keyboard.set('insert')
+
+		return prompt
 
 	def relocate(self, session, dpath):
 		"""
@@ -1265,7 +1280,9 @@ class Frame(Core):
 			# Overwrite the prompt.
 			d = self.close_prompt(dpath)
 			assert d < 0
-			self.deltas.extend(vc.refresh(vc.visible[0]))
+
+			self.deltas.extend(vc.refresh(vc.image.line_offset))
+			self.refocus()
 			return
 
 		self.refocus()
@@ -1288,14 +1305,9 @@ class Frame(Core):
 		d = 0
 		vi = self.paths[dpath]
 		location, content, prompt = self.views[vi]
-		rf = self.focus
 
 		if prompt.area.lines > 0:
 			d = self.resize_footer(dpath, 0)
-
-		# Prompt was focused.
-		if rf is prompt:
-			self.refocus()
 
 		return d
 
