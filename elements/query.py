@@ -296,7 +296,7 @@ def toggle_trace(session, frame, rf, command):
 
 index = {
 	'seek': seek,
-	'search': find,
+	'find': find,
 	'rewrite': rewrite,
 	'system': execute,
 	'system-map': transform,

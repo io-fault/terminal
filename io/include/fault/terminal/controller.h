@@ -212,13 +212,14 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(frame, next) \
 	AI_DEFINE(frame, previous) \
 	AI_DEFINE(frame, transpose) \
+	AI_DEFINE(frame, refresh) \
+	AI_DEFINE(frame, resize) \
 	AI_DEFINE(resource, status) \
 	AI_DEFINE(resource, copy) \
 	AI_DEFINE(resource, create) \
 	AI_DEFINE(resource, close) \
+	AI_DEFINE(resource, select) \
 	AI_DEFINE(resource, switch) \
-	AI_DEFINE(resource, relocate) \
-	AI_DEFINE(resource, cycle) \
 	AI_DEFINE(resource, save) \
 	AI_DEFINE(resource, reload) \
 	AI_DEFINE(elements, status) \
@@ -235,8 +236,6 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(elements, delete) \
 	AI_DEFINE(elements, selectall) \
 	AI_DEFINE(elements, hover) \
-	AI_DEFINE(screen, refresh) \
-	AI_DEFINE(screen, resize) \
 	AI_DEFINE(view, scroll) \
 	AI_DEFINE(view, pan) \
 	AI_DEFINE(time, elapsed)

@@ -19,8 +19,6 @@ from . import symbols
 from . import location
 from . import annotations
 from . import types
-from . import ia
-from . import types
 from . import fields
 from . import retention
 
@@ -59,6 +57,8 @@ class Session(Core):
 		# Defined by &__init__.Parameters.position and &__init__.Parameters.dimensions.
 	# /title/
 		# Session name overriding the filename.
+	# /local_modifiers/
+		# Key modifiers insertions.
 	"""
 
 	host: System
@@ -96,30 +96,13 @@ class Session(Core):
 			'control': controls.control,
 			'insert': controls.insert,
 			'annotations': controls.annotations,
-			'capture-key': ia.types.Mode(('delta', ('insert', 'capture', 'key'), ())),
-			'capture-insert': ia.types.Mode(('delta', ('insert', 'capture'), ())),
-			'capture-replace': ia.types.Mode(('delta', ('replace', 'capture'), ())),
+			'capture-key': types.Mode(('cursor', 'insert/captured/key', ())),
+			'capture-insert': types.Mode(('cursor', 'insert/captured', ())),
+			'capture-replace': types.Mode(('cursor', 'replace/captured', ())),
 		}
 
-		ctl = ia.types.Selection(defaults)
+		ctl = types.Selection(defaults)
 		ctl.set('control')
-
-		# Translations for `distributed` qualification.
-		# Maps certain operations to vertical or horizontal mapped operations.
-		ctl.redirections['distributed'] = {
-			('delta', x): ('delta', y)
-			for x, y in [
-				(('character', 'swap', 'case'), ('horizontal', 'swap', 'case')),
-				(('delete', 'unit', 'current'), ('delete', 'horizontal', 'range')),
-				(('delete', 'unit', 'former'), ('delete', 'vertical', 'column')),
-				(('delete', 'element', 'current'), ('delete', 'vertical', 'range')),
-				(('delete', 'element', 'former'), ('delete', 'vertical', 'range')),
-
-				(('indentation', 'increment'), ('indentation', 'increment', 'range')),
-				(('indentation', 'decrement'), ('indentation', 'decrement', 'range')),
-				(('indentation', 'zero'), ('indentation', 'zero', 'range')),
-			]
-		}
 
 		return ctl
 
@@ -145,22 +128,15 @@ class Session(Core):
 			cus,
 		)
 
-	@staticmethod
-	def integrate_events(ia):
-		return {
-			x.i_category: x.select
-			for x in ia.sections()
-		}
-
 	def __init__(self, cfg, system, io, executable, terminal:Device, position=(0,0), dimensions=None):
 		self.focus = None
 		self.frame = 0
 		self.frames = []
 
 		self.configuration = cfg
-		self.events = self.integrate_events(ia)
 		self.theme = self.integrate_theme(cfg.colors)
 		self.keyboard = self.integrate_controls(cfg.controls)
+		self.local_modifiers = ''
 		self.host = system
 		self.logfile = None
 		self.io = io
@@ -461,14 +437,18 @@ class Session(Core):
 		source = self.import_resource(self.reference(path))
 
 		rf = Refraction(source)
+		rf.keyboard = self.keyboard
+
 		if addressing is not None:
 			rf.restore(addressing)
 
-		return (
-			Refraction(self.allocate_location_resource(source.origin)),
-			rf,
-			Refraction(self.allocate_prompt_resource()),
-		)
+		l = Refraction(self.allocate_location_resource(source.origin))
+		l.keyboard = self.keyboard
+
+		p = Refraction(self.allocate_prompt_resource())
+		p.keyboard = self.keyboard
+
+		return (l, rf, p)
 
 	def log(self, *lines):
 		"""
@@ -502,7 +482,8 @@ class Session(Core):
 		)
 		src.commit()
 
-	def resize(self):
+	@comethod('frame', 'resize')
+	def resize(self, key=None):
 		"""
 		# Window size changed; remodel and render the new frame.
 		"""
@@ -770,42 +751,8 @@ class Session(Core):
 				s.rewrite(area, data)
 				d.invalidate_cells(area)
 
-	intercepts = {
-		'(session/synchronize)': 'meta/synchronize',
-		'(session/close)': 'session/close',
-		'(session/save)': 'session/save',
-		'(session/reset)': 'session/reset',
-		'(screen/refresh)': 'session/screen/refresh',
-		'(screen/resize)': 'session/screen/resize',
-
-		'(frame/create)': 'session/frame/create',
-		'(frame/copy)': 'session/frame/copy',
-		'(frame/close)': 'session/frame/close',
-		'(frame/previous)': 'session/frame/previous',
-		'(frame/next)': 'session/frame/next',
-		'(frame/switch)': 'session/frame/switch',
-		'(frame/transpose)': 'session/frame/transpose',
-
-		'(resource/switch)': 'session/resource/switch',
-		'(resource/relocate)': 'session/resource/relocate',
-		'(resource/open)': 'session/resource/open',
-		'(resource/reload)': 'session/resource/reload',
-		'(resource/save)': 'session/resource/write',
-		'(resource/copy)': 'session/resource/copy',
-		'(resource/close)': 'session/resource/close',
-
-		# Resource Elements, lines.
-		'(elements/undo)': 'delta/undo',
-		'(elements/redo)': 'delta/redo',
-		'(elements/select)': 'session/elements/transmit',
-		'(elements/insert)': 'delta/insert/text',
-		'(elements/delete)': 'delta/delete',
-		'(elements/find)': 'navigation/session/search/resource',
-		'(elements/next)': 'navigation/find/next',
-		'(elements/previous)': 'navigation/find/previous',
-	}
-
-	def integrate(self, frame, refraction, key):
+	@comethod('session', 'synchronize')
+	def integrate(self, key=None):
 		"""
 		# Process pending I/O events for display representation.
 
@@ -819,46 +766,64 @@ class Session(Core):
 			# Apply the performed transfer using the &io_context.
 			io_context.execute(io_transfer)
 
-	def trace(self, src, key, ev_cat, ev_id, ev_op):
+	def trace(self, receiver, key, ev_cat, ipath, ev_op):
 		"""
 		# Log the dispatched event.
 		"""
 
-		if src is self.transcript:
+		if getattr(receiver, 'source', None) is self.transcript:
 			# Ignore transcript events.
 			return
 
-		iaproc = '.'.join((ev_op.__module__, ev_op.__name__))
-		path = '/'.join(ev_id)
-		self.log(f"{key} -> {ev_cat}/{path} -> {iaproc}")
+		if ev_op is None:
+			iaproc = 'none'
+		else:
+			iaproc = '.'.join((receiver.__class__.__name__, ev_op.__name__))
+		self.log(f"{key} -> ({ev_cat}/{ipath}) -> {iaproc}")
 
 	@staticmethod
 	def discard(*args):
 		# Overrides &trace by default.
 		pass
 
-	def dispatch(self, frame, view, key):
+	@staticmethod
+	def lookup(focus, element, method):
+		"""
+		# Scan the focused elements, &focus, for an application instruction.
+		"""
+
+		pm = None
+
+		for phy in focus:
+			try:
+				pm = phy.comethod(element, method)
+				break
+			except types.comethod.MethodNotFound:
+				pass
+
+		return phy, pm
+
+	def dispatch(self, focus, key):
 		"""
 		# Perform the application instruction identified by &key.
 		"""
 
 		try:
-			if key in self.intercepts:
+			if key[0:1] == '(' and key[-1:] == ']':
 				# Mode independent application Instructions
-				op_int = self.intercepts[key]
-				ev_category, *ev_identifier = op_int.split('/')
-				ev_identifier = tuple(ev_identifier)
-				ev_args = ()
+				ixn, mods = key.strip('(]').split(')[')
+				itype, methodpath = ixn.split('/', 1)
+				args = ()
 			else:
 				# Key Translation
 				mode, xev = self.keyboard.interpret(key)
-				ev_category, ev_identifier, ev_args = xev
+				itype, methodpath, args = xev
 
-			ev_op = self.events[ev_category](ev_identifier)
+			phy, op = self._oc(itype, methodpath)
 			# --trace-instructions
-			self.trace(view.source, key, ev_category, ev_identifier, ev_op)
+			self.trace(phy, key, itype, methodpath, op)
 
-			ev_op(self, frame, view, key, *ev_args) # User Event Operation
+			op(self.device.transfer_text(), *args) # User Event Operation
 		except Exception as operror:
 			self.keyboard.reset('control')
 			self.error('Operation Failure', operror)
@@ -874,18 +839,27 @@ class Session(Core):
 		device = self.device
 		screen = device.screen
 
+		if (self._focus['frame'], self._focus['view']) != (frame, view):
+			self._focus = {
+				'frame': frame,
+				'view': view,
+				'resource': view.source,
+			}
+			cl = tools.partial(self.lookup, [view.source, view, frame, self])
+			self._oc = tools.cachedcalls(16)(cl)
+
 		device.render_pixels()
 		device.dispatch_frame()
 		device.synchronize() # Wait for render queue to clear.
 
 		try:
 			# Synchronize input; this could be a timer or I/O.
+			# Get the next event from the device. The blocking, wait event call.
 			device.transfer_event()
 
-			# Get the next event from the device. The blocking, wait event call.
-			key = device.key()
-
-			self.dispatch(frame, view, key)
+			key = device.key(self.local_modifiers)
+			self.local_modifiers = ''
+			self.dispatch(self._focus, key)
 
 			# Transfer all the deltas accumulated on views to screen/device.
 			while frame.deltas:
@@ -920,6 +894,7 @@ class Session(Core):
 		"""
 
 		self.io.service() # Dispatch event loop for I/O integration.
+		self._focus = {'frame': None, 'view': None, 'cursor': None}
 		restore = {}
 
 		try:
@@ -970,6 +945,283 @@ class Session(Core):
 					self.indicate(next_view, nv_status, nv_status)
 		finally:
 			self.store()
+
+	@comethod('session', 'mode/set/distribution')
+	def s_modify_distributed(self, key):
+		self.local_modifiers += chr(0x0394)
+
+	@comethod('session', 'close')
+	def close_session(self, key):
+		raise SystemExit(0)
+
+	@comethod('session', 'save')
+	def save_session_snapshot(self, key):
+		self.store()
+
+	@comethod('session', 'reset')
+	def load_session_snapshot(self, key):
+		self.load()
+		self.reframe(0)
+
+	@comethod('resource', 'save')
+	def s_write_resource(self, key):
+		src = self.focus.focus.source
+		self.store_resource(src)
+
+	@comethod('resource', 'copy')
+	def s_copy_resource(self, key):
+		url = self.device.transfer_text()
+		rf = self.focus.focus
+
+		if not url.startswith('/'):
+			raise ValueError("not a filesystem path: " + url) # Expects an absolute path.
+
+		re = rf.source.origin.ref_path@url
+		src = self.allocate_resource(self.reference(re))
+		src.elements = rf.source.elements
+		if src.origin.ref_path.fs_type() != 'void':
+			src.status = src.origin.ref_path.fs_status()
+
+		self.store_resource(src)
+
+	@comethod('resource', 'close')
+	def s_close_resource(self, key):
+		frame = self.focus
+		rf = frame.focus
+		self.delete_resource(rf.source)
+		devnull = rf.source.origin.ref_path@'/dev/null'
+		self.chresource(self.focus, devnull)
+		self.keyboard.set('control')
+		frame.refocus()
+
+	@comethod('resource', 'reload')
+	def s_reload_resource(self, key):
+		"""
+		# Remove the resource from the session releasing any associated memory.
+		"""
+
+		frame = self.focus
+		rf = frame.focus
+		self.delete_resource(rf.source)
+		self.chresource(frame, rf.source.origin.ref_path)
+		self.keyboard.set('control')
+		frame.refocus()
+
+	@comethod('resource', 'switch')
+	def s_switch_resource(self, key):
+		frame = self.focus
+		rf = frame.focus
+		url = self.device.transfer_text()
+		empty, path = url.split('file://')
+		self.chresource(frame, rf.source.origin.ref_path@(path.strip()))
+		self.keyboard.set('control')
+		frame.refocus()
+
+	@comethod('frame', 'create')
+	def s_frame_create(self, key):
+		self.reframe(self.allocate())
+
+	@comethod('frame', 'copy')
+	def s_frame_copy(self, key):
+		frame = self.focus
+		fi = self.allocate()
+		self.frames[fi].fill(frame.views)
+		self.frames[fi].refresh()
+		self.reframe(fi)
+
+	@comethod('frame', 'close')
+	def s_frame_close(self, key):
+		self.release(self.frame)
+
+	@comethod('frame', 'previous')
+	def s_frame_switch_previous(self, key):
+		self.reframe(self.frame - 1)
+
+	@comethod('frame', 'next')
+	def s_frame_switch_next(self, key):
+		self.reframe(self.frame + 1)
+
+	@comethod('frame', 'switch')
+	def s_frame_switch(self, key):
+		self.reframe(self.device.quantity() - 1)
+
+	@comethod('session', 'ineffective')
+	def s_operation_not_found(self, key, *, quantity=1):
+		pass
+
+	@comethod('session', 'terminal', 'focus', 'gained')
+	def s_application_focused(session, frame, rf, event):
+		pass
+
+	@comethod('session', 'terminal', 'focus', 'lost')
+	def s_application_switched(session, frame, rf, event):
+		pass
+
+	@comethod('session', 'open/log')
+	def open_session_log(self, key, *, quantity=1):
+		frame = self.focus
+		rf = self.chresource(frame, self.transcript.origin.ref_path)
+		frame.refocus()
+		l = rf.source.ln_count()
+		rf.focus[0].set(l-1)
+		rf.scroll(lambda x: max(0, l - rf.area.lines))
+		assert rf is self.focus.focus
+		assert rf.frame_visible == True
+		assert rf.source is session.transcript
+
+	def s_perform_selected_action(self, hold):
+		frame = self.focus
+		rf = frame.focus
+		if rf.activate is not None:
+			action = rf.activate
+			r = action(self, frame, rf, '')
+			if not hold:
+				frame.cancel()
+				rf.keyboard.set('control')
+			return r
+		elif rf.keyboard.mapping == 'insert':
+			# Presume document editing.
+			return rf.c_open_newline_ahead('')
+		elif rf.keyboard.mapping == 'control':
+			return rf.c_move_end_of_line('')
+
+	@comethod('session', 'activate')
+	def s_execute_and_cancel(self, key):
+		return self.s_perform_selected_action(hold=False)
+
+	@comethod('session', 'activate/continue')
+	def v_execute_and_hold(self, key):
+		return self.s_perform_selected_action(hold=True)
+
+	@comethod('elements', 'select')
+	def c_transmit_selected(self, key, *, quantity=1):
+		rf = self.focus.focus
+		codec = rf.forms.lf_codec
+		lform = rf.forms.lf_lines
+
+		if rf.focus[0].magnitude > 0:
+			# Vertical Range
+			ilines = lform.sequence((ln.ln_level, ln.ln_content) for ln in rf.vertical_selection_text())
+		else:
+			ilines = [rf.horizontal_selection_text()]
+
+		ibytes = codec.sequence(ilines)
+		self.device.transmit(b''.join(ibytes))
+
+	@comethod('cursor', 'copy/selected/lines')
+	def c_copy(self, key, *, quantity=1):
+		rf = self.focus.focus
+		src = rf.source
+		start, position, stop = rf.focus[0].snapshot()
+		self.cache = list(src.select(start, stop))
+
+	@comethod('cursor', 'cut/selected/lines')
+	def c_cut(self, key, *, quantity=1):
+		rf = self.focus.focus
+		self.c_copy('')
+		rf.c_delete_selected_lines('')
+
+	@comethod('cursor', 'paste/after')
+	def c_paste_after_line(self, key, *, quantity=1):
+		rf = self.focus.focus
+		lo = rf.focus[0].get()
+		src = rf.source
+		src.insert_lines(lo+1, self.cache)
+		src.checkpoint()
+
+	@comethod('cursor', 'paste/before')
+	def c_paste_before_line(self, key, *, quantity=1):
+		rf = self.focus.focus
+		lo = rf.focus[0].get()
+		src = rf.source
+		src.insert_lines(lo, self.cache)
+		src.checkpoint()
+
+	@comethod('cursor', 'insert/captured/key')
+	def c_insert_captured_key(self, key, *, quantity=1):
+		rf = self.focus.focus
+		lo, co = (x.get() for x in rf.focus)
+		src = rf.source
+		string = self.device.key('')
+		istr = string * quantity
+
+		if lo == 0 and src.ln_count() == 0:
+			src.ln_initialize()
+		src.insert_codepoints(lo, co, istr)
+		src.commit()
+
+		rf.keyboard.revert()
+
+	@comethod('cursor', 'dispatch/inline')
+	def c_dispatch_system_command(self, key, *, quantity=1):
+		from . import query
+		query.substitute(self, self.focus, self.focus.focus)
+
+	@comethod('cursor', 'select/absolute')
+	def c_select_absolute(self, key, *, quantity=1):
+		frame = self.focus
+		ay, ax = self.device.cursor_cell_status()
+		div, trf = frame.target(ay, ax)
+
+		sy = trf.area.top_offset
+		sx = trf.area.left_offset
+		rx = ax - sx
+		ry = ay - sy
+		ry += trf.visible[0]
+		rx = max(0, rx)
+
+		frame.vertical = div[0]
+		frame.division = div[1]
+		trf.focus[0].set(ry)
+
+		try:
+			li = trf.source.sole(ry)
+		except IndexError:
+			trf.focus[1].set(0)
+		else:
+			phrase = trf.phrase(ry)
+			cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
+			h = phrase.tell(cp, *phrase.m_codepoint)
+			trf.focus[1].set(h - li.ln_level)
+
+		frame.focus = trf
+
+	@comethod('view', 'scroll')
+	def v_scroll(self, key, *, quantity=1, shift=chr(0x21E7)):
+		frame = self.focus
+		ay, ax = self.device.cursor_cell_status()
+		fi, cursor_target = frame.target(ay, ax)
+		quantity = self.device.quantity()
+
+		if shift in self.device.key(''):
+			targets = [cursor_target, frame.focus]
+		else:
+			targets = [cursor_target]
+
+		for rf in targets:
+			if quantity < 0:
+				rf.v_scroll_forward('', quantity=(-quantity))
+			else:
+				rf.v_scroll_backward('', quantity=(+quantity))
+
+	@comethod('view', 'pan')
+	def v_pan(self, key, *, quantity=1, shift=chr(0x21E7)):
+		frame = self.focus
+		ay, ax = self.device.cursor_cell_status()
+		fi, cursor_target = frame.target(ay, ax)
+		quantity = self.device.quantity()
+		rf = frame.focus
+
+		if shift in self.device.key(''):
+			targets = [cursor_target, frame.focus]
+		else:
+			targets = [cursor_target]
+
+		for rf in targets:
+			if quantity < 0:
+				rf.v_pan_backward('', quantity=(-quantity))
+			else:
+				rf.v_pan_forward('', quantity=(+quantity))
 
 restricted = {
 	'--trace-instructions': ('set-add', 'instructions', 'traces'),

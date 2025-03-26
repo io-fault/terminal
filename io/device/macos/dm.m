@@ -246,7 +246,7 @@ resizeCellImage: (id) sender
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
 	{
 		[cm configureCellImage];
-		dispatch_application_instruction(cm, nil, 0, ai_screen_resize);
+		dispatch_application_instruction(cm, nil, 0, ai_frame_resize);
 	}
 }
 
@@ -255,7 +255,7 @@ refreshAll: (id) sender
 {
 	CellMatrix *cm = self.root.contentView;
 	/* +1 quantity signals display flush */
-	dispatch_application_instruction(cm, nil, +1, ai_screen_refresh);
+	dispatch_application_instruction(cm, nil, +1, ai_frame_refresh);
 }
 
 - (void)
@@ -337,7 +337,7 @@ revertScreen: (id) sender
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
 	{
 		[cm configureCellImage];
-		dispatch_application_instruction(cm, nil, 0, ai_screen_resize);
+		dispatch_application_instruction(cm, nil, 0, ai_frame_resize);
 	}
 }
 
@@ -501,8 +501,6 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 	AddMenuItem(rm, "New", @selector(relayInstruction:), "n")
 		.tag = ai_resource_create;
 	AddMenuItem(rm, "Open", @selector(openResources:), "o");
-	AddMenuItem(rm, "Cycle", @selector(relayInstruction:), "`")
-		.tag = ai_resource_cycle;
 
 	AddSeparator(rm);
 	AddMenuItem(rm, "Close", @selector(relayInstruction:), "w")
@@ -519,7 +517,7 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 	{
 		NSMenuItem *rmi = AddMenuItem(rm, "Relocate", @selector(relayInstruction:), "l");
 		rmi.toolTip = @"Change the frame's focus resource.";
-		rmi.tag = ai_resource_relocate;
+		rmi.tag = ai_resource_select;
 	}
 
 	/* Edit Menu */

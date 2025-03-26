@@ -947,16 +947,16 @@ device_cursor_pixel_status(PyObject *self)
 }
 
 static PyObject *
-device_key(PyObject *self)
+device_key(PyObject *self, PyObject *ext)
 {
 	struct ControllerStatus *ctl = DeviceController(self);
 	PyObj modstr, rob;
-	wchar_t m[3 + km_sentinel - km_void]; // 2 Brackets + NULL.
+	wchar_t m[2 + km_sentinel - km_void] = {'-', 0};
 	uint32_t st_keys = ctl->st_keys;
-	int i, x = 0;
+	int i, x;
 
 	/* Fill modifier representations in identifier order. */
-	m[x++] = '[';
+	x = 0;
 	for (i = km_imaginary; i < km_sentinel; ++i)
 	{
 		enum KeyModifiers km = i;
@@ -966,15 +966,11 @@ device_key(PyObject *self)
 			m[x++] = ModifierKey(km);
 		}
 	}
-	m[x++] = ']';
-	m[x] = 0;
 
-	/* Empty string if no modifiers. */
-	if (x <= 2)
-	{
-		m[0] = 0;
-		x = 0;
-	}
+	if (x > 0)
+		m[x] = 0;
+	else
+		x = 1;
 
 	modstr = PyUnicode_FromWideChar(m, x);
 	if (modstr == NULL)
@@ -993,7 +989,7 @@ device_key(PyObject *self)
 		}
 
 		PyUnicode_WriteChar(ko, 0, (uint32_t) ctl->st_dispatch);
-		rob = PyUnicode_FromFormat("[%U]%U", ko, modstr);
+		rob = PyUnicode_FromFormat("[%U][%U%U]", ko, modstr, ext);
 		Py_XDECREF(ko);
 	}
 	else
@@ -1002,7 +998,7 @@ device_key(PyObject *self)
 		{
 			#define AI_DEFINE(CLASS, OPNAME) \
 				case ai_##CLASS##_##OPNAME: \
-					rob = PyUnicode_FromFormat("(%s/%s)%U", #CLASS, #OPNAME, modstr); \
+					rob = PyUnicode_FromFormat("(%s/%s)[%U%U]", #CLASS, #OPNAME, modstr, ext); \
 				break;
 
 				ApplicationInstructions()
@@ -1015,16 +1011,16 @@ device_key(PyObject *self)
 
 				if (fn > 0 && fn <= 32)
 				{
-					rob = PyUnicode_FromFormat("[F%d]%U", fn, modstr);
+					rob = PyUnicode_FromFormat("[F%d][%U%U]", fn, modstr, ext);
 				}
 				else if (mbutton > 0 && mbutton <= 32)
 				{
-					rob = PyUnicode_FromFormat("[M%d]%U", mbutton, modstr);
+					rob = PyUnicode_FromFormat("[M%d][%U%U]", mbutton, modstr, ext);
 				}
 				else
 				{
 					/* Pass unrecognized negative value through as string. */
-					rob = PyUnicode_FromFormat("[%d]%U", ctl->st_dispatch, modstr);
+					rob = PyUnicode_FromFormat("[%d][%U%U]", ctl->st_dispatch, modstr, ext);
 				}
 			}
 		}
@@ -1257,7 +1253,7 @@ device_integrate(PyObject *self, PyObject *args)
 }
 
 static PyMethodDef device_methods[] = {
-	{"key", (PyCFunction) device_key, METH_NOARGS, NULL},
+	{"key", (PyCFunction) device_key, METH_O, NULL},
 	{"quantity", (PyCFunction) device_quantity, METH_NOARGS, NULL},
 	{"cursor_pixel_status", (PyCFunction) device_cursor_pixel_status, METH_NOARGS, NULL},
 	{"cursor_cell_status", (PyCFunction) device_cursor_cell_status, METH_NOARGS, NULL},

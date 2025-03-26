@@ -770,3 +770,10 @@ class Resource(types.Core):
 
 		return None
 
+	@comethod('resource', 'undo')
+	def r_log_undo(self, key, quantity=1):
+		self.undo(quantity)
+
+	@comethod('resource', 'redo')
+	def r_log_redo(self, key, quantity=1):
+		self.redo(quantity)

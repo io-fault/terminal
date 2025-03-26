@@ -259,7 +259,7 @@ inscriptionParameters
 refreshCellImage
 {
 	/* -1 quantity withholds invalidation leaving a stale pixel image */
-	dispatch_application_instruction(self, nil, -1, ai_screen_refresh);
+	dispatch_application_instruction(self, nil, -1, ai_frame_refresh);
 }
 
 - (void)
@@ -1123,13 +1123,39 @@ scrollWheel: (NSEvent *) ev
 	/* View pan (horizontal scroll) event */
 	if (ev.scrollingDeltaX && [ev modifierFlags] & NSEventModifierFlagCommand)
 	{
-		dispatch_event(self, ev, ev.scrollingDeltaX / 2, InstructionKey_Identifier(ai_view_pan));
+		int ik, su;
+
+		if (ev.scrollingDeltaX > 0)
+		{
+			ik = InstructionKey_Identifier(ai_view_pan);
+			su = (ev.scrollingDeltaX / 2);
+		}
+		else
+		{
+			ik = InstructionKey_Identifier(ai_view_pan);
+			su = (ev.scrollingDeltaX / 2);
+		}
+
+		dispatch_event(self, ev, su, ik);
 	}
 
 	/* View (vertical) scroll event */
 	if (ev.scrollingDeltaY)
 	{
-		dispatch_event(self, ev, ev.scrollingDeltaY / 2, InstructionKey_Identifier(ai_view_scroll));
+		int ik, su;
+
+		if (ev.scrollingDeltaY > 0)
+		{
+			ik = InstructionKey_Identifier(ai_view_scroll);
+			su = (ev.scrollingDeltaY / 2);
+		}
+		else
+		{
+			ik = InstructionKey_Identifier(ai_view_scroll);
+			su = (ev.scrollingDeltaY / 2);
+		}
+
+		dispatch_event(self, ev, su, ik);
 	}
 }
 

@@ -65,6 +65,7 @@ def open(session, frame, rf, event):
 	ref = session.reference(compose(li.ln_content for li in src.select(0, 2)))
 	src = session.import_resource(ref)
 	new = rf.__class__(src)
+	new.keyboard = rf.keyboard
 
 	session.dispatch_delta(frame.attach(dpath, new))
 	session.keyboard.set('control')
