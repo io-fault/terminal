@@ -115,7 +115,7 @@
 	@property (retain,nonatomic) dispatch_queue_t render_queue;
 	@property (retain,nonatomic) NSMutableArray <NSValue *> *pending_updates;
 	@property (nonatomic) int completed_updates;
-	@property (nonatomic) IOSurfaceRef pixelImage;
+	@property (nonatomic) IOSurfaceRef pixelImage, pendingImage;
 	@property (retain,nonatomic) CALayer *pixelImageLayer;
 
 	/* Tile rendering */

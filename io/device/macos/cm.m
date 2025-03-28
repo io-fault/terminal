@@ -312,11 +312,18 @@ dealloc
 		self.cellImage = NULL;
 	}
 
+	self.pixelImageLayer.contents = nil;
+
 	if (self.pixelImage != NULL)
 	{
-		self.pixelImageLayer.contents = nil;
 		IOSurfaceDecrementUseCount(self.pixelImage);
 		self.pixelImage = NULL;
+	}
+
+	if (self.pendingImage != NULL)
+	{
+		IOSurfaceDecrementUseCount(self.pendingImage);
+		self.pendingImage = NULL;
 	}
 
 	return([super dealloc]);
@@ -420,12 +427,36 @@ configurePixelImage
 		}
 	);
 
+	if (self.pendingImage != NULL)
+		IOSurfaceDecrementUseCount(self.pendingImage);
+
+	self.pendingImage = IOSurfaceCreate(
+		(CFDictionaryRef)
+		@{
+			(id) kIOSurfaceWidth: @(width),
+			(id) kIOSurfaceHeight: @(height),
+			(id) kIOSurfaceBytesPerElement: @(bpp),
+			(id) kIOSurfaceElementHeight: @(1),
+			(id) kIOSurfaceElementWidth: @(1),
+			(id) kIOSurfaceBytesPerRow: @(bpr),
+			(id) kIOSurfaceAllocSize: @(tb),
+			(id) kIOSurfacePixelFormat: @((unsigned int)'BGRA')
+		}
+	);
+
 	IOSurfaceLock(self.pixelImage, 0, NULL);
 	{
 		char *data = IOSurfaceGetBaseAddress(self.pixelImage);
 		memset(data, 0x00, bpr * height);
 	}
 	IOSurfaceUnlock(self.pixelImage, 0, NULL);
+
+	IOSurfaceLock(self.pendingImage, 0, NULL);
+	{
+		char *data = IOSurfaceGetBaseAddress(self.pendingImage);
+		memset(data, 0x00, bpr * height);
+	}
+	IOSurfaceUnlock(self.pendingImage, 0, NULL);
 
 	[self.pixelImageLayer setContents: (id) self.pixelImage];
 }
@@ -844,19 +875,25 @@ signalDisplay
 
 	[CATransaction begin];
 	{
+		IOSurfaceRef hold;
+
 		[CATransaction
 			setValue: (id) kCFBooleanTrue
 			forKey: kCATransactionDisableActions];
 
-		if (true)
-			[self.pixelImageLayer reloadValueForKeyPath: @"contents"];
-		else
-		{
-			[self.pixelImageLayer setContents: nil];
-			[self.pixelImageLayer setContents: (id) self.pixelImage];
-		}
+		[self.pixelImageLayer setContents: (id) self.pixelImage];
+		hold = self.pixelImage;
+		self.pixelImage = self.pendingImage;
+		self.pendingImage = hold;
 	}
 	[CATransaction commit];
+
+	/* Copy new image over old. */
+	{
+		unsigned char *dst = IOSurfaceGetBaseAddress(self.pixelImage);
+		unsigned char *src = IOSurfaceGetBaseAddress(self.pendingImage);
+		memcpy(dst, src, IOSurfaceGetAllocSize(self.pixelImage));
+	}
 
 	[self.pending_updates removeObjectsInRange: NSMakeRange(0, self.completed_updates)];
 	self.completed_updates = 0;
