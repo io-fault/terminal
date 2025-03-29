@@ -1173,7 +1173,8 @@ scrollWheel: (NSEvent *) ev
 			su = (ev.scrollingDeltaX / 2);
 		}
 
-		dispatch_event(self, ev, su, ik);
+		if (su != 0)
+			dispatch_event(self, ev, su, ik);
 	}
 
 	/* View (vertical) scroll event */
@@ -1192,7 +1193,8 @@ scrollWheel: (NSEvent *) ev
 			su = (ev.scrollingDeltaY / 2);
 		}
 
-		dispatch_event(self, ev, su, ik);
+		if (su != 0)
+			dispatch_event(self, ev, su, ik);
 	}
 }
 
