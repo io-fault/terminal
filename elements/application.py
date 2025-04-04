@@ -803,7 +803,7 @@ class Session(Core):
 
 		return phy, pm
 
-	def dispatch(self, focus, key):
+	def dispatch(self, key):
 		"""
 		# Perform the application instruction identified by &key.
 		"""
@@ -859,7 +859,7 @@ class Session(Core):
 
 			key = device.key(self.local_modifiers)
 			self.local_modifiers = ''
-			self.dispatch(self._focus, key)
+			self.dispatch(key)
 
 			# Transfer all the deltas accumulated on views to screen/device.
 			while frame.deltas:
@@ -1069,29 +1069,72 @@ class Session(Core):
 		assert rf.frame_visible == True
 		assert rf.source is session.transcript
 
-	def s_perform_selected_action(self, hold):
+	def execute_view_action(self):
+		"""
+		# Perform the operation configured on the view giving it
+		# the session-level scope.
+		"""
+
 		frame = self.focus
 		rf = frame.focus
 		if rf.activate is not None:
 			action = rf.activate
-			r = action(self, frame, rf, '')
-			if not hold:
-				frame.cancel()
-				rf.keyboard.set('control')
-			return r
-		elif rf.keyboard.mapping == 'insert':
-			# Presume document editing.
-			return rf.c_open_newline_ahead('')
-		elif rf.keyboard.mapping == 'control':
-			return rf.c_move_end_of_line('')
+			return action(self, frame, rf, '')
 
+	def frame_status_modifiers(self):
+		"""
+		# Modifiers used to recognize the focus orientation for
+		# selecting the preferred behavior for dispatch.
+		"""
+
+		rf = self._focus['view']
+		f = self._focus['frame']
+		l, c, p = f.select((f.vertical, f.division))
+
+		if l is rf:
+			# Location action.
+			m = 'L'
+		elif c is rf:
+			# Document editing; primary content.
+			m = 'W'
+		elif p is rf:
+			m = 'X'
+
+			# Conceal behavior; keep open when transcript.
+			if c.source.origin.ref_type == 'transcript':
+				m += 'Z'
+			else:
+				m += 'z'
+
+		return m
+
+	@comethod('session', 'cancel')
 	@comethod('session', 'activate')
-	def s_execute_and_cancel(self, key):
-		return self.s_perform_selected_action(hold=False)
+	def s_status_qualified_routing(self, key):
+		# Reconstruct the key using the frame status.
+		imods = self.frame_status_modifiers()
+		dkey = self.device.key(imods)
+		self.dispatch(dkey)
 
-	@comethod('session', 'activate/continue')
-	def v_execute_and_hold(self, key):
-		return self.s_perform_selected_action(hold=True)
+	@comethod('session', 'execute/close')
+	def s_execute_prompt_close(self, key):
+		r = self.execute_view_action()
+		self.focus.cancel()
+		self.keyboard.set('control')
+		return r
+
+	@comethod('session', 'execute/reset')
+	def s_execute_prompt_reset(self, key):
+		r = self.execute_view_action()
+		f = self.focus
+		dpath = (f.vertical, f.division)
+		l, c, p = f.select(dpath)
+		self.focus.prompt(dpath, c.source.origin.ref_system, ['system', ''])
+		return r
+
+	@comethod('session', 'execute/repeat')
+	def s_execute_prompt_repeat(self, key):
+		return self.execute_view_action()
 
 	@comethod('elements', 'select')
 	def c_transmit_selected(self, key, *, quantity=1):
@@ -1152,7 +1195,7 @@ class Session(Core):
 
 		rf.keyboard.revert()
 
-	@comethod('cursor', 'dispatch/inline')
+	@comethod('cursor', 'substitute/selected/command')
 	def c_dispatch_system_command(self, key, *, quantity=1):
 		from . import query
 		query.substitute(self, self.focus, self.focus.focus)

@@ -43,6 +43,8 @@ filename_extensions = {
 	"swift": 'swift',
 	"go": 'go',
 	"rs": 'rust',
+
+	"transcript": 'transcript',
 }
 
 Default = ''

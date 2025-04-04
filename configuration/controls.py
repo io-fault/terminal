@@ -1,7 +1,11 @@
 """
 # Key bindings for controlling terminal applications.
 """
-from ..elements.types import Mode, Selection
+from ..elements.types import Mode
+from itertools import combinations
+
+k_return = 0x23CE
+k_space = 0x2423
 
 km_shift = "Shift"
 km_control = "Control"
@@ -9,7 +13,17 @@ km_meta = "Meta"
 km_void = "None"
 km_d = "Distribution"
 
+# Status modifiers used to control actions based on the selected view.
+km_location = "Location"
+km_writing = "Writing"
+km_executing = "Executing"
+km_reading = "Reading"
+km_retain = "Retained"
+km_conceal = "Concealed"
+km_all = [km_shift, km_control, km_meta, km_d]
+
 modifiers = {
+	"None": ord('-'),
 	"Imaginary": 0x2148,
 	"Shift": 0x21E7,
 	"Control": 0x2303,
@@ -17,7 +31,19 @@ modifiers = {
 	"Meta": 0x2325,
 	"Hyper": 0x2726,
 	"Distribution": 0x0394,
-	"None": ord('-'),
+
+}
+
+status_modifiers = {
+	# Status modifiers identifying the status of the focus.
+	"Reading": ord('R'),   # Paging
+	"Writing": ord('W'),   # Editing
+	"Executing": ord('X'), # Prompt
+	"Location": ord('L'),
+
+	# Concealment policy on activate.
+	"Retained": ord('Z'),
+	"Concealed": ord('z'),
 }
 
 def a(ks, method, *args):
@@ -25,9 +51,12 @@ def a(ks, method, *args):
 
 	if isinstance(ks, tuple):
 		k, *mods = ks
+		smods = [status_modifiers[m] for m in mods if m in status_modifiers]
+		smods.sort()
 	else:
 		k = ks
 		mods = ()
+		smods = list()
 
 	if isinstance(k, int):
 		if k >= 0:
@@ -41,14 +70,16 @@ def a(ks, method, *args):
 	else:
 		ki = f"[{k.upper()}]"
 
-	if not mods:
-		ki += '[-]'
+	cmods = [modifiers[x] for x in mods if x not in status_modifiers]
+	if not cmods:
+		ki += '[-'
 	else:
-		mods = [modifiers[x] for x in mods]
-		mods.sort(key=(lambda x: x if x > 0x2000 else 0x6000))
+		cmods.sort(key=(lambda x: x if x > 0x2000 else 0x6000))
 		ki += '['
-		ki += ''.join(map(chr, mods))
-		ki += ']'
+		ki += ''.join(map(chr, cmods))
+
+	ki += ''.join(map(chr, smods))
+	ki += ']'
 
 	if isinstance(method, str):
 		itype, action = method.split('/', 1)
@@ -63,18 +94,35 @@ insert = Mode(('cursor', 'insert/character', ()))
 annotations = Mode(('cursor', 'transition/annotation/void', ()))
 relay = Mode(('view', 'dispatch/device/status', ()))
 
-k_return = 0x23CE
-k_space = 0x2423
-
-# Return Keystrokes
+# Dispatch; return control.
+import sys
 for mode in (control, insert):
-	a((k_return), 'session/activate')
-	a((k_return, km_control), 'session/activate/continue')
-	a((k_return, km_meta), 'cursor/dispatch/inline')
-	a((k_return, km_shift), 'frame/view/return')
+	# Set of combinations need to be trapped so they can be forwarded.
+	a((k_return, *km_all), 'session/activate')
+	for i in range(0, len(km_all)):
+		for mods in combinations(km_all, i):
+			a((k_return, *mods), 'session/activate')
+
+	a((k_return, km_meta), 'cursor/substitute/selected/command')
+	a((k_return, km_location), 'session/execute/reset')
+
+	a((k_return, km_executing, km_retain), 'session/execute/reset')
+	a((k_return, km_executing, km_retain, km_control), 'session/execute/repeat')
+	a((k_return, km_executing, km_retain, km_control, km_shift), 'session/execute/close')
+
+	a((k_return, km_executing, km_conceal), 'session/execute/close')
+	a((k_return, km_executing, km_conceal, km_control), 'session/execute/reset')
+	a((k_return, km_executing, km_conceal, km_control, km_shift), 'session/execute/repeat')
 
 if 'controls':
 	mode = control
+
+	a((k_return, km_writing, km_control), 'frame/view/return')
+	a((k_return, km_writing, km_shift), 'cursor/move/backward/line/void')
+	a((k_return, km_writing), 'cursor/move/forward/line/void')
+	a(('c', km_location, km_control), 'frame/cancel')
+	a(('c', km_executing, km_retain, km_control), 'frame/refocus')
+	a(('c', km_executing, km_conceal, km_control), 'frame/cancel')
 
 	a((k_space, km_control), 'frame/prepare/command')
 
@@ -86,13 +134,13 @@ if 'controls':
 
 	a(('c'), 'cursor/substitute/selected/characters')
 	a(('c', km_shift), 'cursor/substitute/again')
-	a(('c', km_control), 'frame/cancel')
+	a(('c', km_control), 'session/cancel')
 	a(('c', km_meta), 'cursor/copy/selected/lines')
 	a(('c', km_shift, km_meta), 'cursor/cut/selected/lines')
 
 	a(('d'), 'cursor/move/backward/field')
 	a(('d', km_shift), 'cursor/move/start/character')
-	a(('d', km_control), 'cursor/horizontal/query/backware')
+	a(('d', km_control), 'cursor/horizontal/query/backward')
 
 	a(('f'), 'cursor/move/forward/field')
 	a(('f', km_shift), 'cursor/move/stop/character')
@@ -212,6 +260,7 @@ if 'annotations':
 
 if 'inserts':
 	mode = insert
+	a((k_return, km_writing), 'cursor/line/break/follow')
 
 	a(('a', km_control), 'cursor/move/first/character')
 	a(('c', km_control), 'cursor/abort')

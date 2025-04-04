@@ -1612,6 +1612,15 @@ class Refraction(Core):
 
 		self.focus[1].restore((start, start, start + len(last)))
 
+	@comethod('cursor', 'line/break/follow')
+	def c_split_line_at_cursor(self, key, *, quantity=1):
+		lo = self.focus[0].get()
+		r = self.c_split_line_at_cursor('', quantity=quantity)
+
+		self.focus[0].set(lo + quantity)
+		self.focus[1].set(0)
+		return r
+
 	@comethod('cursor', 'line/break')
 	def c_split_line_at_cursor(self, key, *, quantity=1):
 		lo = self.focus[0].get()
@@ -1958,7 +1967,6 @@ class Frame(Core):
 		previous = self.returns[self.paths[dpath]]
 		if previous is not None:
 			# Clear deltas before switch.
-			yield from self.deltas
 			del self.deltas[:]
 
 			self.chpath(dpath, previous.source.origin)
@@ -1987,7 +1995,8 @@ class Frame(Core):
 
 		return self.views[self.paths[dpath]]
 
-	def refocus(self):
+	@comethod('frame', 'refocus')
+	def refocus(self, key=None, quantity=0):
 		"""
 		# Adjust for a focus change.
 		"""
@@ -2048,6 +2057,24 @@ class Frame(Core):
 			a = Area(*avalues)
 			yield a, [Type.inscribe(ord(fill_char))] * a.volume
 
+	def prompt(self, dpath, system, command):
+		"""
+		# Initialize the prompt for &dpath division to issue &command to the &system.
+		"""
+
+		prompt = self.views[self.paths[dpath]][2]
+
+		src = prompt.source
+		src.delete_lines(0, src.ln_count())
+		cmdstr = ' '.join(command)
+		src.extend_lines(map(src.forms.ln_interpret, [str(system), cmdstr]))
+		src.commit()
+
+		prompt.focus[0].restore((1, 1, 2))
+		ctxlen = len(command[0]) + 1
+		prompt.focus[1].restore((ctxlen, ctxlen, len(cmdstr)))
+		self.deltas.extend(prompt.refresh(0))
+
 	def prepare(self, system, type, dpath, *, extension=None):
 		"""
 		# Shift the focus to the prompt of the focused refraction.
@@ -2075,17 +2102,9 @@ class Frame(Core):
 			)
 
 		self.focus = prompt
-
-		src = prompt.source
-		src.delete_lines(0, src.ln_count())
-		src.extend_lines(map(src.forms.ln_interpret, [str(system), qtype + ' ' + state]))
-		src.commit()
-
 		prompt.activate = issue
-		prompt.focus[0].restore((1, 1, 2))
-		prompt.focus[1].restore((len(qtype) + 1, len(qtype) + 1, len(qtype) + len(state) + 1))
-		self.deltas.extend(prompt.refresh(0))
 
+		self.prompt(dpath, system, [qtype, state])
 		return prompt
 
 	def relocate(self, dpath):
