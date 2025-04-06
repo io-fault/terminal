@@ -870,21 +870,19 @@ class Session(Core):
 			self.error("Rendering Failure", derror)
 			del derror
 
-	def indicate(self, view, new, old):
-		a = new.area
-
-		if 0 and old.ln_cursor_offset != new.ln_cursor_offset:
-			# Cursor line changed, restore.
-			lo = view.source.translate(old.version, old.ln_cursor_offset)
-			dr = delta.Update(lo, "", "", 0)
-			self.dispatch_delta(list(view.v_update(dr)))
+	def indicate(self, view, status):
+		a = status.area
 
 		# Draw cursor.
-		rln = new.ln_cursor_offset - new.v_line_offset
+		rln = status.ln_cursor_offset - status.v_line_offset
 		if rln >= 0 and rln < a.lines:
 			c = a.__class__(a.top_offset + rln, a.left_offset, 1, a.span)
-			cline = new.cursor_line[new.v_cell_offset:new.v_cell_offset+a.span]
+			cline = status.cursor_line[status.v_cell_offset:status.v_cell_offset+a.span]
 			self.dispatch_delta([(c, cline)])
+
+		# Enqueue restoration.
+		rc = delta.Update(status.ln_cursor_offset, "", "", 0)
+		view.deltas.extend(view.v_update(rc))
 
 	def interact(self):
 		"""
@@ -895,19 +893,14 @@ class Session(Core):
 
 		self.io.service() # Dispatch event loop for I/O integration.
 		self._focus = {'frame': None, 'view': None, 'cursor': None}
-		restore = {}
 
+		# Expects initial synchronize instruction to draw first cursor.
 		try:
 			while self.frames:
 				last_frame = self.focus
 				last_view = last_frame.focus
 				lv_status = last_view.v_status(self.keyboard.mapping)
 
-				# Enqueue cursor reset.
-				rc = delta.Update(lv_status.ln_cursor_offset, "", "", 0)
-				last_frame.deltas.extend(last_view.v_update(rc))
-
-				# Cursor line changed, restore.
 				for ds in self.cycle():
 					self.dispatch_delta(ds)
 
@@ -915,34 +908,12 @@ class Session(Core):
 				next_view = next_frame.focus
 				nv_status = next_view.v_status(self.keyboard.mapping)
 
-				# Division indicators.
-				if next_frame is not last_frame:
-					# New frame.
-					restore.clear()
-
-				new = dict(last_frame.indicate(nv_status))
-				urestore = dict(restore)
-				urestore.update(
-					(area, self.device.screen.select(area))
-					for area in new if area not in urestore
-				)
-
-				# Transfer cleared positions into new for dispatch.
-				for r in (set(urestore) - set(new)):
-					new[r] = urestore.pop(r)
-
-				# Capture new restores and replace old set.
-				restore = urestore
-
-				# Emit new state.
+				new = dict(next_frame.indicate(nv_status))
+				restore = [(area, self.device.screen.select(area)) for area in new]
 				self.dispatch_delta(list(new.items()))
-				del new, urestore
+				next_frame.deltas.extend(restore)
 
-				if last_view is next_view:
-					if nv_status != lv_status:
-						self.indicate(last_view, nv_status, lv_status)
-				else:
-					self.indicate(next_view, nv_status, nv_status)
+				self.indicate(next_view, nv_status)
 		finally:
 			self.store()
 
