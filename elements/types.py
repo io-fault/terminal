@@ -791,29 +791,34 @@ class Model(object):
 		"""
 		# Distribute the available vertical area so that each page has at least the
 		# given &allocation.
+
+		# [ Parameters ]
+		# /verticals/
+			# Tuples designating the division count and allocation width.
 		"""
 
 		height = self.fm_context.lines - (self.fm_border_width * 2)
 		width = self.fm_context.span - (self.fm_border_width * 2)
 		nverticals = len(verticals)
 		maxverticals = max(width // allocation, 1)
-		units = sum(x[0] for x in verticals)
-		if units < maxverticals:
-			verticals.extend([(2, 1)] * maxverticalss - units)
 
-		ralloc = width // maxverticals # remainder goes to last pane
-
-		inheritor = nverticals - 1
+		# Fill the available space; excess goes to &inheritor.
+		ralloc = width // maxverticals
 		for i, va in enumerate(verticals):
 			if va[1] == 0:
 				# Override the vertical that receives the remaining space.
 				inheritor = i
 				break
+		else:
+			inheritor = nverticals - 1
 		verticals[inheritor] = (verticals[inheritor][0], 0)
-		self.fm_layout = verticals
 
+		self.fm_layout = verticals
 		self.fm_verticals = [
-			((None, 0 + self.fm_border_width), (allocation * x[1], height))
+			(
+				(None, 0 + self.fm_border_width),
+				(allocation * x[1] + (max(x[1]-1, 0) * self.fm_border_width), height),
+			)
 			for x in verticals
 		]
 
