@@ -2324,13 +2324,13 @@ class Frame(Core):
 		self.focus.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/seek/absolute')
-	def prompt_seek_absolute(session, frame, rf, event):
+	def prompt_seek_absolute(self, key, quantity=0):
 		sys = self.focus.system
 		self.prepare(sys, "seek", (self.vertical, self.division), extension='absolute')
 		self.focus.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/seek/relative')
-	def prompt_seek_relative(session, frame, rf, event):
+	def prompt_seek_relative(self, key, quantity=0):
 		sys = self.focus.system
 		self.prepare(sys, "seek", (self.vertical, self.division), extension='relative')
 		self.focus.keyboard.set('insert')

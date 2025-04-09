@@ -146,8 +146,8 @@ if 'controls':
 	a(('f', km_shift), 'cursor/move/stop/character')
 	a(('f', km_control), 'cursor/horizontal/query/forward')
 
-	a(('g', km_control), 'session/seek/element/absolute')
-	a(('g', km_shift, km_control), 'session/seek/element/relative')
+	a(('g', km_control), 'frame/prompt/seek/absolute')
+	a(('g', km_shift, km_control), 'frame/prompt/seek/relative')
 
 	a(('h'), 'cursor/select/line')
 	a(('h', km_shift), 'cursor/move/bisect/line')
