@@ -1234,11 +1234,11 @@ class Model(object):
 
 		# Left
 		loffset = h_offset
-		lpositions = zip(R('left'), R(loffset), v_context, vertical, itypes)
+		lpositions = zip(R('left'), R(loffset), v_context, rev(vertical), rev(itypes))
 
 		# Right
 		roffset = h_offset + borderx + h_limit
-		rpositions = zip(R('right'), R(roffset), v_context, rev(vertical), rev(itypes))
+		rpositions = zip(R('right'), R(roffset), v_context, vertical, itypes)
 
 		# Top
 		toffset = v_offset
