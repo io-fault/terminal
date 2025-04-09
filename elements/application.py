@@ -16,7 +16,6 @@ from fault.system import files
 from fault.system import query
 
 from . import symbols
-from . import location
 from . import annotations
 from . import types
 from . import fields
@@ -433,7 +432,7 @@ class Session(Core):
 		)
 
 		src = Resource(ref, self.load_type('filesystem'))
-		location.configure_path(src, reference.ref_context, reference.ref_path)
+		Frame.rl_update_path(src, reference.ref_context, reference.ref_path)
 		src.forms = self.fs_forms(src, reference.ref_context)
 		return src
 
