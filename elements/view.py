@@ -12,7 +12,7 @@ from . import storage
 from . import location
 
 from .types import Core, Annotation, Position, Status, Model, System
-from .types import Reformulations, Line
+from .types import Reformulations, Line, Prompting
 from .types import Area, Image, Phrase, Words, Glyph, LineStyle
 
 class Refraction(Core):
@@ -117,7 +117,19 @@ class Refraction(Core):
 		new.forms = lf
 		return new
 
+	def reporting(self, cfg:Prompting) -> bool:
+		"""
+		# Whether the view intends to report on execution.
+		"""
+
+		typ = self.source.origin.ref_type
+		if typ in cfg.pg_execution_types:
+			return True
+
+		return False
+
 	def __init__(self, resource):
+		self.control_mode = 'control'
 		self.area = Area(0, 0, 0, 0)
 		self.define = ord
 		self.deltas = []
@@ -1793,6 +1805,8 @@ class Frame(Core):
 	# Frame implementation for laying out and interacting with a set of refactions.
 
 	# [ Elements ]
+	# /prompting/
+		# Session inherited prompt behavior.
 	# /area/
 		# The location and size of the frame on the screen.
 	# /index/
@@ -1827,7 +1841,8 @@ class Frame(Core):
 	views: Sequence[tuple[Refraction, Refraction, Refraction]]
 	returns: Sequence[Refraction|None]
 
-	def __init__(self, define, theme, fs, keyboard, area, index=None, title=None):
+	def __init__(self, prompting, define, theme, fs, keyboard, area, index=None, title=None):
+		self.prompting = prompting
 		self.define = define
 		self.theme = theme
 		self.border = theme['frame-border']
@@ -1898,6 +1913,8 @@ class Frame(Core):
 		"""
 
 		self.views[:] = views
+		self.focus = self.views[0][1]
+		self.vertical = self.division = 0
 
 		# Align returns size.
 		n = len(self.views)
@@ -1908,6 +1925,16 @@ class Frame(Core):
 		for av, vv in zip(self.areas, self.views):
 			for a, v in zip(av, vv):
 				v.configure(self.deltas, self.define, a)
+
+		from .query import issue
+
+		for dpath, index in self.paths.items():
+			l, rf, p = self.views[index]
+			p.activate = issue
+
+			if rf.reporting(self.prompting):
+				self.reveal(dpath, self.prompting.pg_line_allocation)
+				self.prompt(dpath, rf.system, ['system', ''])
 
 	def remodel(self, area=None, divisions=None):
 		"""
@@ -1995,37 +2022,63 @@ class Frame(Core):
 
 		return self.views[self.paths[dpath]]
 
+	def restrict_path(self, dpath):
+		"""
+		# Normalize the division path by restricting vertical
+		# and division to be within the bounds of the frame.
+		"""
+
+		if dpath not in self.paths:
+			if dpath[1] < 0:
+				v = dpath[0] - 1
+				if v < 0:
+					v += self.structure.verticals()
+				dpath = (v, self.structure.divisions(v)-1)
+			else:
+				dpath = (dpath[0]+1, 0)
+				if dpath not in self.paths:
+					dpath = (0, 0)
+
+		return dpath
+
 	@comethod('frame', 'refocus')
 	def refocus(self, key=None, quantity=0):
 		"""
 		# Adjust for a focus change.
 		"""
 
-		path = (self.vertical, self.division)
-		if path not in self.paths:
-			if path[1] < 0:
-				v = path[0] - 1
-				if v < 0:
-					v += self.structure.verticals()
-				path = (v, self.structure.divisions(v)-1)
-			else:
-				path = (path[0]+1, 0)
-				if path not in self.paths:
-					path = (0, 0)
-
-			self.vertical, self.division = path
-
+		path = self.restrict_path((self.vertical, self.division))
+		self.vertical, self.division = path
 		self.focus = self.select(path)[1]
+
+	def switch(self, dpath):
+		"""
+		# Change the focused view accounting for prompt priority.
+		"""
+
+		self.focus.control_mode = self.keyboard.mapping
+
+		dpath = self.restrict_path(dpath)
+		v = self.select(dpath)
+
+		rf = v[1]
+		if rf.reporting(self.prompting):
+			self.focus = v[2]
+		else:
+			self.focus = rf
+
+		self.keyboard.set(self.focus.control_mode)
+		self.vertical, self.division = dpath
 
 	def resize_footer(self, dpath, height):
 		"""
 		# Adjust the size, &height, of the footer for the given &dpath.
 		"""
 
-		l, rf, f = self.select(dpath)
+		l, rf, p = self.select(dpath)
 
 		d = self.structure.set_margin_size(dpath[0], dpath[1], 3, height)
-		f.area = f.area.resize(d, 0)
+		p.area = p.area.resize(d, 0)
 
 		# Initial opening needs to include the border size.
 		if height - d == 0:
@@ -2038,9 +2091,9 @@ class Frame(Core):
 		rf.configure(rf.deltas, rf.define, rf.area.resize(-d, 0))
 		rf.vi_compensate()
 
-		f.area = f.area.move(-d, 0)
+		p.area = p.area.move(-d, 0)
 		# &render will emit the entire image, so make sure the footer is trimmed.
-		f.vi_compensate()
+		p.vi_compensate()
 		return d
 
 	def fill_areas(self, patterns, *, Area=Area, ord=ord):
@@ -2056,6 +2109,14 @@ class Frame(Core):
 		for avalues, fill_char in patterns:
 			a = Area(*avalues)
 			yield a, [Type.inscribe(ord(fill_char))] * a.volume
+
+	def reveal(self, dpath, lines):
+		self.resize_footer(dpath, lines)
+		self.deltas.extend(
+			self.fill_areas(
+				self.structure.r_patch_footer(dpath[0], dpath[1])
+			)
+		)
 
 	def prompt(self, dpath, system, command):
 		"""
@@ -2094,12 +2155,7 @@ class Frame(Core):
 
 		# Make footer visible if the view is empty.
 		if prompt.area.lines == 0:
-			self.resize_footer(dpath, 2)
-			self.deltas.extend(
-				self.fill_areas(
-					self.structure.r_patch_footer(dpath[0], dpath[1])
-				)
-			)
+			self.reveal(dpath, self.prompting.pg_line_allocation)
 
 		self.focus = prompt
 		prompt.activate = issue
@@ -2251,13 +2307,11 @@ class Frame(Core):
 
 	@comethod('frame', 'view/next')
 	def f_select_next_view(self, key, *, quantity=1):
-		self.division += 1
-		self.refocus()
+		self.switch((self.vertical, self.division + quantity))
 
 	@comethod('frame', 'view/previous')
 	def f_select_previous_view(self, key, *, quantity=1):
-		self.division -= 1
-		self.refocus()
+		self.switch((self.vertical, self.division - quantity))
 
 	@comethod('frame', 'view/return')
 	def f_select_return_view(self, key, *, quantity=1):

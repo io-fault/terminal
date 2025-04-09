@@ -128,6 +128,14 @@ class Session(Core):
 			cus,
 		)
 
+	@staticmethod
+	def integrate_prompts(cfgprompts) -> types.Prompting:
+		return types.Prompting(
+			max(cfgprompts.line_allocation, 1) + 1,
+			cfgprompts.syntax_type,
+			cfgprompts.execution_types,
+		)
+
 	def __init__(self, cfg, system, io, executable, terminal:Device, position=(0,0), dimensions=None):
 		self.focus = None
 		self.frame = 0
@@ -136,6 +144,7 @@ class Session(Core):
 		self.configuration = cfg
 		self.theme = self.integrate_theme(cfg.colors)
 		self.keyboard = self.integrate_controls(cfg.controls)
+		self.prompting = self.integrate_prompts(cfg.prompts)
 		self.local_modifiers = ''
 		self.host = system
 		self.logfile = None
@@ -448,6 +457,9 @@ class Session(Core):
 		p = Refraction(self.allocate_prompt_resource())
 		p.keyboard = self.keyboard
 
+		if rf.reporting(self.prompting):
+			p.control_mode = 'insert'
+
 		return (l, rf, p)
 
 	def log(self, *lines):
@@ -506,7 +518,7 @@ class Session(Core):
 			self.frame = nframes + (self.frame % -nframes)
 
 		try:
-			self.focus = self.frames[self.frame]
+			f = self.focus = self.frames[self.frame]
 		except IndexError:
 			if nframes == 0:
 				# Exit condition.
@@ -515,20 +527,22 @@ class Session(Core):
 				return
 			else:
 				self.frame = self.frame % nframes
-				self.focus = self.frames[self.frame]
+				f = self.focus = self.frames[self.frame]
 
-		self.focus.refocus()
+		self.keyboard.set(f.focus.control_mode)
+		f.switch((f.vertical, f.division))
 
 	def reframe(self, index):
 		"""
 		# Change the selected frame and redraw the screen to reflect the new status.
 		"""
 
+		if index == self.frame:
+			return
+
 		if self.focus:
-			while self.focus.deltas:
-				l = len(self.focus.deltas)
-				self.dispatch_delta(self.focus.deltas[:l])
-				del self.focus.deltas[:l]
+			del self.focus.deltas[:]
+			self.focus.focus.control_mode = self.keyboard.mapping
 
 		last = self.frame
 
@@ -546,8 +560,6 @@ class Session(Core):
 			rf.frame_visible = True
 
 		self.dispatch_delta(self.focus.render())
-
-		# Use &self.frame as refocus may have compensated.
 		self.device.update_frame_status(self.frame, last)
 
 	def allocate(self, layout=None, area=None, title=None):
@@ -580,6 +592,7 @@ class Session(Core):
 		divcount = sum(x[0] for x in layout)
 
 		f = Frame(
+			self.prompting,
 			self.device.define, self.theme,
 			self.load_type('filesystem'),
 			self.keyboard, area,

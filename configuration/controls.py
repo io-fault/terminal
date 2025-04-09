@@ -288,5 +288,7 @@ if 'inserts':
 
 	a((0x21E5), 'cursor/indentation/increment')
 	a((0x21E5, km_shift), 'cursor/indentation/decrement')
+	a((0x21E5, km_meta), 'frame/view/next')
+	a((0x21E5, km_shift, km_meta), 'frame/view/previous')
 
 del a

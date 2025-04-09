@@ -9,7 +9,7 @@ from fault.context import comethod
 from fault.context import tools
 from fault.syntax import format
 
-from collections.abc import Sequence, Mapping, Iterable
+from collections.abc import Sequence, Mapping, Iterable, Container
 from typing import Optional, Protocol, Literal, Callable
 
 from ..cells import text
@@ -22,6 +22,16 @@ class Core(comethod.object):
 
 	# Common base class for all instructable application elements.
 	"""
+
+@tools.struct()
+class Prompting(object):
+	"""
+	# Defaults controlling the behavior of command prompts.
+	"""
+
+	pg_line_allocation: int
+	pg_syntax_type: str
+	pg_execution_types: Container[str]
 
 class Mode(object):
 	"""
