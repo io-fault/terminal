@@ -312,7 +312,7 @@ class IOManager(object):
 				# No output.
 				os.close(ro)
 
-			pid = invocation.spawn(fdmap=[(ri, 0), (wo, 1), (2, 2)])
+			pid = invocation.spawn(fdmap=[(ri, 0), (wo, 1), (wo, 2)])
 			exitcontext.target.system_execution_status[pid] = None
 			xl = self.dispatch(exitcontext, pid)
 
