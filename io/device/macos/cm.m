@@ -270,6 +270,9 @@ refreshPixelImage
 	/* Rewrite pixels without application I/O */
 	device_invalidate_cells(self, CellArea(0, 0, mp->y_cells, mp->x_cells));
 	device_render_pixels(self);
+
+	/* Twice; it is not clear why once is insufficient here. */
+	device_dispatch_frame(self);
 	device_dispatch_frame(self);
 }
 
@@ -303,6 +306,12 @@ acceptsFirstMouse: (NSEvent *) ev
 	return(NO);
 }
 
+- (BOOL)
+isOpaque
+{
+	return(YES);
+}
+
 - (void)
 dealloc
 {
@@ -320,19 +329,13 @@ dealloc
 		self.pixelImage = NULL;
 	}
 
-	if (self.pendingImage != NULL)
+	if (self.dispatchedImage != NULL)
 	{
-		IOSurfaceDecrementUseCount(self.pendingImage);
-		self.pendingImage = NULL;
+		IOSurfaceDecrementUseCount(self.dispatchedImage);
+		self.dispatchedImage = NULL;
 	}
 
 	return([super dealloc]);
-}
-
-- (BOOL)
-isOpaque
-{
-	return(YES);
 }
 
 - (void)
@@ -427,10 +430,10 @@ configurePixelImage
 		}
 	);
 
-	if (self.pendingImage != NULL)
-		IOSurfaceDecrementUseCount(self.pendingImage);
+	if (self.dispatchedImage != NULL)
+		IOSurfaceDecrementUseCount(self.dispatchedImage);
 
-	self.pendingImage = IOSurfaceCreate(
+	self.dispatchedImage = IOSurfaceCreate(
 		(CFDictionaryRef)
 		@{
 			(id) kIOSurfaceWidth: @(width),
@@ -451,12 +454,12 @@ configurePixelImage
 	}
 	IOSurfaceUnlock(self.pixelImage, 0, NULL);
 
-	IOSurfaceLock(self.pendingImage, 0, NULL);
+	IOSurfaceLock(self.dispatchedImage, 0, NULL);
 	{
-		char *data = IOSurfaceGetBaseAddress(self.pendingImage);
+		char *data = IOSurfaceGetBaseAddress(self.dispatchedImage);
 		memset(data, 0x00, bpr * height);
 	}
-	IOSurfaceUnlock(self.pendingImage, 0, NULL);
+	IOSurfaceUnlock(self.dispatchedImage, 0, NULL);
 
 	[self.pixelImageLayer setContents: (id) self.pixelImage];
 }
@@ -823,7 +826,7 @@ updatePixels
 		[self.pending_updates[i] getValue: &ca size: sizeof(ca)];
 
 		constrain_area(mp, &ca);
-		if (ca.lines * ca.span < 16)
+		if (ca.lines * ca.span < 32)
 		{
 			/* Don't bother with dispatch when the volume is small. */
 			[self drawPixels: ca];
@@ -869,7 +872,7 @@ signalDisplayUpdates
 }
 
 - (void)
-signalDisplay
+commitDisplay
 {
 	struct MatrixParameters *mp = [self matrixParameters];
 
@@ -881,17 +884,18 @@ signalDisplay
 			setValue: (id) kCFBooleanTrue
 			forKey: kCATransactionDisableActions];
 
-		[self.pixelImageLayer setContents: (id) self.pixelImage];
+		/* Rotate dispatched. */
 		hold = self.pixelImage;
-		self.pixelImage = self.pendingImage;
-		self.pendingImage = hold;
+		self.pixelImage = self.dispatchedImage;
+		self.dispatchedImage = hold;
+		[self.pixelImageLayer setContents: (id) hold];
 	}
 	[CATransaction commit];
 
-	/* Copy new image over old. */
+	/* Copy new image over old in render queue. */
 	{
 		unsigned char *dst = IOSurfaceGetBaseAddress(self.pixelImage);
-		unsigned char *src = IOSurfaceGetBaseAddress(self.pendingImage);
+		unsigned char *src = IOSurfaceGetBaseAddress(self.dispatchedImage);
 		memcpy(dst, src, IOSurfaceGetAllocSize(self.pixelImage));
 	}
 
@@ -1601,9 +1605,11 @@ device_dispatch_frame(void *context)
 {
 	CellMatrix *terminal = context;
 
+	/* Dispatch on render queue first to synchronize all enqueued changes. */
 	dispatch_async(terminal.render_queue, ^(void) {
+		/* Block render queue until the frame is committed in the main thread. */
 		dispatch_sync(dispatch_get_main_queue(), ^(void) {
-			[terminal signalDisplay];
+			[terminal commitDisplay];
 		});
 	});
 }
@@ -1613,6 +1619,7 @@ device_synchronize(void *context)
 {
 	CellMatrix *terminal = context;
 
+	/* Wait for render queue to clear. */
 	dispatch_sync(terminal.render_queue, ^(void) {
 		;
 	});
