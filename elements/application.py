@@ -15,7 +15,6 @@ from fault.system import process
 from fault.system import files
 from fault.system import query
 
-from . import symbols
 from . import annotations
 from . import types
 from . import fields

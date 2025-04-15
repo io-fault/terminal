@@ -650,7 +650,7 @@ class Model(object):
 	"""
 
 	# Indicator images (characters) and colors.
-	from . import symbols
+	from ..configuration import symbols
 	fm_iimages = {
 		'left': {
 			'leading': symbols.wedges['up'],
