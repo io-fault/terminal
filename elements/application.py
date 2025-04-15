@@ -946,6 +946,22 @@ class Session(Core):
 		self.load()
 		self.reframe(0)
 
+	@comethod('resource', 'execute')
+	def rl_execute(self, event):
+		"""
+		# Perform the operation identified by the location's annotation.
+		"""
+
+		frame = self.focus
+		rf = frame.focus
+
+		if rf.annotation.title == 'open':
+			rl_operation = frame.rl_open
+		elif rf.annotation.title == 'save':
+			rl_operation = frame.rl_save
+
+		return rl_operation(self, frame, rf, event)
+
 	@comethod('resource', 'save')
 	def s_write_resource(self, key):
 		src = self.focus.focus.source
@@ -1052,18 +1068,6 @@ class Session(Core):
 		assert rf.frame_visible == True
 		assert rf.source is session.transcript
 
-	def execute_view_action(self):
-		"""
-		# Perform the operation configured on the view giving it
-		# the session-level scope.
-		"""
-
-		frame = self.focus
-		rf = frame.focus
-		if rf.activate is not None:
-			action = rf.activate
-			return action(self, frame, rf, '')
-
 	def frame_status_modifiers(self):
 		"""
 		# Modifiers used to recognize the focus orientation for
@@ -1091,6 +1095,15 @@ class Session(Core):
 
 		return m
 
+	@comethod('session', 'trace/instructions')
+	def s_toggle_trace(self, key='', quantity=0):
+		if self.trace is self.discard:
+			del self.trace
+			self.log("Instruction tracing enabled.")
+		else:
+			self.trace = self.discard
+			self.log("Instruction tracing disabled.")
+
 	@comethod('session', 'cancel')
 	@comethod('session', 'activate')
 	def s_status_qualified_routing(self, key):
@@ -1101,23 +1114,25 @@ class Session(Core):
 
 	@comethod('session', 'execute/close')
 	def s_execute_prompt_close(self, key):
-		r = self.execute_view_action()
-		self.focus.cancel()
+		frame = self.focus
+		r = frame.prompt_execute((frame.vertical, frame.division), self)
+		frame.cancel()
 		self.keyboard.set('control')
 		return r
 
 	@comethod('session', 'execute/reset')
 	def s_execute_prompt_reset(self, key):
-		r = self.execute_view_action()
-		f = self.focus
-		dpath = (f.vertical, f.division)
-		l, c, p = f.select(dpath)
-		self.focus.prompt(dpath, c.source.origin.ref_system, ['system', ''])
+		frame = self.focus
+		dpath = (frame.vertical, frame.division)
+		r = frame.prompt_execute(dpath, self)
+		l, c, p = frame.select(dpath)
+		frame.prompt(dpath, c.source.origin.ref_system, ['system', ''])
 		return r
 
 	@comethod('session', 'execute/repeat')
 	def s_execute_prompt_repeat(self, key):
-		return self.execute_view_action()
+		frame = self.focus
+		return frame.prompt_execute((frame.vertical, frame.division), self)
 
 	@comethod('elements', 'select')
 	def c_transmit_selected(self, key, *, quantity=1):
@@ -1178,10 +1193,46 @@ class Session(Core):
 
 		rf.keyboard.revert()
 
+	@staticmethod
+	def joinlines(decoder, linesep='\n', character=''):
+		# Used in conjunction with an incremental decoder to collapse line ends.
+		data = (yield None)
+		while True:
+			buf = decoder(data)
+			data = (yield buf.replace(linesep, character))
+
 	@comethod('cursor', 'substitute/selected/command')
 	def c_dispatch_system_command(self, key, *, quantity=1):
-		from . import query
-		query.substitute(self, self.focus, self.focus.focus)
+		session = self
+		frame = self.focus
+		rf = frame.focus
+
+		from .system import Completion, Insertion, Invocation, Decode
+		from .annotations import ExecutionStatus
+		from fault.system.query import executables
+		src = rf.source
+
+		# Horizontal Range
+		lo, co, lines = rf.take_horizontal_range()
+		rf.focus[1].magnitude = 0
+		readlines = session.joinlines(Decode('utf-8').decode)
+		readlines.send(None)
+		readlines = readlines.send
+		src.commit()
+
+		cmd = '\n'.join(lines).split()
+		for exepath in executables(cmd[0]):
+			inv = Invocation(str(exepath), tuple(cmd))
+			break
+		else:
+			# No command found.
+			return
+
+		c = Completion(rf, -1)
+		i = Insertion(rf, (lo, co, ''), readlines)
+		pid = session.io.invoke(c, i, None, inv)
+		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+		rf.annotate(ca)
 
 	@comethod('cursor', 'select/absolute')
 	def c_select_absolute(self, key, *, quantity=1):

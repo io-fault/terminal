@@ -95,7 +95,6 @@ annotations = Mode(('cursor', 'transition/annotation/void', ()))
 relay = Mode(('view', 'dispatch/device/status', ()))
 
 # Dispatch; return control.
-import sys
 for mode in (control, insert):
 	# Set of combinations need to be trapped so they can be forwarded.
 	a((k_return, *km_all), 'session/activate')
@@ -104,7 +103,7 @@ for mode in (control, insert):
 			a((k_return, *mods), 'session/activate')
 
 	a((k_return, km_meta), 'cursor/substitute/selected/command')
-	a((k_return, km_location), 'session/execute/reset')
+	a((k_return, km_location), 'resource/execute')
 
 	a((k_return, km_executing, km_retain), 'session/execute/reset')
 	a((k_return, km_executing, km_retain, km_control), 'session/execute/repeat')

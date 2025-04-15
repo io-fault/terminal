@@ -14,17 +14,29 @@ from dataclasses import dataclass
 
 from fault.context.tools import partial
 from fault.system import files
+from fault.system import query
 from fault.system.kernel import Event
 from fault.system.kernel import Link
 from fault.system.kernel import Invocation
 from fault.system.kernel import Scheduler
 
-from . import annotations
+from .annotations import ExecutionStatus
 from .types import Core, System
 from .view import Refraction
 
 Decode = codecs.getincrementaldecoder('utf-8')
 Encode = codecs.getincrementalencoder('utf-8')
+
+def bufferlines(limit, lines):
+	buffer = b''
+	for l in lines:
+		buffer += l
+		if len(buffer) > limit:
+			yield buffer
+			buffer = b''
+
+	if buffer:
+		yield buffer
 
 class IO(object):
 	"""
@@ -205,7 +217,7 @@ class Completion(IO):
 
 		if self.target.annotation is None:
 			return
-		if not isinstance(self.target.annotation, annotations.ExecutionStatus):
+		if not isinstance(self.target.annotation, ExecutionStatus):
 			return
 
 		if pid == self.target.annotation.xs_process_id:
@@ -406,3 +418,107 @@ class Execution(Core):
 		self.encoding = encoding
 		self.executable = ifpath
 		self.interface = argv
+
+	@comethod('system', 'system')
+	def execute(self, session, frame, rf, string):
+		"""
+		# Send the selected elements to the device manager.
+		"""
+
+		src = rf.source
+
+		cmd = string.split()
+		for exepath in query.executables(cmd[0]):
+			inv = Invocation(str(exepath), tuple(cmd))
+			break
+		else:
+			# No command found.
+			return
+
+		c = Completion(rf, -1)
+		lo = rf.focus[0].get()
+		co = rf.focus[1].get()
+		readlines = Decode('utf-8').decode
+
+		ins = Insertion(rf, (lo, co, ''), readlines)
+		pid = session.io.invoke(c, ins, None, inv)
+		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+		rf.annotate(ca)
+
+	@comethod('system', 'transform')
+	def transform(self, session, frame, rf, system):
+		"""
+		# Send the selected elements to the device manager.
+		"""
+
+		cmd = system.split()
+		for exepath in query.executables(cmd[0]):
+			inv = Invocation(str(exepath), tuple(cmd))
+			break
+		else:
+			# No command found.
+			return
+
+		readlines = Decode('utf-8').decode
+		src = rf.source
+		src.checkpoint()
+
+		c = Completion(rf, -1)
+		start, co, lines = rf.take_vertical_range()
+		src.commit()
+
+		rf.focus[0].magnitude = 0
+
+		i = Insertion(rf, (start, 0, ''), readlines)
+		lfb = src.forms.lf_codec.sequence
+		lfl = src.forms.lf_lines.sequence
+		try:
+			cil = min(li.ln_level for li in lines if li.ln_content)
+		except ValueError:
+			cil = 0
+		i.level = cil
+
+		# Maintain initial indentation context on first line,
+		# and make sure that there is a line to write into.
+		src.insert_lines(start, [src.forms.ln_interpret("", level=cil)])
+		src.commit()
+
+		ilines = ((li.ln_level - cil, li.ln_content) for li in lines)
+
+		x = Transmission(rf, bufferlines(2048, lfb(lfl(ilines))), b'', 0)
+
+		# Trigger first buffer.
+		x.transferred(b'')
+
+		pid = session.io.invoke(c, i, x, inv)
+
+		# Report status via annotation.
+		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+		rf.annotate(ca)
+
+	@comethod('system', 'transmit')
+	def transmit(self, session, frame, rf, system):
+		"""
+		# Send the selected elements to the system command.
+		"""
+
+		cmd = system.split()
+		for exepath in query.executables(cmd[0]):
+			inv = Invocation(str(exepath), tuple(cmd))
+			break
+		else:
+			# No command found.
+			return
+
+		c = Completion(rf, -1)
+		lines = rf.source.serialize(*rf.focus[0].range())
+		x = Transmission(rf, bufferlines(2048, lines), b'', 0)
+
+		# Trigger first buffer.
+		x.transferred(b'')
+
+		pid = session.io.invoke(c, None, x, inv)
+
+		# Report status via annotation.
+		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+		rf.annotate(ca)

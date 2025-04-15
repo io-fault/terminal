@@ -32,10 +32,6 @@ class Refraction(Core):
 		# Per dimension offsets used to trigger margin scrolls.
 	# /visible/
 		# The first elements visible in the view for each dimension.
-	# /activate/
-		# Action associated with return and enter.
-		# Defaults to &None.
-		# &.ia.types.Selection intercepts will eliminate the need for this.
 	# /area/
 		# The display context of the &image.
 	# /version/
@@ -54,7 +50,6 @@ class Refraction(Core):
 	focus: Sequence[object]
 	limits: Sequence[int]
 	visible: Sequence[int]
-	activate = None
 	cancel = None
 	define: Callable[[str], int]
 	version: object = (0, 0, None)
@@ -237,9 +232,9 @@ class Refraction(Core):
 					h.restore((i, i, i + termlength))
 					return
 
-	def seek(self, lo, unit):
+	def seek(self, lo, co):
 		"""
-		# Relocate the cursor to the &unit in &element.
+		# Relocate the cursor to the &co codepoint offset in the line &lo.
 		"""
 
 		src = self.source
@@ -247,9 +242,24 @@ class Refraction(Core):
 		width = self.area.span
 
 		self.focus[0].set(lo)
-		self.focus[1].set(unit if unit is not None else li.ln_length)
-		page_offset = lo - (width // 2)
-		self.scroll(lambda x: page_offset)
+		self.focus[1].set(co if co is not None else li.ln_length)
+		self.recursor()
+
+	@comethod('cursor', 'seek/absolute/line')
+	def c_seek_absolute(self, quantity=0):
+		if quantity < 0:
+			ln = self.source.ln_count() + quantity
+		elif quantity > 0:
+			ln = quantity - 1
+		else:
+			ln = self.source.ln_count() // 2
+
+		self.seek(ln, 0)
+
+	@comethod('cursor', 'seek/relative/line')
+	def c_seek_relative(self, quantity=0):
+		ln = self.focus[0].get() + quantity
+		self.seek(ln, 0)
 
 	def recursor(self):
 		"""
@@ -313,6 +323,108 @@ class Refraction(Core):
 			elif rln >= edge - climit:
 				position, rscroll, area = alignment.forward(total, edge, current, sunit)
 				self.scroll(rscroll.__add__)
+
+	def prepare_rewrite(self, command):
+		"""
+		# Identify the requested change.
+		"""
+
+		strctx, remainder = command.split(None, 1)
+
+		if strctx == 'field':
+			*index, di, arg = remainder.strip().split()
+			# field indexes
+			index = int(index[0])
+			assert strctx == 'field'
+			selector = self.select_field
+		elif strctx == 'line':
+			index = None
+			di, arg = remainder.strip().split()
+			selector = (lambda lo, idx: (slice(0, self.source.sole(lo).ln_length), ('line', self.source.sole(lo).ln_content)))
+
+		op = {
+			'prefix': (lambda a, tf: (a.start, arg, "")),
+			'suffix': (lambda a, tf: (a.stop, arg, "")),
+			'replace': (lambda a, tf: (a.start, arg, tf[1])),
+		}[di]
+
+		return selector, index, op
+
+	@comethod('command', 'rewrite')
+	def p_rewrite(self, string):
+		"""
+		# Rewrite the lines or fields of a vertical range.
+		"""
+
+		s, index, d = self.prepare_rewrite(string)
+		v, h = self.focus
+		lspan = v.slice()
+
+		# Identify first IL.
+		src = self.source
+		ln = src.sole(lspan.start)
+		il = ln.ln_level
+
+		# Force checkpoint.
+		src.checkpoint()
+
+		for lo in range(lspan.start, lspan.stop):
+			if il != src.sole(lo).ln_level:
+				# Match starting IL.
+				continue
+
+			try:
+				selection = s(lo, index)
+			except IndexError:
+				# Handle shorter line cases by skipping them.
+				continue
+			else:
+				co, sub, removed = d(*selection)
+				deletion = src.substitute_codepoints(lo, co, co + len(removed), sub)
+				assert deletion == removed
+
+		src.checkpoint()
+
+	@comethod('command', 'find')
+	def p_find(self, string):
+		"""
+		# Perform a find operation against the subject's elements.
+		"""
+
+		v, h = self.focus
+		self.query['search'] = string
+		ctl = self.forward(self.source.ln_count(), v.get(), h.maximum)
+		self.find(ctl, string)
+		self.recursor()
+
+	@comethod('command', 'seek')
+	def p_seek(self, string):
+		"""
+		# Perform a seek operation on the refraction.
+		"""
+
+		try:
+			whence, target_s = string.split()
+		except ValueError:
+			log("Unrecognized seek arguments " + repr(string) + ".")
+			return
+
+		target = int(target_s.strip())
+
+		if whence == 'absolute':
+			self.c_seek_absolute(target)
+		elif whence == 'relative':
+			self.c_seek_relative(target)
+		else:
+			log("Unrecognized seek whence " + repr(whence) + ".")
+
+	def select_field(self, lo:int, fi:int):
+		"""
+		# Get the area-field pair identified by &lo and &fi.
+		"""
+
+		field_areas, field_records = self.fields(lo)
+		return (field_areas[fi], field_records[fi])
 
 	def field_areas(self, element):
 		"""
@@ -2026,11 +2138,8 @@ class Frame(Core):
 			for a, v in zip(av, vv):
 				v.configure(self.deltas, self.define, a)
 
-		from .query import issue
-
 		for dpath, index in self.paths.items():
 			l, rf, p = self.views[index]
-			p.activate = issue
 
 			if rf.reporting(self.prompting):
 				self.reveal(dpath, self.prompting.pg_line_allocation)
@@ -2218,6 +2327,43 @@ class Frame(Core):
 			)
 		)
 
+	def prompt_execute(self, dpath, session):
+		"""
+		# Execute the command present on the prompt of the &dpath division.
+		"""
+
+		l, target, p = self.select(dpath)
+		src = p.source
+		ctx, *commands = src.select(0, src.ln_count())
+
+		prompt_string = ' '.join(x.ln_content for x in commands)
+		try:
+			command, string = prompt_string.split(' ', 1)
+		except ValueError:
+			command = prompt_string
+			string = ''
+
+		if command[:1] == ':':
+			# Dispatch application instruction to the focused refraction.
+			session.dispatch('(' + command[1:] + ')' + '[-]')
+		else:
+			try:
+				# Eliminate this in favor of direct application instructions
+				# once type signatures can be probed for parameters.
+				cmd = target.comethod('command', command)
+			except:
+				# Currently, select the target refraction's system, but
+				# the prompt intends to allow arbitrary routing. System
+				# should be interpreted by &ctx here.
+				sr = target.source.origin.ref_system
+				exectx = session.systems[sr]
+				cmd = exectx.comethod('system', command)
+			else:
+				cmd(string)
+				return
+
+			cmd(session, self, target, string)
+
 	def prompt(self, dpath, system, command):
 		"""
 		# Initialize the prompt for &dpath division to issue &command to the &system.
@@ -2242,7 +2388,6 @@ class Frame(Core):
 		# If no prompt is open, initialize it.
 		"""
 
-		from .query import issue
 		vi = self.paths[dpath]
 		state = self.focus.query.get(type, None) or ''
 
@@ -2258,7 +2403,6 @@ class Frame(Core):
 			self.reveal(dpath, self.prompting.pg_line_allocation)
 
 		self.focus = prompt
-		prompt.activate = issue
 
 		self.prompt(dpath, system, [qtype, state])
 		return prompt
@@ -2275,7 +2419,6 @@ class Frame(Core):
 		self.rl_place_cursor(location_rf)
 
 		self.focus = location_rf
-		self.focus.activate = self.rl_open
 		self.focus.annotation = annotations.Filesystem('open',
 			self.focus.forms,
 			self.focus.source,
@@ -2294,7 +2437,6 @@ class Frame(Core):
 		self.rl_place_cursor(location_rf)
 
 		self.focus = location_rf
-		self.focus.activate = self.rl_save
 		self.focus.annotation = annotations.Filesystem('save',
 			self.focus.forms,
 			self.focus.source,
