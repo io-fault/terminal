@@ -1209,14 +1209,57 @@ class Refraction(Core):
 		lp = self.focus[0]
 		lp.configure(lp.get(), 1)
 
+	@staticmethod
+	def identify_routing_series(fields, index, ftype='router'):
+		"""
+		# Identify the boundary of the field series where &ftype fields
+		# extend the range.
+
+		# [ Returns ]
+		# A pair of &fields indexes identifying the first and last fields
+		# of the series.
+		"""
+		scans = (
+			range(index - 1, -1, -1),
+			range(index + 1, len(fields), 1),
+		)
+		locations = []
+
+		# Iterate through both directions from &index.
+		for r in scans:
+			rs = 0
+			last = index
+
+			# Scan for series and exit when successive non-router
+			for fi in r:
+				ft, fc = fields[fi]
+				if ftype in ft:
+					# Continue series.
+					rs = 1
+					last = fi
+				else:
+					rs -= 1
+					if rs < 0:
+						# Successive decrement, end of series.
+						fi -= 1
+						break
+					else:
+						if ft in {'indentation', 'indentation-only', 'space'}:
+							break
+
+						last = fi
+
+			locations.append(last)
+
+		return tuple(locations)
+
 	@comethod('cursor', 'select/field/series')
 	def c_select_field_series(self, key, *, quantity=1):
 		hcp = self.focus[1].get()
 		areas, fields = self.fields(self.focus[0].get())
 		cfi = self.field_index(areas, hcp)
 
-		from .fields import identify_routing_series as irs
-		first, last = irs(fields, cfi)
+		first, last = self.identify_routing_series(fields, cfi)
 
 		self.focus[1].restore((
 			areas[first].start,

@@ -1,12 +1,12 @@
 """
 # Refraction cursor annotations for completion support and ephemeral information displays.
 """
+from os.path import islink
 import functools
 from typing import Sequence
 
 from fault.system import files
 from . import types
-from . import fields
 
 def rotate(ai, quantity=1):
 	"""
@@ -416,6 +416,66 @@ class Filesystem(Directory):
 	# Filesystem Directory query annotation for file path completion support.
 	"""
 
+	@staticmethod
+	def typed_path_fields(root, extension, *, separator='/'):
+		"""
+		# Format the path components in &extension relative to &root.
+		"""
+
+		current = root
+		for f in extension[:-1]:
+			if not f:
+				yield ('path-empty', '')
+			else:
+				current = current/f
+
+				if f in {'.', '..'}:
+					yield ('relatives', f)
+				else:
+					if islink(current):
+						yield ('path-link', f)
+					else:
+						try:
+							typ = current.fs_type()
+						except OSError:
+							typ = 'warning'
+
+						if typ == 'directory':
+							yield ('path-directory', f)
+						elif typ == 'void':
+							yield ('file-not-found', f)
+						else:
+							yield (typ, f)
+
+			yield ('path-separator', separator)
+
+		f = extension[-1]
+		final = current/f
+		try:
+			typ = final.fs_type()
+		except OSError:
+			typ = 'warning'
+
+		# Slightly different from path segments.
+		if typ == 'data':
+			try:
+				if final.fs_executable():
+					typ = 'executable'
+				elif f[:1] == '.':
+					typ = 'dot-file'
+				else:
+					# No subtype override.
+					pass
+			except OSError:
+				typ = 'warning'
+		elif typ == 'void':
+			typ = 'file-not-found'
+		else:
+			# No adjustments necessary.
+			pass
+
+		yield (typ, f)
+
 	def __init__(self, title, lf, source, vertical, horizontal):
 		super().__init__(title)
 		self.forms = lf
@@ -423,10 +483,9 @@ class Filesystem(Directory):
 		self.vertical = vertical
 		self.horizontal = horizontal
 
-	_tpf = staticmethod(fields.typed_path_fields)
 	def structure_path(self, match):
 		# Only displaying the match's filename.
-		return self._tpf(self.location, match.split('/'), separator='/')
+		return self.typed_path_fields(self.location, match.split('/'), separator='/')
 
 	def chdir(self, context, location):
 		super().chdir(context, location)

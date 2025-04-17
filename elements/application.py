@@ -17,7 +17,6 @@ from fault.system import query
 
 from . import annotations
 from . import types
-from . import fields
 from . import retention
 
 from .types import Core, Reference, Glyph, Device, System, Reformulations
@@ -27,6 +26,52 @@ from .system import Execution, IOManager
 
 # Disable signal exits for multiple interpreter cases.
 process.__signal_exit__ = (lambda x: None)
+
+def kwf_qualify(tokens, context='inclusion'):
+	"""
+	# Convert a delimited KOS token stream into fields.
+	"""
+
+	for t in tokens:
+		typ, qual, chars = t
+		if typ == 'switch':
+			context = qual
+			continue
+
+		if context == 'inclusion':
+			if qual == 'event':
+				yield ("-".join((context, typ)), chars)
+			else:
+				if typ == 'space':
+					yield ("-".join((context, typ)), chars)
+				else:
+					yield ("-".join((context, qual, typ)), chars)
+		else:
+			if typ == 'space':
+				yield ("-".join((context, 'space')), chars)
+			elif qual == 'event' or typ == 'enclosure':
+				yield ("-".join((context, 'words')), chars)
+			else:
+				yield ("-".join((context, qual)), chars)
+
+def kwf_isolate(parser, ln):
+	return kwf_qualify(parser.process_line(ln.ln_content))
+
+def fs_isolate_path(pathref, ln, *, separator='/', relative=None, tpf=annotations.Filesystem.typed_path_fields):
+	"""
+	# Structure the path components of &line relative to &rpath.
+	# If &line begins with a root directory, it is interpreted absolutely.
+	"""
+
+	s = separator
+	lc = ln.ln_content
+	if lc:
+		if relative or not lc.startswith(s):
+			return tpf(pathref(), lc.split(s), separator=s)
+		else:
+			return tpf(files.root, lc.split(s), separator=s)
+	else:
+		return ()
 
 class Session(Core):
 	"""
@@ -105,12 +150,13 @@ class Session(Core):
 		return ctl
 
 	@staticmethod
-	def integrate_types(cfgtypes, theme):
+	def integrate_types(cfgtypes, theme, cachesize=256):
 		ce, ltc, lic, isize = cfgtypes.formats[cfgtypes.Default]
 
+		# segmentation
 		from fault.system.text import cells as syscellcount
 		from ..cells.text import graphemes, words
-		cus = tools.cachedcalls(256)(
+		cus = tools.cachedcalls(cachesize)(
 			tools.compose(list, words,
 				tools.partial(graphemes, syscellcount, ctlsize=4, tabsize=4)
 			)
@@ -154,9 +200,12 @@ class Session(Core):
 		self.cache = [] # Lines
 
 		ltype = self.integrate_types(self.configuration.types, self.theme)
+		from fault.syntax.format import Fields
+		fs_parser = Fields(process.fs_pwd, fs_isolate_path)
+
 		self.types = {
 			"": ltype, # Root type.
-			'filesystem': ltype.replace(lf_fields=fields.filesystem_paths),
+			'filesystem': ltype.replace(lf_fields=fs_parser),
 		}
 		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
 
@@ -355,13 +404,20 @@ class Session(Core):
 		syntax_record = self.configuration.load_syntax(sti)
 		fimethod, ficonfig, ce, eol, ic, ils = syntax_record
 
-		from fault.syntax import format
+		from fault.syntax import format, keywords
+
+		if fimethod == 'keywords':
+			fiprofile = keywords.Profile.from_keywords_v1(**ficonfig)
+			fiparser = keywords.Parser.from_profile(fiprofile)
+			fields = format.Fields(fiparser, kwf_isolate)
+		else:
+			raise LookupError("unknown field isolation interface")
 
 		lf = self.default_type().replace(
 			lf_type=sti,
 			lf_lines=format.Lines(eol, ic),
 			lf_codec=format.Characters.from_codec(ce, 'surrogateescape'),
-			lf_fields=fields.prepare(fimethod, ficonfig),
+			lf_fields=fields,
 		)
 
 		self.types[sti] = lf
