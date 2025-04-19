@@ -103,7 +103,7 @@ for mode in (control, insert):
 			a((k_return, *mods), 'session/activate')
 
 	a((k_return, km_meta), 'cursor/substitute/selected/command')
-	a((k_return, km_location), 'resource/execute')
+	a((k_return, km_location), 'location/execute/operation')
 
 	a((k_return, km_executing, km_retain), 'session/execute/reset')
 	a((k_return, km_executing, km_retain, km_control), 'session/execute/repeat')
@@ -122,6 +122,7 @@ if 'controls':
 	a(('c', km_location, km_control), 'frame/cancel')
 	a(('c', km_executing, km_retain, km_control), 'frame/refocus')
 	a(('c', km_executing, km_conceal, km_control), 'frame/cancel')
+	a(('c', km_writing, km_control), 'frame/cancel')
 
 	a((k_space, km_control), 'frame/prepare/command')
 

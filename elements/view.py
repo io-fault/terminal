@@ -1047,25 +1047,25 @@ class Refraction(Core):
 		# yield ctx.__class__(vy + rln, vx, 1, hedge), cells[hoffset:hoffset+hedge]
 
 	@comethod('cursor', 'move/backward/field')
-	def c_select_previous_field(self, key, quantity=1):
+	def c_select_previous_field(self, quantity=1):
 		t = self.field(-quantity)
 		self.focus[1].restore((t.start, t.start, t.stop))
 
 	@comethod('cursor', 'move/forward/field')
-	def c_select_next_field(self, key, quantity=1):
+	def c_select_next_field(self, quantity=1):
 		t = self.field(quantity)
 		self.focus[1].restore((t.start, t.start, t.stop))
 
 	@comethod('cursor', 'move/first/character')
-	def c_move_start_of_line(self, key):
+	def c_move_start_of_line(self):
 		self.focus[1].set(0)
 
 	@comethod('cursor', 'move/last/character')
-	def c_move_end_of_line(self, key):
+	def c_move_end_of_line(self):
 		self.focus[1].set(self.cwl().ln_length)
 
 	@comethod('cursor', 'move/start/character')
-	def c_move_start_of_range(self, key):
+	def c_move_start_of_range(self):
 		h = self.focus[1]
 		if h.offset == 0:
 			n = self.field(-1)
@@ -1083,7 +1083,7 @@ class Refraction(Core):
 		self.recursor()
 
 	@comethod('cursor', 'move/stop/character')
-	def c_move_end_of_range(self, key):
+	def c_move_end_of_range(self):
 		h = self.focus[1]
 		if h.offset == h.magnitude:
 			n = self.field(+1)
@@ -1098,26 +1098,28 @@ class Refraction(Core):
 		self.recursor()
 
 	@comethod('cursor', 'move/forward/character')
-	def c_move_next_character(self, key, *, quantity=1):
+	def c_move_next_character(self, quantity=1):
 		self.focus[1].set(self.unit(quantity))
 
 	@comethod('cursor', 'move/backward/character')
-	def c_move_back_character(self, key, *, quantity=1):
+	def c_move_back_character(self, quantity=1):
 		self.focus[1].set(self.unit(-quantity))
 
 	@comethod('cursor', 'move/jump/string')
-	def c_move_to_character(self, key, *, quantity=1):
-		h = self.focus[1]
-		offset = self.cwl().ln_content.find(key, h.get() + 1)
-		if offset > -1:
-			h.set(offset)
-
 	@comethod('cursor', 'move/jump/character')
-	def c_move_to_event_text(self, key, *, quantity=1):
-		return self.c_move_to_character(key)
+	def c_move_to_character(self, text, quantity=1):
+		h = self.focus[1]
+		cwl = self.cwl().ln_content
+
+		for i in range(quantity):
+			offset = cwl.find(text, h.get() + 1)
+			if offset > -1:
+				h.set(offset)
+			else:
+				break
 
 	@comethod('cursor', 'move/forward/line')
-	def c_move_next_line(self, key, *, quantity=1):
+	def c_move_next_line(self, quantity=1):
 		v = self.focus[0]
 		ln = v.get() + quantity
 		v.set(min(ln, self.source.ln_count()))
@@ -1125,7 +1127,7 @@ class Refraction(Core):
 		self.recursor()
 
 	@comethod('cursor', 'move/backward/line')
-	def c_move_back_line(self, key, *, quantity=1):
+	def c_move_back_line(self, quantity=1):
 		v = self.focus[0]
 		ln = v.get() + -quantity
 		v.set(max(0, ln))
@@ -1133,33 +1135,35 @@ class Refraction(Core):
 		self.recursor()
 
 	@comethod('cursor', 'move/forward/line/void')
-	def c_move_next_void(self, key, *, quantity=1):
+	def c_move_next_void(self, quantity=1):
 		src = self.source
 
-		ln = src.find_next_void(self.focus[0].get() + 1)
-		if ln is None:
-			lo = src.ln_count()
-		else:
-			lo = ln.ln_offset
+		for i in range(quantity):
+			ln = src.find_next_void(self.focus[0].get() + 1)
+			if ln is None:
+				lo = src.ln_count()
+			else:
+				lo = ln.ln_offset
 
-		self.focus[0].set(lo)
+			self.focus[0].set(lo)
 		self.recursor()
 
 	@comethod('cursor', 'move/backward/line/void')
-	def c_move_back_void(self, key, *, quantity=1):
+	def c_move_back_void(self, quantity=1):
 		src = self.source
 
-		ln = src.find_previous_void(self.focus[0].get() - 1)
-		if ln is None:
-			lo = 0
-		else:
-			lo = ln.ln_offset
+		for i in range(quantity):
+			ln = src.find_previous_void(self.focus[0].get() - 1)
+			if ln is None:
+				lo = 0
+			else:
+				lo = ln.ln_offset
 
-		self.focus[0].set(lo)
+			self.focus[0].set(lo)
 		self.recursor()
 
 	@comethod('cursor', 'move/start/line')
-	def c_seek_start_line(self, key, *, quantity=1):
+	def c_seek_start_line(self):
 		src = self.source
 		start, lo, stop = self.focus[0].snapshot()
 
@@ -1179,7 +1183,7 @@ class Refraction(Core):
 		self.recursor()
 
 	@comethod('cursor', 'move/stop/line')
-	def c_seek_stop_line(self, key, *, quantity=1):
+	def c_seek_stop_line(self):
 		src = self.source
 		start, lo, stop = self.focus[0].snapshot()
 
@@ -1199,13 +1203,13 @@ class Refraction(Core):
 		self.recursor()
 
 	@comethod('cursor', 'select/line/characters')
-	def c_select_current_line_characters(self, key, *, quantity=1):
+	def c_select_current_line_characters(self):
 		ln = self.cwl()
 		cp = self.focus[1]
 		cp.restore((0, cp.get(), ln.ln_length))
 
 	@comethod('cursor', 'select/line')
-	def c_select_current_line(self, key, *, quantity=1):
+	def c_select_current_line(self):
 		lp = self.focus[0]
 		lp.configure(lp.get(), 1)
 
@@ -1254,7 +1258,7 @@ class Refraction(Core):
 		return tuple(locations)
 
 	@comethod('cursor', 'select/field/series')
-	def c_select_field_series(self, key, *, quantity=1):
+	def c_select_field_series(self):
 		hcp = self.focus[1].get()
 		areas, fields = self.fields(self.focus[0].get())
 		cfi = self.field_index(areas, hcp)
@@ -1268,7 +1272,7 @@ class Refraction(Core):
 		))
 
 	@comethod('cursor', 'select/indentation')
-	def c_select_indentation(self, key, *, quantity=1):
+	def c_select_indentation(self):
 		src = self.source
 		ln = self.cwl()
 
@@ -1280,7 +1284,7 @@ class Refraction(Core):
 		self.focus[0].restore((start, ln.ln_offset, stop))
 
 	@comethod('cursor', 'select/indentation/level')
-	def c_select_indentation_level(self, key, *, quantity=1):
+	def c_select_indentation_level(self):
 		src = self.source
 		start, lo, stop = self.focus[0].snapshot()
 
@@ -1294,24 +1298,24 @@ class Refraction(Core):
 		self.focus[0].restore((hstart, lo, hstop))
 
 	@comethod('cursor', 'move/line/start')
-	def c_move_line_start(self, key, *, quantity=1):
+	def c_move_line_start(self):
 		offset = self.focus[0].offset
 		self.focus[0].offset = 0
 		self.focus[0].datum += offset
 		self.focus[0].magnitude -= offset
 
 	@comethod('cursor', 'move/line/stop')
-	def c_move_line_stop(self, key, *, quantity=1):
+	def c_move_line_stop(self):
 		self.focus[0].halt(+1)
 
 	@comethod('cursor', 'move/bisect/line')
-	def c_move_bisect_line(self, key, *, quantity=1):
+	def c_move_bisect_line(self, quantity=1):
 		l = self.focus[0].magnitude
 		self.focus[0].offset = (l // (2 ** quantity))
 
 	@comethod('cursor', 'find/previous/pattern')
 	@comethod('elements', 'previous')
-	def c_find_previous_string(self, key, *, quantity=1):
+	def c_find_previous_string(self):
 		v, h = self.focus
 		term = self.query.get('search') or self.horizontal_selection_text()
 		self.find(self.backward(self.source.ln_count(), v.get(), h.minimum), term)
@@ -1319,20 +1323,20 @@ class Refraction(Core):
 
 	@comethod('cursor', 'find/next/pattern')
 	@comethod('elements', 'next')
-	def c_find_next_string(self, key, *, quantity=1):
+	def c_find_next_string(self):
 		v, h = self.focus
 		term = self.query.get('search') or self.horizontal_selection_text()
 		self.find(self.forward(self.source.ln_count(), v.get(), h.maximum), term)
 		self.recursor()
 
 	@comethod('cursor', 'configure/find/pattern')
-	def c_configure_find_pattern(self, key, *, quantity=1):
+	def c_configure_find_pattern(self):
 		self.query['search'] = self.horizontal_selection_text()
 
 	# View Controls
 
 	@comethod('view', 'refresh')
-	def v_refresh_view_image(self, key, *, quantity=1):
+	def v_refresh_view_image(self):
 		img = self.image
 		log(
 			f"View: {img.line_offset!r} -> {img.cell_offset!r} {self.version!r} {self.area!r}",
@@ -1343,25 +1347,25 @@ class Refraction(Core):
 		self.deltas.extend(self.refresh(self.visible[0]))
 
 	@comethod('view', 'scroll/forward')
-	def v_scroll_forward(self, key, *, quantity=1, shift=chr(0x21E7)):
+	def v_scroll_forward(self, quantity=1):
 		self.scroll(quantity.__add__)
 
 	@comethod('view', 'scroll/backward')
-	def v_scroll_backward(self, key, *, quantity=1, shift=chr(0x21E7)):
+	def v_scroll_backward(self, quantity=1):
 		self.scroll((-quantity).__add__)
 
 	@comethod('view', 'scroll/forward/third')
-	def v_scroll_forward_many(self, key, *, quantity=1):
+	def v_scroll_forward_many(self, quantity=1):
 		q = ((self.area.lines // 3) or 1) * quantity
 		self.scroll(q.__add__)
 
 	@comethod('view', 'scroll/backward/third')
-	def v_scroll_backward_many(self, key, *, quantity=1):
+	def v_scroll_backward_many(self, quantity=1):
 		q = ((self.area.lines // 3) or 1) * quantity
 		self.scroll((-q).__add__)
 
 	@comethod('view', 'pan/forward')
-	def v_pan_forward(self, key, *, quantity=3, shift=chr(0x21E7)):
+	def v_pan_forward(self, quantity=3):
 		"""
 		# Adjust the horizontal position of the window forward by the given quantity.
 		"""
@@ -1373,7 +1377,7 @@ class Refraction(Core):
 		self.deltas.extend(self.v_render())
 
 	@comethod('view', 'pan/backward')
-	def v_pan_backward(self, key, *, quantity=3, shift=chr(0x21E7)):
+	def v_pan_backward(self, quantity=3):
 		"""
 		# Adjust the horizontal position of the window forward by the given quantity.
 		"""
@@ -1386,79 +1390,112 @@ class Refraction(Core):
 		self.deltas.extend(self.v_render())
 
 	@comethod('view', 'scroll/first')
-	def v_scroll_first(self, key, *, quantity=1):
+	def v_scroll_first(self):
 		self.scroll((0).__mul__)
 
 	@comethod('view', 'scroll/last')
-	def v_scroll_last(self, key, *, quantity=1):
+	def v_scroll_last(self):
 		self.scroll(lambda x: self.source.ln_count())
+
+	@comethod('view', 'scroll')
+	def v_scroll(self, device, frame, quantity=1, *, shift=chr(0x21E7)):
+		ay, ax = device.cursor_cell_status()
+		fi, cursor_target = frame.target(ay, ax)
+
+		if shift in device.key(''):
+			targets = [cursor_target, frame.focus]
+		else:
+			targets = [cursor_target]
+
+		for rf in targets:
+			if quantity < 0:
+				rf.v_scroll_forward(quantity=(-quantity))
+			else:
+				rf.v_scroll_backward(quantity=(+quantity))
+
+	@comethod('view', 'pan')
+	def v_pan(self, device, frame, quantity=1, *, shift=chr(0x21E7)):
+		ay, ax = device.cursor_cell_status()
+		fi, cursor_target = frame.target(ay, ax)
+		rf = frame.focus
+
+		if shift in self.device.key(''):
+			targets = [cursor_target, frame.focus]
+		else:
+			targets = [cursor_target]
+
+		for rf in targets:
+			if quantity < 0:
+				rf.v_pan_backward(quantity=(-quantity))
+			else:
+				rf.v_pan_forward(quantity=(+quantity))
 
 	# Deltas
 
 	@comethod('cursor', 'abort')
-	def c_abort(self, key, *, quantity=1):
+	def c_abort(self):
 		self.source.undo()
 		self.keyboard.set('control')
 
 	@comethod('cursor', 'commit')
-	def c_commit(self, key, *, quantity=1):
+	def c_commit(self):
 		self.source.checkpoint()
 		self.keyboard.set('control')
 
 	@comethod('cursor', 'insert/character')
-	def c_insert_characters(self, key, *, quantity=1):
+	def c_insert_characters(self, text, quantity=1):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
-		string = key * quantity
+		string = text * quantity
 		if lo == 0 and src.ln_count() == 0:
 			src.ln_initialize()
 		src.insert_codepoints(lo, co, string)
 		src.commit()
 
 	@comethod('cursor', 'indentation/increment')
-	def c_increase_indentation_level(self, key, *, quantity=1):
+	def c_increase_indentation_level(self, quantity=1):
 		lo = self.focus[0].get()
 		src = self.source
 		src.increase_indentation(lo, quantity)
 		src.commit()
 
 	@comethod('cursor', 'indentation/decrement')
-	def c_decrease_indentation_level(self, key, *, quantity=1):
+	def c_decrease_indentation_level(self, quantity=1):
 		lo = self.focus[0].get()
 		src = self.source
 		src.adjust_indentation(lo, lo+1, -quantity)
 		src.commit()
 
 	@comethod('cursor', 'indentation/zero')
-	def c_delete_indentation(self, key, *, quantity=1):
+	def c_delete_indentation(self):
 		lo = self.focus[0].get()
 		src = self.source
 		src.delete_indentation(lo, lo+1)
 		src.commit()
 
 	@comethod('cursor', 'indentation/increment/selected')
-	def c_increase_indentation_levels_v(self, key, *, quantity=1):
+	def c_increase_indentation_levels_v(self, quantity=1):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 		src.adjust_indentation(start, stop, quantity)
 		src.checkpoint()
 
 	@comethod('cursor', 'indentation/decrement/selected')
-	def c_decrease_indentation_levels_v(self, key, *, quantity=1):
+	def c_decrease_indentation_levels_v(self, quantity=1):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 		src.adjust_indentation(start, stop, -quantity)
 		src.checkpoint()
 
 	@comethod('cursor', 'indentation/zero/selected')
-	def c_delete_indentation_v(self, key, *, offset=None, quantity=1):
+	def c_delete_indentation_v(self):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 		src.delete_indentation(start, stop)
 		src.checkpoint()
 
 	@comethod('cursor', 'open/behind')
-	def c_open_newline_behind(self, key, *, quantity=1):
+	def c_open_newline_behind(self, quantity=1):
 		src = self.source
 		current_line = self.focus[0].get()
 
@@ -1480,7 +1517,7 @@ class Refraction(Core):
 		self.keyboard.set('insert')
 
 	@comethod('cursor', 'open/ahead')
-	def c_open_newline_ahead(self, key, *, quantity=1):
+	def c_open_newline_ahead(self, quantity=1):
 		src = self.source
 		nlines = src.ln_count()
 		current_line = self.focus[0].get()
@@ -1506,7 +1543,7 @@ class Refraction(Core):
 		self.keyboard.set('insert')
 
 	@comethod('cursor', 'open/first')
-	def c_open_first(self, key, *, quantity=1):
+	def c_open_first(self, quantity=1):
 		src = self.source
 
 		src.insert_lines(0, [Line(-1, 0, "")] * quantity)
@@ -1517,7 +1554,7 @@ class Refraction(Core):
 		self.v_scroll_first('')
 
 	@comethod('cursor', 'open/last')
-	def c_open_last(self, key, *, quantity=1):
+	def c_open_last(self, quantity=1):
 		src = self.source
 		lo = src.ln_count()
 
@@ -1529,7 +1566,7 @@ class Refraction(Core):
 		self.v_scroll_last('')
 
 	@comethod('cursor', 'insert/string')
-	def c_insert_string(self, key, string, *, quantity=1):
+	def c_insert_string(self, quantity, /, string=""):
 		src = self.source
 		lo, co = (x.get() for x in self.focus)
 		string = string * quantity
@@ -1538,20 +1575,20 @@ class Refraction(Core):
 		src.commit()
 
 	@comethod('cursor', 'insert/captured')
-	def c_insert_capture(self, key, *, quantity=1):
+	def c_insert_capture(self, text, quantity=1):
 		src = self.source
 		lo, co = (x.get() for x in self.focus)
-		key = key * quantity
+		key = text * quantity
 
 		src.insert_codepoints(lo, co, key)
 		src.commit()
 		self.keyboard.revert()
 
 	@comethod('cursor', 'insert/capture/control')
-	def c_insert_captured_control_character(self, key, quantity=1):
+	def c_insert_captured_control_character(self, text, quantity=1):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
-		string = key * quantity
+		string = text * quantity
 
 		if lo == 0 and src.ln_count() == 0:
 			src.ln_initialize()
@@ -1561,12 +1598,12 @@ class Refraction(Core):
 		self.keyboard.revert()
 
 	@comethod('cursor', 'replace/captured')
-	def c_replace_captured_character(self, key, quantity=1):
-		self.c_delete_characters_ahead('', quantity=quantity)
-		self.c_insert_captured_control_character(key, quantity)
+	def c_replace_captured_character(self, text, quantity=1):
+		self.c_delete_characters_ahead(quantity)
+		self.c_insert_captured_control_character(text, quantity)
 
 	@comethod('cursor', 'swap/case/character')
-	def c_swap_case_cu(self, key, quantity=1):
+	def c_swap_case_cu(self):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
 
@@ -1577,7 +1614,7 @@ class Refraction(Core):
 		self.focus[1].set(stop)
 
 	@comethod('cursor', 'swap/case/selected/characters')
-	def c_swap_case_hr(self, key):
+	def c_swap_case_hr(self):
 		lo = self.focus[0].get()
 		start, position, stop = self.focus[1].snapshot()
 		src = self.source
@@ -1586,7 +1623,7 @@ class Refraction(Core):
 		src.commit()
 
 	@comethod('cursor', 'delete/preceding/character')
-	def c_delete_characters_behind(self, key, *, quantity=1):
+	def c_delete_characters_behind(self, quantity):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
 		line = src.elements[lo]
@@ -1596,7 +1633,7 @@ class Refraction(Core):
 		src.commit()
 
 	@comethod('cursor', 'delete/current/character')
-	def c_delete_characters_ahead(self, key, *, quantity=1):
+	def c_delete_characters_ahead(self, quantity):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
 		line = src.elements[lo]
@@ -1606,11 +1643,11 @@ class Refraction(Core):
 		src.commit()
 
 	@comethod('cursor', 'delete/preceding/line')
-	def c_delete_lines_behind(self, key, *, quantity=1):
-		return self.c_delete_lines(key, quantity=quantity, offset=-quantity)
+	def c_delete_lines_behind(self, quantity):
+		return self.c_delete_lines(quantity, offset=-quantity)
 
 	@comethod('cursor', 'delete/current/line')
-	def c_delete_lines(self, key, *, quantity=1, offset=0):
+	def c_delete_lines(self, quantity, *, offset=0):
 		lo = self.focus[0].get() + offset
 
 		src = self.source
@@ -1621,7 +1658,7 @@ class Refraction(Core):
 			self.focus[0].changed(lo, -quantity)
 
 	@comethod('cursor', 'delete/preceding/field')
-	def c_delete_fields_behind(self, key, *, quantity=1):
+	def c_delete_fields_behind(self):
 		wordtypes = {'identifier', 'keyword', 'coreword', 'projectword'}
 		src = self.source
 
@@ -1648,7 +1685,7 @@ class Refraction(Core):
 		src.commit()
 
 	@comethod('cursor', 'delete/leading')
-	def c_delete_to_beginning_of_line(self, key, *, quantity=1):
+	def c_delete_to_beginning_of_line(self):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
 
@@ -1656,7 +1693,7 @@ class Refraction(Core):
 		src.checkpoint()
 
 	@comethod('cursor', 'delete/following')
-	def c_delete_to_end_of_line(self, key, *, quantity=1):
+	def c_delete_to_end_of_line(self):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
 		li = src.sole(lo)
@@ -1665,7 +1702,7 @@ class Refraction(Core):
 		src.checkpoint()
 
 	@comethod('cursor', 'delete/column')
-	def c_delete_character_column(self, key, *, quantity=1):
+	def c_delete_character_column(self, quantity):
 		start, _, stop = self.focus[0].snapshot()
 		co = self.focus[1].get()
 		src = self.source
@@ -1678,7 +1715,7 @@ class Refraction(Core):
 
 	@comethod('cursor', 'delete/selected/lines')
 	@comethod('elements', 'delete')
-	def c_delete_selected_lines(self, key, *, quantity=1):
+	def c_delete_selected_lines(self):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 
@@ -1686,7 +1723,7 @@ class Refraction(Core):
 		src.checkpoint()
 
 	@comethod('cursor', 'delete/selected/characters')
-	def c_delete_selected_characters(self, key, *, quantity=1):
+	def c_delete_selected_characters(self):
 		src = self.source
 		lo = self.focus[0].get()
 		start, p, stop = self.focus[1].snapshot()
@@ -1695,7 +1732,7 @@ class Refraction(Core):
 		src.commit()
 
 	@comethod('cursor', 'move/line/selection/ahead')
-	def c_move_line_range_ahead(self, key, *, quantity=1):
+	def c_move_line_range_ahead(self):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 
@@ -1717,7 +1754,7 @@ class Refraction(Core):
 		self.focus[0].restore((position, position-1, position + vr))
 
 	@comethod('cursor', 'move/line/selection/behind')
-	def c_move_line_range_behind(self, key, *, quantity=1):
+	def c_move_line_range_behind(self):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 
@@ -1744,17 +1781,17 @@ class Refraction(Core):
 		dl = src.replicate_lines(lo+offset, start, stop)
 
 	@comethod('cursor', 'copy/line/selection/ahead')
-	def c_copy_line_range_ahead(self, key, *, quantity=1):
+	def c_copy_line_range_ahead(self, quantity):
 		self.replicate_line_range(+1, quantity)
 		self.source.checkpoint()
 
 	@comethod('cursor', 'copy/line/selection/behind')
-	def c_copy_line_range_behind(self, key, *, quantity=1):
+	def c_copy_line_range_behind(self, quantity):
 		self.replicate_line_range(+0, quantity)
 		self.source.checkpoint()
 
 	@comethod('cursor', 'substitute/selected/characters')
-	def c_substitute_characters(self, key, *, quantity=1):
+	def c_substitute_characters(self):
 		lo = self.focus[0].get()
 		start, p, stop = self.focus[1].snapshot()
 		src = self.source
@@ -1765,7 +1802,7 @@ class Refraction(Core):
 		self.keyboard.set('insert')
 
 	@comethod('cursor', 'substitute/again')
-	def c_repeat_substitution(self, key, *, quantity=1, islice=itertools.islice):
+	def c_repeat_substitution(self, *, islice=itertools.islice):
 		lo = self.focus[0].get()
 		start, p, stop = self.focus[1].snapshot()
 		src = self.source
@@ -1780,25 +1817,26 @@ class Refraction(Core):
 		self.focus[1].restore((start, start, start + len(last)))
 
 	@comethod('cursor', 'line/break/follow')
-	def c_split_line_at_cursor(self, key, *, quantity=1):
+	def c_split_line_at_cursor(self, quantity):
 		lo = self.focus[0].get()
-		r = self.c_split_line_at_cursor('', quantity=quantity)
+		r = self.c_split_line_at_cursor(quantity)
 
 		self.focus[0].set(lo + quantity)
 		self.focus[1].set(0)
 		return r
 
 	@comethod('cursor', 'line/break')
-	def c_split_line_at_cursor(self, key, *, quantity=1):
-		lo = self.focus[0].get()
-		src = self.source
-		offset = self.focus[1].get()
+	def c_split_line_at_cursor(self, quantity):
+		for i in range(quantity):
+			lo = self.focus[0].get()
+			src = self.source
+			offset = self.focus[1].get()
 
-		d = src.split(lo, offset)
+			d = src.split(lo, offset)
 		src.commit()
 
 	@comethod('cursor', 'line/join')
-	def c_join_line_with_following(self, key, *, quantity=1):
+	def c_join_line_with_following(self, quantity):
 		lo = self.focus[0].get()
 		co = self.focus[1].get()
 		src = self.source
@@ -1808,8 +1846,7 @@ class Refraction(Core):
 
 	@comethod('cursor', 'insert/text')
 	@comethod('elements', 'insert')
-	def c_insert_transfer_text(self, key, *, quantity=1):
-		text = key
+	def c_insert_transfer_text(self, text):
 		src = self.source
 
 		lo = self.focus[0].get()
@@ -1818,34 +1855,35 @@ class Refraction(Core):
 		src.checkpoint()
 
 	@comethod('cursor', 'insert/annotation')
-	def c_insert_annotation(self, key, *, quantity=1):
-		cq = self.annotation
-		if cq is None:
-			return
+	def c_insert_annotation(self, quantity):
+		for i in range(quantity):
+			cq = self.annotation
+			if cq is None:
+				return
 
-		src = self.source
-		string = cq.insertion()
-		lo, co = (x.get() for x in self.focus)
+			src = self.source
+			string = cq.insertion()
+			lo, co = (x.get() for x in self.focus)
 
-		src.insert_codepoints(lo, co, string)
+			src.insert_codepoints(lo, co, string)
 		src.commit()
 
 	# Modes
 
 	@comethod('cursor', 'transition/capture/replace')
-	def c_transition_capture_replace(self, key, *, quantity=1):
+	def c_transition_capture_replace(self):
 		self.keyboard.set('capture-replace')
 
 	@comethod('cursor', 'transition/capture/key')
-	def c_transition_capture_key(self, key, *, quantity=1):
+	def c_transition_capture_key(self):
 		self.keyboard.set('capture-key')
 
 	@comethod('cursor', 'transition/capture/insert')
-	def c_transition_capture_insert(self, key, *, quantity=1):
+	def c_transition_capture_insert(self):
 		self.keyboard.set('capture-insert')
 
 	@comethod('cursor', 'transition/insert/start-of-line')
-	def c_startofline_insert_mode_switch(self, key, *, quantity=1):
+	def c_startofline_insert_mode_switch(self):
 		self.source.checkpoint()
 
 		self.focus[1].set(0)
@@ -1853,7 +1891,7 @@ class Refraction(Core):
 		self.whence = -2
 
 	@comethod('cursor', 'transition/insert/end-of-line')
-	def c_endofline_insert_mode_switch(self, key, *, quantity=1):
+	def c_endofline_insert_mode_switch(self):
 		self.source.checkpoint()
 
 		lo = self.focus[0].get()
@@ -1863,14 +1901,14 @@ class Refraction(Core):
 		self.whence = +2
 
 	@comethod('cursor', 'transition/insert')
-	def c_atposition_insert_mode_switch(self, key, *, quantity=1):
+	def c_atposition_insert_mode_switch(self):
 		self.source.checkpoint()
 
 		self.keyboard.set('insert')
 		self.whence = 0
 
 	@comethod('cursor', 'transition/insert/start-of-field')
-	def c_fieldend_insert_mode_switch(self, key, *, quantity=1):
+	def c_fieldend_insert_mode_switch(self):
 		self.source.checkpoint()
 
 		self.focus[1].move(0, +1)
@@ -1878,7 +1916,7 @@ class Refraction(Core):
 		self.whence = -1
 
 	@comethod('cursor', 'transition/insert/end-of-field')
-	def c_fieldend_insert_mode_switch(self, key, *, quantity=1):
+	def c_fieldend_insert_mode_switch(self):
 		self.source.checkpoint()
 
 		self.focus[1].move(0, -1)
@@ -1886,7 +1924,7 @@ class Refraction(Core):
 		self.whence = +1
 
 	@comethod('cursor', 'transition/exit')
-	def c_transition_last_mode(self, key, *, quantity=1):
+	def c_transition_last_mode(self):
 		self.keyboard.revert()
 
 	@comethod('cursor', 'annotation/query')
@@ -1906,53 +1944,53 @@ class Refraction(Core):
 
 	for i, (rb, ri) in enumerate(annotations.integer_representations):
 		im = 'annotate/integer/select/' + rb
-		def c_int_annotation(self, key, *, quantity=1, index=i):
+		def c_int_annotation(self, *, index=i):
 			self.annotate(annotations.BaseAnnotation(self.focus[1], index=index))
 			self.keyboard.revert()
 		comethod('cursor', im)(c_int_annotation)
 
 	for i, (rb, ri) in enumerate(annotations.codepoint_representations):
 		im = 'annotate/codepoint/select/' + rb
-		def c_cp_annotation(self, key, *, quantity=1, index=i):
+		def c_cp_annotation(self, *, index=i):
 			self.annotate(annotations.CodepointAnnotation(self.focus[1], index=index))
 			self.keyboard.revert()
 		comethod('cursor', im)(c_cp_annotation)
 
 	@comethod('cursor', 'annotate/integer/color/swatch')
-	def color_annotation(self, key, *, quantity=1):
+	def color_annotation(self):
 		self.annotate(annotations.ColorAnnotation(self.focus[1]))
 		self.keyboard.revert()
 
 	@comethod('cursor', 'annotate/status')
-	def status_annotation(self, key, *, quantity=1):
+	def status_annotation(self):
 		self.annotate(annotations.Status('', self.keyboard, self.focus))
 		self.keyboard.revert()
 
 	@comethod('cursor', 'transition/annotation/void')
-	def c_transition_no_such_annotation(self, key, *, quantity=1):
+	def c_transition_no_such_annotation(self):
 		self.annotate(None)
 		self.keyboard.revert()
 
 	@comethod('cursor', 'annotation/select/next')
-	def c_annotation_rotate(self, key, *, quantity=1):
+	def c_annotation_rotate(self, quantity):
 		if self.annotation is not None:
 			self.annotation.rotate(quantity)
 
 	@comethod('cursor', 'transition/annotation/select')
-	def c_transition_capture_insert(self, key, *, quantity=1):
+	def c_transition_capture_insert(self):
 		self.annotate(annotations.Status('view-select', self.keyboard, self.focus))
 		self.keyboard.set('annotations')
 
 	@comethod('elements', 'selectall')
-	def c_select_all_lines(self, key, *, quantity=1):
+	def c_select_all_lines(self):
 		self.focus[0].restore((0, self.focus[0].get(), self.source.ln_count()))
 
 	@comethod('elements', 'undo')
-	def e_undo(self, key, *, quantity=1):
+	def e_undo(self, quantity):
 		self.source.undo(quantity)
 
 	@comethod('elements', 'redo')
-	def e_redo(self, key, *, quantity=1):
+	def e_redo(self, quantity):
 		self.source.redo(quantity)
 
 class Frame(Core):
@@ -2116,42 +2154,39 @@ class Frame(Core):
 
 		return path
 
-	@staticmethod
-	def rl_open(session, frame, rf, event):
-		"""
-		# Respond to an activation event while focused on a location refraction.
+	@comethod('location', 'execute/operation')
+	def rl_execute(self, location, session, content):
+		if location.annotation.title == 'open':
+			rl_operation = self.rl_open
+		elif location.annotation.title == 'save':
+			rl_operation = self.rl_save
+		else:
+			return
 
-		# Interprets the refractions' elements as a &Reference and constructs
-		# a new refraction to represent the loaded resource.
-		"""
+		return rl_operation(session, location, content)
 
-		src = rf.source
+	@comethod('location', 'open/resource')
+	def rl_open(self, session, location, content):
+		src = location.source
 
 		# Construct reference and load dependencies.
-		dpath = (frame.vertical, frame.division)
-		ref = session.reference(frame.rl_compose_path(li.ln_content for li in src.select(0, 2)))
+		dpath = (self.vertical, self.division)
+		ref = session.reference(self.rl_compose_path(li.ln_content for li in src.select(0, 2)))
 		src = session.import_resource(ref)
-		new = rf.__class__(src)
-		new.keyboard = rf.keyboard
+		new = content.__class__(src)
+		new.keyboard = content.keyboard
 
-		session.dispatch_delta(frame.attach(dpath, new))
-		frame.chpath(dpath, new.source.origin)
+		session.dispatch_delta(self.attach(dpath, new))
+		self.chpath(dpath, new.source.origin)
 
 		if new.reporting(session.prompting):
-			frame.reveal(dpath, session.prompting.pg_line_allocation)
-		frame.switch(dpath)
+			self.reveal(dpath, session.prompting.pg_line_allocation)
+		self.switch(dpath)
 
-	@staticmethod
-	def rl_save(session, frame, rf, event):
-		"""
-		# Respond to an activation event while focused on a location refraction.
-
-		# Interprets the refractions' elements as a path and performs the write operation
-		# to that path.
-		"""
-
-		frame.refocus()
-		session.store_resource(frame.focus.source)
+	@comethod('location', 'save/resource')
+	def rl_save(self, session, location, content):
+		session.store_resource(content.source)
+		self.refocus()
 
 	def chpath(self, dpath, reference):
 		"""
@@ -2213,7 +2248,7 @@ class Frame(Core):
 		))
 
 	@comethod('frame', 'refresh/view/images')
-	def f_refresh_views(self, key=None, ichain=itertools.chain.from_iterable):
+	def f_refresh_views(self, *, ichain=itertools.chain.from_iterable):
 		"""
 		# Refresh the view images.
 		"""
@@ -2222,7 +2257,7 @@ class Frame(Core):
 			v.refresh(v.image.line_offset)
 
 	@comethod('frame', 'refresh')
-	def refresh(self, key=None, quantity=1):
+	def refresh(self):
 		self.f_refresh_views()
 		self.deltas.extend(self.render())
 
@@ -2294,7 +2329,7 @@ class Frame(Core):
 		return dpath
 
 	@comethod('frame', 'refocus')
-	def refocus(self, key=None, quantity=0):
+	def refocus(self):
 		"""
 		# Adjust for a focus change.
 		"""
@@ -2488,15 +2523,15 @@ class Frame(Core):
 
 	@comethod('frame', 'open/resource')
 	@comethod('resource', 'select')
-	def f_switch_resource(self, key=None, *, quantity=1):
+	def f_switch_resource(self):
 		self.relocate((self.vertical, self.division))
 
 	@comethod('frame', 'save/resource')
-	def f_update_resource(self, key=None):
+	def f_update_resource(self):
 		self.rewrite((self.vertical, self.division))
 
 	@comethod('frame', 'cancel')
-	def cancel(self, key=None):
+	def cancel(self):
 		"""
 		# Refocus the subject refraction and discard any state changes
 		# performed to the location heading.
@@ -2591,37 +2626,37 @@ class Frame(Core):
 			yield vstat.area.__class__(y, x, 1, 1), (picell,)
 
 	@comethod('frame', 'view/next')
-	def f_select_next_view(self, key, *, quantity=1):
+	def f_select_next_view(self, quantity=1):
 		self.switch((self.vertical, self.division + quantity))
 
 	@comethod('frame', 'view/previous')
-	def f_select_previous_view(self, key, *, quantity=1):
+	def f_select_previous_view(self, quantity=1):
 		self.switch((self.vertical, self.division - quantity))
 
 	@comethod('frame', 'view/return')
-	def f_select_return_view(self, key, *, quantity=1):
+	def f_select_return_view(self):
 		self.deltas.extend(self.returnview((self.vertical, self.division)))
 
 	@comethod('frame', 'prepare/command')
-	def prompt_command(self, key, *, quantity=1):
+	def prompt_command(self):
 		sys = self.focus.system
 		self.prepare(sys, "system", (self.vertical, self.division))
 		self.focus.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/seek/absolute')
-	def prompt_seek_absolute(self, key, quantity=0):
+	def prompt_seek_absolute(self):
 		sys = self.focus.system
 		self.prepare(sys, "seek", (self.vertical, self.division), extension='absolute')
 		self.focus.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/seek/relative')
-	def prompt_seek_relative(self, key, quantity=0):
+	def prompt_seek_relative(self):
 		sys = self.focus.system
 		self.prepare(sys, "seek", (self.vertical, self.division), extension='relative')
 		self.focus.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/rewrite')
-	def prompt_rewrite(self, key, *, quantity=1):
+	def prompt_rewrite(self):
 		# Identify the field for preparing the rewrite context.
 		rf = self.focus
 		sys = rf.system
@@ -2638,7 +2673,7 @@ class Frame(Core):
 
 	@comethod('frame', 'prompt/find')
 	@comethod('elements', 'find')
-	def prompt_find(self, key, *, quantity=1):
+	def prompt_find(self):
 		sys = self.focus.system
 		self.prepare(sys, "find", (self.vertical, self.division))
 		self.focus.keyboard.set('insert')

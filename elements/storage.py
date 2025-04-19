@@ -771,9 +771,27 @@ class Resource(types.Core):
 		return None
 
 	@comethod('resource', 'undo')
-	def r_log_undo(self, key, quantity=1):
+	def r_log_undo(self, quantity=1):
 		self.undo(quantity)
 
 	@comethod('resource', 'redo')
-	def r_log_redo(self, key, quantity=1):
+	def r_log_redo(self, quantity=1):
 		self.redo(quantity)
+
+	@comethod('resource', 'save')
+	def r_write_resource(self, session):
+		session.store_resource(self)
+
+	@comethod('resource', 'copy')
+	def r_copy_resource(self, text, session):
+		url = text
+		if not url.startswith('/'):
+			raise ValueError("not a filesystem path: " + url) # Expects an absolute path.
+
+		re = self.origin.ref_path@url
+		src = session.allocate_resource(session.reference(re))
+		src.elements = self.elements
+		if src.origin.ref_path.fs_type() != 'void':
+			src.status = src.origin.ref_path.fs_status()
+
+		session.store_resource(src)
