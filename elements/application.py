@@ -859,6 +859,7 @@ class Session(Core):
 		'focus': (lambda s, f, k: f),
 		'key': (lambda s, f, k: k),
 		'device': (lambda s, f, k: s.device),
+		'cellstatus': (lambda s, f, k: s.device.cursor_cell_status()),
 		'text': (lambda s, f, k: s.device.transfer_text()),
 		'view': (lambda s, f, k: f['view']),
 		'frame': (lambda s, f, k: f['frame']),
@@ -1193,50 +1194,6 @@ class Session(Core):
 		ibytes = codec.sequence(ilines)
 		self.device.transmit(b''.join(ibytes))
 
-	@comethod('cursor', 'copy/selected/lines')
-	def c_copy(self):
-		rf = self.focus.focus
-		src = rf.source
-		start, position, stop = rf.focus[0].snapshot()
-		self.cache = list(src.select(start, stop))
-
-	@comethod('cursor', 'cut/selected/lines')
-	def c_cut(self):
-		rf = self.focus.focus
-		self.c_copy('')
-		rf.c_delete_selected_lines('')
-
-	@comethod('cursor', 'paste/after')
-	def c_paste_after_line(self):
-		rf = self.focus.focus
-		lo = rf.focus[0].get()
-		src = rf.source
-		src.insert_lines(lo+1, self.cache)
-		src.checkpoint()
-
-	@comethod('cursor', 'paste/before')
-	def c_paste_before_line(self):
-		rf = self.focus.focus
-		lo = rf.focus[0].get()
-		src = rf.source
-		src.insert_lines(lo, self.cache)
-		src.checkpoint()
-
-	@comethod('cursor', 'insert/captured/key')
-	def c_insert_captured_key(self, key, quantity=1):
-		rf = self.focus.focus
-		lo, co = (x.get() for x in rf.focus)
-		src = rf.source
-		string = self.device.key('')
-		istr = string * quantity
-
-		if lo == 0 and src.ln_count() == 0:
-			src.ln_initialize()
-		src.insert_codepoints(lo, co, istr)
-		src.commit()
-
-		rf.keyboard.revert()
-
 	@staticmethod
 	def joinlines(decoder, linesep='\n', character=''):
 		# Used in conjunction with an incremental decoder to collapse line ends.
@@ -1277,35 +1234,6 @@ class Session(Core):
 		pid = session.io.invoke(c, i, None, inv)
 		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
 		rf.annotate(ca)
-
-	@comethod('cursor', 'select/absolute')
-	def c_select_absolute(self):
-		frame = self.focus
-		ay, ax = self.device.cursor_cell_status()
-		div, trf = frame.target(ay, ax)
-
-		sy = trf.area.top_offset
-		sx = trf.area.left_offset
-		rx = ax - sx
-		ry = ay - sy
-		ry += trf.visible[0]
-		rx = max(0, rx)
-
-		frame.vertical = div[0]
-		frame.division = div[1]
-		trf.focus[0].set(ry)
-
-		try:
-			li = trf.source.sole(ry)
-		except IndexError:
-			trf.focus[1].set(0)
-		else:
-			phrase = trf.phrase(ry)
-			cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
-			h = phrase.tell(cp, *phrase.m_codepoint)
-			trf.focus[1].set(h - li.ln_level)
-
-		frame.focus = trf
 
 restricted = {
 	'--trace-instructions': ('set-add', 'instructions', 'traces'),

@@ -1927,6 +1927,19 @@ class Refraction(Core):
 	def c_transition_last_mode(self):
 		self.keyboard.revert()
 
+	@comethod('cursor', 'insert/captured/key')
+	def c_insert_captured_key(self, key, quantity=1):
+		lo, co = (x.get() for x in self.focus)
+		src = self.source
+		istr = key * quantity
+
+		if lo == 0 and src.ln_count() == 0:
+			src.ln_initialize()
+		src.insert_codepoints(lo, co, istr)
+		src.commit()
+
+		self.keyboard.revert()
+
 	@comethod('cursor', 'annotation/query')
 	def c_directory_annotation_request(session, frame, rf, event):
 		"""
@@ -1992,6 +2005,32 @@ class Refraction(Core):
 	@comethod('elements', 'redo')
 	def e_redo(self, quantity):
 		self.source.redo(quantity)
+
+	# Clipboard
+	@comethod('cursor', 'copy/selected/lines')
+	def c_copy(self, session):
+		src = self.source
+		start, position, stop = self.focus[0].snapshot()
+		session.cache = list(src.select(start, stop))
+
+	@comethod('cursor', 'cut/selected/lines')
+	def c_cut(self, session):
+		self.c_copy(session)
+		self.c_delete_selected_lines()
+
+	@comethod('cursor', 'paste/after')
+	def c_paste_after_line(self, session):
+		lo = self.focus[0].get()
+		src = self.source
+		src.insert_lines(lo+1, session.cache)
+		src.checkpoint()
+
+	@comethod('cursor', 'paste/before')
+	def c_paste_before_line(self, session):
+		lo = self.focus[0].get()
+		src = self.source
+		src.insert_lines(lo, session.cache)
+		src.checkpoint()
 
 class Frame(Core):
 	"""
@@ -2677,3 +2716,31 @@ class Frame(Core):
 		sys = self.focus.system
 		self.prepare(sys, "find", (self.vertical, self.division))
 		self.focus.keyboard.set('insert')
+
+	@comethod('frame', 'select/absolute')
+	def f_select_absolute(self, cellstatus):
+		ay, ax = cellstatus
+		div, trf = self.target(ay, ax)
+
+		sy = trf.area.top_offset
+		sx = trf.area.left_offset
+		rx = ax - sx
+		ry = ay - sy
+		ry += trf.visible[0]
+		rx = max(0, rx)
+
+		self.vertical = div[0]
+		self.division = div[1]
+
+		trf.focus[0].set(ry)
+		try:
+			li = trf.source.sole(ry)
+		except IndexError:
+			trf.focus[1].set(0)
+		else:
+			phrase = trf.phrase(ry)
+			cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
+			h = phrase.tell(cp, *phrase.m_codepoint)
+			trf.focus[1].set(h - li.ln_level)
+
+		self.focus = trf
