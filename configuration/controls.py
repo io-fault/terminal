@@ -113,6 +113,26 @@ for mode in (control, insert):
 	a((k_return, km_executing, km_conceal, km_control), 'session/execute/reset')
 	a((k_return, km_executing, km_conceal, km_control, km_shift), 'session/execute/repeat')
 
+	a(('[M1]'), 'frame/select/absolute')
+
+	a((0x2190), 'view/pan/backward')
+	a((0x2191), 'view/scroll/backward')
+	a((0x2192), 'view/pan/forward')
+	a((0x2193), 'view/scroll/forward')
+
+	a((0x21DF), 'view/scroll/forward/third')
+	a((0x21DE), 'view/scroll/backward/third')
+	a((0x21F1), 'view/scroll/first')
+	a((0x21F2), 'view/scroll/last')
+
+	a((0x21E5), 'cursor/indentation/increment')
+	a((0x21E5, km_shift), 'cursor/indentation/decrement')
+	a((0x21E5, km_meta), 'frame/view/next')
+	a((0x21E5, km_shift, km_meta), 'frame/view/previous')
+
+	a((0x21E5, km_void, km_d), 'cursor/indentation/increment/selected')
+	a((0x21E5, km_shift, km_d), 'cursor/indentation/decrement/selected')
+
 if 'controls':
 	mode = control
 
@@ -226,25 +246,6 @@ if 'controls':
 	a((k_space, km_shift), 'cursor/move/backward/character')
 	a((0x2326), 'cursor/move/backward/character')
 	a((0x232B), 'cursor/move/backward/character')
-	a((0x21E5, km_meta), 'frame/view/next')
-	a((0x21E5, km_shift, km_meta), 'frame/view/previous')
-
-	a((0x21E5), 'cursor/indentation/increment')
-	a((0x21E5, km_shift), 'cursor/indentation/decrement')
-	a((0x21E5, km_void, km_d), 'cursor/indentation/increment/selected')
-	a((0x21E5, km_shift, km_d), 'cursor/indentation/decrement/selected')
-
-	a(('[M1]'), 'cursor/select/absolute')
-
-	a((0x2190), 'view/pan/backward')
-	a((0x2191), 'view/scroll/backward')
-	a((0x2192), 'view/pan/forward')
-	a((0x2193), 'view/scroll/forward')
-
-	a((0x21DF), 'view/scroll/forward/third')
-	a((0x21DE), 'view/scroll/backward/third')
-	a((0x21F1), 'view/scroll/first')
-	a((0x21F2), 'view/scroll/last')
 
 if 'annotations':
 	mode = annotations
@@ -285,10 +286,5 @@ if 'inserts':
 	a((0x2193), 'cursor/move/last/character')
 
 	a((k_space, km_control), 'cursor/insert/string', ("\x1f",))
-
-	a((0x21E5), 'cursor/indentation/increment')
-	a((0x21E5, km_shift), 'cursor/indentation/decrement')
-	a((0x21E5, km_meta), 'frame/view/next')
-	a((0x21E5, km_shift, km_meta), 'frame/view/previous')
 
 del a
