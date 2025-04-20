@@ -549,18 +549,6 @@ class Session(Core):
 		)
 		src.commit()
 
-	@comethod('frame', 'resize')
-	def resize(self):
-		"""
-		# Window size changed; remodel and render the new frame.
-		"""
-
-		self.device.reconnect()
-		new = self.device.screen.area
-		for frame in self.frames:
-			frame.resize(new)
-		self.dispatch_delta(self.focus.render())
-
 	def refocus(self):
 		"""
 		# Change the focus to reflect the selection designated by &frame.
@@ -1018,6 +1006,18 @@ class Session(Core):
 		finally:
 			self.store()
 
+	@comethod('session', 'ineffective')
+	def s_operation_not_found(self):
+		pass
+
+	@comethod('session', 'terminal/focus/gained')
+	def s_application_focused(self):
+		pass
+
+	@comethod('session', 'terminal/focus/lost')
+	def s_application_switched(self):
+		pass
+
 	@comethod('session', 'mode/set/distribution')
 	def s_modify_distributed(self):
 		self.local_modifiers += chr(0x0394)
@@ -1033,7 +1033,6 @@ class Session(Core):
 	@comethod('session', 'reset')
 	def load_session_snapshot(self):
 		self.load()
-		self.reframe(0)
 
 	@comethod('resource', 'close')
 	def s_close_resource(self):
@@ -1063,11 +1062,27 @@ class Session(Core):
 		self.keyboard.set('control')
 		frame.refocus()
 
-	@comethod('frame', 'create')
+	@comethod('screen', 'resize')
+	def resize(self):
+		"""
+		# Device screen area changed.
+		"""
+
+		self.device.reconnect()
+		new = self.device.screen.area
+		for frame in self.frames:
+			frame.resize(new)
+		self.dispatch_delta(self.focus.render())
+
+	@comethod('screen', 'refresh')
+	def refresh(self, frame):
+		frame.refresh()
+
+	@comethod('screen', 'create/frame')
 	def s_frame_create(self):
 		self.reframe(self.allocate())
 
-	@comethod('frame', 'copy')
+	@comethod('screen', 'copy/frame')
 	def s_frame_copy(self):
 		frame = self.focus
 		fi = self.allocate()
@@ -1075,33 +1090,21 @@ class Session(Core):
 		self.frames[fi].refresh()
 		self.reframe(fi)
 
-	@comethod('frame', 'close')
+	@comethod('screen', 'close/frame')
 	def s_frame_close(self):
 		self.release(self.frame)
 
-	@comethod('frame', 'previous')
-	def s_frame_switch_previous(self, quantity=1):
-		self.reframe(self.frame - quantity)
-
-	@comethod('frame', 'next')
-	def s_frame_switch_next(self, quantity=1):
-		self.reframe(self.frame + quantity)
-
-	@comethod('frame', 'switch')
+	@comethod('screen', 'switch/frame')
 	def s_frame_switch(self, quantity):
 		self.reframe(quantity - 1)
 
-	@comethod('session', 'ineffective')
-	def s_operation_not_found(self):
-		pass
+	@comethod('screen', 'previous/frame')
+	def s_frame_switch_previous(self, quantity=1):
+		self.reframe(self.frame - quantity)
 
-	@comethod('session', 'terminal/focus/gained')
-	def s_application_focused(self):
-		pass
-
-	@comethod('session', 'terminal/focus/lost')
-	def s_application_switched(self):
-		pass
+	@comethod('screen', 'next/frame')
+	def s_frame_switch_next(self, quantity=1):
+		self.reframe(self.frame + quantity)
 
 	@comethod('session', 'open/log')
 	def open_session_log(self):

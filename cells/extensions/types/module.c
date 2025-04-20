@@ -996,6 +996,10 @@ device_key(PyObject *self, PyObject *ext)
 	{
 		switch (InstructionKey_Number(ctl->st_dispatch))
 		{
+			#define AI_DEFINE_2(CLASS, OPNAME, SUBJECT) \
+				case ai_##CLASS##_##OPNAME##_##SUBJECT: \
+					rob = PyUnicode_FromFormat("(%s/%s/%s)[%U%U]", #CLASS, #OPNAME, #SUBJECT, modstr, ext); \
+				break;
 			#define AI_DEFINE(CLASS, OPNAME) \
 				case ai_##CLASS##_##OPNAME: \
 					rob = PyUnicode_FromFormat("(%s/%s)[%U%U]", #CLASS, #OPNAME, modstr, ext); \

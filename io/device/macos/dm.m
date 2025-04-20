@@ -187,7 +187,7 @@ relayInstruction: (id) sender
 	CellMatrix *cm = self.root.contentView;
 	NSMenuItem *mi = (NSMenuItem *) sender;
 
-	dispatch_application_instruction(cm, nil, 0, (enum ApplicationInstruction) mi.tag);
+	dispatch_application_instruction(cm, nil, 1, (enum ApplicationInstruction) mi.tag);
 }
 
 /**
@@ -246,7 +246,7 @@ resizeCellImage: (id) sender
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
 	{
 		[cm configureCellImage];
-		dispatch_application_instruction(cm, nil, 0, ai_frame_resize);
+		dispatch_application_instruction(cm, nil, 0, ai_screen_resize);
 	}
 }
 
@@ -337,7 +337,7 @@ revertScreen: (id) sender
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
 	{
 		[cm configureCellImage];
-		dispatch_application_instruction(cm, nil, 0, ai_frame_resize);
+		dispatch_application_instruction(cm, nil, 0, ai_screen_resize);
 	}
 }
 
@@ -545,28 +545,28 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 
 	/* Frames Menu */
 	AddMenuItem(fm, "New", @selector(relayInstruction:), "N")
-		.tag = ai_frame_create;
+		.tag = ai_screen_create_frame;
 	{
 		NSMenuItem *mi = AddMenuItem(fm, "Copy", @selector(relayInstruction:), "n");
 		mi.keyEquivalentModifierMask |= NSEventModifierFlagControl;
-		mi.tag = ai_frame_copy;
+		mi.tag = ai_screen_copy_frame;
 		mi.toolTip = @"Duplicate the frame maintaining layout and attached resources.";
 	}
 	AddMenuItem(fm, "Close", @selector(relayInstruction:), "W")
-		.tag = ai_frame_close;
+		.tag = ai_screen_close_frame;
 	AddSeparator(fm);
 
 	{
 		NSMenuItem *shifted;
 		shifted = MenuItem("Previous", @selector(relayInstruction:), "[");
 		shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
-		shifted.tag = ai_frame_previous;
+		shifted.tag = ai_screen_previous_frame;
 		[fm addItem: shifted];
 
 		shifted = MenuItem("Next", @selector(relayInstruction:), "]");
 		[fm addItem: shifted];
 		shifted.keyEquivalentModifierMask |= NSEventModifierFlagShift;
-		shifted.tag = ai_frame_next;
+		shifted.tag = ai_screen_next_frame;
 	}
 
 	/* Create frame list separator as one always exists. */

@@ -246,7 +246,7 @@ inscriptionParameters
 		{
 			struct ControllerStatus *ctl = &(self->_event_status);
 			self.event_text = nil;
-			ctl->st_dispatch = InstructionKey_Identifier(ai_frame_switch);
+			ctl->st_dispatch = InstructionKey_Identifier(ai_screen_switch_frame);
 			ctl->st_quantity = nth;
 			ctl->st_text_length = 0;
 			ctl->st_keys = 0;
@@ -259,7 +259,7 @@ inscriptionParameters
 refreshCellImage
 {
 	/* -1 quantity withholds invalidation leaving a stale pixel image */
-	dispatch_application_instruction(self, nil, -1, ai_frame_refresh);
+	dispatch_application_instruction(self, nil, -1, ai_screen_refresh);
 }
 
 - (void)

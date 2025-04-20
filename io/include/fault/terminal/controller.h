@@ -204,16 +204,16 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(session, interrupt) \
 	AI_DEFINE(session, quit) \
 	AI_DEFINE(session, reset) \
+	AI_DEFINE(screen, resize) \
+	AI_DEFINE(screen, refresh) \
+	AI_DEFINE_2(screen, create, frame) \
+	AI_DEFINE_2(screen, copy, frame) \
+	AI_DEFINE_2(screen, switch, frame) \
+	AI_DEFINE_2(screen, previous, frame) \
+	AI_DEFINE_2(screen, next, frame) \
+	AI_DEFINE_2(screen, close, frame) \
 	AI_DEFINE(frame, status) \
-	AI_DEFINE(frame, copy) \
-	AI_DEFINE(frame, create) \
-	AI_DEFINE(frame, close) \
-	AI_DEFINE(frame, switch) \
-	AI_DEFINE(frame, next) \
-	AI_DEFINE(frame, previous) \
-	AI_DEFINE(frame, transpose) \
 	AI_DEFINE(frame, refresh) \
-	AI_DEFINE(frame, resize) \
 	AI_DEFINE(resource, status) \
 	AI_DEFINE(resource, copy) \
 	AI_DEFINE(resource, create) \
@@ -249,8 +249,10 @@ enum ApplicationInstruction
 	ai_void = 0,
 
 	#define AI_DEFINE(CLASS, N) ai_##CLASS##_##N,
+	#define AI_DEFINE_2(CLASS, N, M) ai_##CLASS##_##N##_##M,
 		ApplicationInstructions()
 	#undef AI_DEFINE
+	#undef AI_DEFINE_2
 
 	ai_sentinel
 };
