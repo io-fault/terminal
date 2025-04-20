@@ -97,21 +97,21 @@ relay = Mode(('view', 'dispatch/device/status', ()))
 # Dispatch; return control.
 for mode in (control, insert):
 	# Set of combinations need to be trapped so they can be forwarded.
-	a((k_return, *km_all), 'session/activate')
+	a((k_return, *km_all), 'focus/activate')
 	for i in range(0, len(km_all)):
 		for mods in combinations(km_all, i):
-			a((k_return, *mods), 'session/activate')
+			a((k_return, *mods), 'focus/activate')
 
 	a((k_return, km_meta), 'cursor/substitute/selected/command')
 	a((k_return, km_location), 'location/execute/operation')
 
-	a((k_return, km_executing, km_retain), 'session/execute/reset')
-	a((k_return, km_executing, km_retain, km_control), 'session/execute/repeat')
-	a((k_return, km_executing, km_retain, km_control, km_shift), 'session/execute/close')
+	a((k_return, km_executing, km_retain), 'prompt/execute/reset')
+	a((k_return, km_executing, km_retain, km_control), 'prompt/execute/repeat')
+	a((k_return, km_executing, km_retain, km_control, km_shift), 'prompt/execute/close')
 
-	a((k_return, km_executing, km_conceal), 'session/execute/close')
-	a((k_return, km_executing, km_conceal, km_control), 'session/execute/reset')
-	a((k_return, km_executing, km_conceal, km_control, km_shift), 'session/execute/repeat')
+	a((k_return, km_executing, km_conceal), 'prompt/execute/close')
+	a((k_return, km_executing, km_conceal, km_control), 'prompt/execute/reset')
+	a((k_return, km_executing, km_conceal, km_control, km_shift), 'prompt/execute/repeat')
 
 	a(('[M1]'), 'frame/select/absolute')
 
@@ -154,7 +154,7 @@ if 'controls':
 
 	a(('c'), 'cursor/substitute/selected/characters')
 	a(('c', km_shift), 'cursor/substitute/again')
-	a(('c', km_control), 'session/cancel')
+	a(('c', km_control), 'focus/cancel')
 	a(('c', km_meta), 'cursor/copy/selected/lines')
 	a(('c', km_shift, km_meta), 'cursor/cut/selected/lines')
 
@@ -237,7 +237,7 @@ if 'controls':
 	a(('x', km_meta), 'cursor/cut/selected/lines')
 	a(('x', km_shift, km_control), 'cursor/delete/preceding/line')
 
-	a(('y'), 'session/mode/set/distribution')
+	a(('y'), 'cursor/transition/distribution')
 
 	a(('z'), 'cursor/move/line/stop')
 	a(('z', km_shift), 'cursor/move/line/start')

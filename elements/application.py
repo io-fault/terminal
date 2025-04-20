@@ -807,21 +807,6 @@ class Session(Core):
 				s.rewrite(area, data)
 				d.invalidate_cells(area)
 
-	@comethod('session', 'synchronize')
-	def integrate(self):
-		"""
-		# Process pending I/O events for display representation.
-
-		# Called by (session/synchronize) instructions.
-		"""
-
-		# Acquire events prepared by &.system.IO.loop.
-		events = self.io.take()
-
-		for io_context, io_transfer in events:
-			# Apply the performed transfer using the &io_context.
-			io_context.execute(io_transfer)
-
 	def trace(self, receiver, key, ev_cat, ipath, ev_op):
 		"""
 		# Log the dispatched event.
@@ -842,15 +827,18 @@ class Session(Core):
 		# Overrides &trace by default.
 		pass
 
+	# Resolves the arguments for AI parameters.
 	airs = {
 		'session': (lambda s, f, k: s),
 		'focus': (lambda s, f, k: f),
 		'key': (lambda s, f, k: k),
 		'device': (lambda s, f, k: s.device),
 		'cellstatus': (lambda s, f, k: s.device.cursor_cell_status()),
+		'statusmodifiers': (lambda s, f, k: s._frame_status_modifiers(f)),
 		'text': (lambda s, f, k: s.device.transfer_text()),
 		'view': (lambda s, f, k: f['view']),
 		'frame': (lambda s, f, k: f['frame']),
+		'dpath': (lambda s, f, k: f['frame'].focus_path),
 		'resource': (lambda s, f, k: f['resource']),
 		'quantity': (lambda s, f, k: f.get('quantity', s.device.quantity())),
 
@@ -1006,6 +994,21 @@ class Session(Core):
 		finally:
 			self.store()
 
+	@comethod('session', 'synchronize')
+	def integrate(self):
+		"""
+		# Process pending I/O events for display representation.
+
+		# Called by (session/synchronize) instructions.
+		"""
+
+		# Acquire events prepared by &.system.IO.loop.
+		events = self.io.take()
+
+		for io_context, io_transfer in events:
+			# Apply the performed transfer using the &io_context.
+			io_context.execute(io_transfer)
+
 	@comethod('session', 'ineffective')
 	def s_operation_not_found(self):
 		pass
@@ -1017,10 +1020,6 @@ class Session(Core):
 	@comethod('session', 'terminal/focus/lost')
 	def s_application_switched(self):
 		pass
-
-	@comethod('session', 'mode/set/distribution')
-	def s_modify_distributed(self):
-		self.local_modifiers += chr(0x0394)
 
 	@comethod('session', 'close')
 	def close_session(self):
@@ -1118,32 +1117,16 @@ class Session(Core):
 		assert rf.frame_visible == True
 		assert rf.source is session.transcript
 
-	def frame_status_modifiers(self):
+	@staticmethod
+	def _frame_status_modifiers(focus):
 		"""
 		# Modifiers used to recognize the focus orientation for
 		# selecting the preferred behavior for dispatch.
 		"""
 
-		rf = self._focus['view']
-		f = self._focus['frame']
-		l, c, p = f.select((f.vertical, f.division))
-
-		if l is rf:
-			# Location action.
-			m = 'L'
-		elif c is rf:
-			# Document editing; primary content.
-			m = 'W'
-		elif p is rf:
-			m = 'X'
-
-			# Conceal behavior; keep open when transcript.
-			if c.source.origin.ref_type == 'transcript':
-				m += 'Z'
-			else:
-				m += 'z'
-
-		return m
+		f = focus['frame']
+		v = focus['view']
+		return f.status_modifiers((f.vertical, f.division), v)
 
 	@comethod('session', 'trace/instructions')
 	def s_toggle_trace(self):
@@ -1153,34 +1136,6 @@ class Session(Core):
 		else:
 			self.trace = self.discard
 			self.log("Instruction tracing disabled.")
-
-	@comethod('session', 'cancel')
-	@comethod('session', 'activate')
-	def s_status_qualified_routing(self):
-		# Reconstruct the key using the frame status.
-		imods = self.frame_status_modifiers()
-		dkey = self.device.key(imods)
-		self.dispatch(dkey)
-
-	@comethod('session', 'execute/close')
-	def s_execute_prompt_close(self, frame):
-		r = frame.prompt_execute((frame.vertical, frame.division), self)
-		frame.cancel()
-		self.keyboard.set('control')
-		return r
-
-	@comethod('session', 'execute/reset')
-	def s_execute_prompt_reset(self, frame):
-		dpath = (frame.vertical, frame.division)
-		r = frame.prompt_execute(dpath, self)
-		l, c, p = frame.select(dpath)
-		frame.prompt(dpath, c.source.origin.ref_system, ['system', ''])
-		return r
-
-	@comethod('session', 'execute/repeat')
-	def s_execute_prompt_repeat(self):
-		frame = self.focus
-		return frame.prompt_execute((frame.vertical, frame.division), self)
 
 	@comethod('elements', 'select')
 	def c_transmit_selected(self):
@@ -1196,47 +1151,6 @@ class Session(Core):
 
 		ibytes = codec.sequence(ilines)
 		self.device.transmit(b''.join(ibytes))
-
-	@staticmethod
-	def joinlines(decoder, linesep='\n', character=''):
-		# Used in conjunction with an incremental decoder to collapse line ends.
-		data = (yield None)
-		while True:
-			buf = decoder(data)
-			data = (yield buf.replace(linesep, character))
-
-	@comethod('cursor', 'substitute/selected/command')
-	def c_dispatch_system_command(self):
-		session = self
-		frame = self.focus
-		rf = frame.focus
-
-		from .system import Completion, Insertion, Invocation, Decode
-		from .annotations import ExecutionStatus
-		from fault.system.query import executables
-		src = rf.source
-
-		# Horizontal Range
-		lo, co, lines = rf.take_horizontal_range()
-		rf.focus[1].magnitude = 0
-		readlines = session.joinlines(Decode('utf-8').decode)
-		readlines.send(None)
-		readlines = readlines.send
-		src.commit()
-
-		cmd = '\n'.join(lines).split()
-		for exepath in executables(cmd[0]):
-			inv = Invocation(str(exepath), tuple(cmd))
-			break
-		else:
-			# No command found.
-			return
-
-		c = Completion(rf, -1)
-		i = Insertion(rf, (lo, co, ''), readlines)
-		pid = session.io.invoke(c, i, None, inv)
-		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
-		rf.annotate(ca)
 
 restricted = {
 	'--trace-instructions': ('set-add', 'instructions', 'traces'),

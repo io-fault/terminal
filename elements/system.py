@@ -27,6 +27,13 @@ from .view import Refraction
 Decode = codecs.getincrementaldecoder('utf-8')
 Encode = codecs.getincrementalencoder('utf-8')
 
+def joinlines(decoder, linesep='\n', character=''):
+	# Used in conjunction with an incremental decoder to collapse line ends.
+	data = (yield None)
+	while True:
+		buf = decoder(data)
+		data = (yield buf.replace(linesep, character))
+
 def bufferlines(limit, lines):
 	buffer = b''
 	for l in lines:

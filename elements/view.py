@@ -1870,6 +1870,10 @@ class Refraction(Core):
 
 	# Modes
 
+	@comethod('cursor', 'transition/distribution')
+	def c_modify_distributed(self, session):
+		session.local_modifiers += chr(0x0394)
+
 	@comethod('cursor', 'transition/capture/replace')
 	def c_transition_capture_replace(self):
 		self.keyboard.set('capture-replace')
@@ -2007,6 +2011,7 @@ class Refraction(Core):
 		self.source.redo(quantity)
 
 	# Clipboard
+
 	@comethod('cursor', 'copy/selected/lines')
 	def c_copy(self, session):
 		src = self.source
@@ -2031,6 +2036,44 @@ class Refraction(Core):
 		src = self.source
 		src.insert_lines(lo, session.cache)
 		src.checkpoint()
+
+	# Execute and cancel handling. (Control-C and Return)
+
+	@comethod('cursor', 'substitute/selected/command')
+	def c_dispatch_system_command(self, view, session):
+		from .system import Completion, Insertion, Invocation, Decode, joinlines
+		from .annotations import ExecutionStatus
+		from fault.system.query import executables
+		rf = view
+		src = rf.source
+
+		# Horizontal Range
+		lo, co, lines = rf.take_horizontal_range()
+		rf.focus[1].magnitude = 0
+		readlines = joinlines(Decode('utf-8').decode)
+		readlines.send(None)
+		readlines = readlines.send
+		src.commit()
+
+		cmd = '\n'.join(lines).split()
+		for exepath in executables(cmd[0]):
+			inv = Invocation(str(exepath), tuple(cmd))
+			break
+		else:
+			# No command found.
+			return
+
+		c = Completion(rf, -1)
+		i = Insertion(rf, (lo, co, ''), readlines)
+		pid = session.io.invoke(c, i, None, inv)
+		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+		rf.annotate(ca)
+
+	@comethod('focus', 'cancel')
+	@comethod('focus', 'activate')
+	def focus_status_qualified_routing(self, session, device, statusmodifiers):
+		# Reconstruct the key using the frame status.
+		session.dispatch(device.key(statusmodifiers))
 
 class Frame(Core):
 	"""
@@ -2073,6 +2116,10 @@ class Frame(Core):
 	views: Sequence[tuple[Refraction, Refraction, Refraction]]
 	returns: Sequence[Refraction|None]
 
+	@property
+	def focus_path(self):
+		return (self.vertical, self.division)
+
 	def __init__(self, prompting, define, theme, fs, keyboard, area, index=None, title=None):
 		self.prompting = prompting
 		self.define = define
@@ -2095,6 +2142,34 @@ class Frame(Core):
 		self.returns = []
 
 		self.deltas = []
+
+	def status_modifiers(self, dpath, view):
+		"""
+		# Identify the status modifiers to use for the &view relative to
+		# the &dpath.
+		"""
+
+		l, c, p = self.select(dpath)
+
+		if l is view:
+			# Location action.
+			m = 'L'
+		elif c is view:
+			# Document editing; primary content.
+			m = 'W'
+		elif p is view:
+			m = 'X'
+
+			# Conceal behavior; keep open when transcript.
+			if c.source.origin.ref_type == 'transcript':
+				m += 'Z'
+			else:
+				m += 'z'
+		else:
+			# View is not part of the division.
+			m = '?'
+
+		return m
 
 	def attach(self, dpath, rf):
 		"""
@@ -2444,6 +2519,24 @@ class Frame(Core):
 			)
 		)
 
+	@comethod('prompt', 'execute/close')
+	def pg_execute_close(self, dpath, session, prompt):
+		r = self.prompt_execute(dpath, session)
+		self.cancel(dpath, prompt)
+		session.keyboard.set('control')
+		return r
+
+	@comethod('prompt', 'execute/reset')
+	def pg_execute_reset(self, dpath, session):
+		r = self.prompt_execute(dpath, session)
+		l, c, p = self.select(dpath)
+		self.prompt(dpath, c.source.origin.ref_system, ['system', ''])
+		return r
+
+	@comethod('prompt', 'execute/repeat')
+	def pg_execute_repeat(self, dpath, session):
+		return self.prompt_execute(dpath, session)
+
 	def prompt_execute(self, dpath, session):
 		"""
 		# Execute the command present on the prompt of the &dpath division.
@@ -2570,14 +2663,13 @@ class Frame(Core):
 		self.rewrite((self.vertical, self.division))
 
 	@comethod('frame', 'cancel')
-	def cancel(self):
+	def cancel(self, dpath, view):
 		"""
 		# Refocus the subject refraction and discard any state changes
 		# performed to the location heading.
 		"""
 
-		rf = self.focus
-		dpath = (self.vertical, self.division)
+		rf = view
 		vi = self.paths[dpath]
 		vl, vc, vp = self.views[vi]
 
