@@ -21,7 +21,7 @@ from . import types
 from . import retention
 
 from .types import Core, Reference, Glyph, Device, System, Reformulations
-from .storage import Resource, delta
+from .storage import Resource, Directory, delta
 from .view import Refraction, Frame
 from .system import Execution, IOManager
 
@@ -219,9 +219,8 @@ class Session(Core):
 		self.transcript = Resource(editor_log, self.load_type('lambda'))
 		self.transcript.ln_initialize()
 		self.transcript.commit()
-		self.resources = {
-			self.executable/'transcript': self.transcript
-		}
+		self.sources = Directory()
+		self.sources.insert_resource(self.transcript)
 
 		self.process = Execution(
 			System(
@@ -254,137 +253,6 @@ class Session(Core):
 		"""
 
 		self.log = self.extend_transcript
-
-	def allocate_resource(self, ref:Reference) -> Resource:
-		"""
-		# Create a &Resource instance using the given reference as it's origin.
-		"""
-
-		return Resource(ref, self.load_type(ref.ref_type))
-
-	def import_resource(self, ref:Reference) -> Resource:
-		"""
-		# Return a &Resource associated with the contents of &path and
-		# add it to the resource set managed by &self.
-		"""
-
-		if ref.ref_path in self.resources:
-			return self.resources[ref.ref_path]
-
-		rs = self.allocate_resource(ref)
-		self.load_resource(rs)
-		self.resources[ref.ref_path] = rs
-
-		return rs
-
-	@staticmethod
-	def buffer_data(size, file):
-		buf = file.read(size)
-		while len(buf) >= size:
-			yield buf
-			buf = file.read(size)
-		yield buf
-
-	def load_resource(self, src:Resource):
-		"""
-		# Load and retain the lines of the resource identified by &src.origin.
-		"""
-
-		path = src.origin.ref_path
-		lf = src.forms
-		codec = lf.lf_codec
-		lines = lf.lf_lines
-
-		try:
-			with path.fs_open('rb') as f:
-				src.status = path.fs_status()
-				ilines = lines.structure(codec.structure(self.buffer_data(1024, f)))
-				cpr = map(lf.ln_sequence, (types.Line(-1, il, lc) for il, lc in ilines))
-				del src.elements[:]
-				src.elements.partition(cpr)
-				if src.ln_count() == 0:
-					src.ln_initialize()
-		except FileNotFoundError:
-			self.log("Resource does not exist: " + str(path))
-		except Exception as load_error:
-			self.error("Exception during load. Continuing with empty document.", load_error)
-		else:
-			# Initialized.
-			return
-
-		self.log("Writing will attempt to create the file and any leading paths.")
-
-	@staticmethod
-	def buffer_lines(ilines):
-		# iter(elements) is critical here; repeating the running iterator
-		# as islice continues to take processing units to be buffered.
-		ielements = itertools.repeat(iter(ilines))
-		ilinesets = (itertools.islice(i, 512) for i in ielements)
-
-		buf = bytearray()
-		for lines in ilinesets:
-			bl = len(buf)
-			for line in lines:
-				buf += line
-
-			if bl == len(buf):
-				yield buf
-				break
-			elif len(buf) > 0xffff:
-				yield buf
-				buf = bytearray()
-
-	def store_resource(self, src:Resource):
-		"""
-		# Write the elements of the process local resource, &src, to the file
-		# identified by &src.origin using the origin's system context.
-		"""
-
-		ref = src.origin
-		codec = src.forms.lf_codec
-		lform = src.forms.lf_lines
-		exectx = self.systems[ref.ref_system]
-		self.log(f"Writing {len(src.elements)} [{str(src.forms)}] lines to [{ref}]")
-
-		path = ref.ref_path
-		if path.fs_type() == 'void':
-			leading = (path ** 1)
-			if leading.fs_type() == 'void':
-				self.log(f"Allocating directories: " + str(leading))
-				path.fs_alloc() # Leading path not present on save.
-
-		ilines = lform.sequence((li.ln_level, li.ln_content) for li in src.select(0, src.ln_count()))
-		ibytes = codec.sequence(ilines)
-		idata = self.buffer_lines(ibytes)
-		size = 0
-
-		with open(ref.ref_identity, 'wb') as file:
-			for data in idata:
-				size += len(data)
-				file.write(data)
-
-		st = path.fs_status()
-		self.log(f"Finished writing {size!r} bytes.")
-
-		if st.size != size:
-			self.log(f"Calculated write size differs from system reported size: {st.size}")
-
-		if src.status is None:
-			self.log("No previous modification time, file is new.")
-		else:
-			age = src.age(st.last_modified)
-			if age is not None:
-				self.log("Last modification was " + age + " ago.")
-
-		src.saved = src.modifications.snapshot()
-		src.status = st
-
-	def delete_resource(self, rs:Resource):
-		"""
-		# Remove the process local resource, &rs, from the session's list.
-		"""
-
-		del self.resources[rs.origin.ref_path]
 
 	def lookup_type(self, path:files.Path):
 		cfgtypes = self.configuration.types
@@ -453,17 +321,11 @@ class Session(Core):
 
 	def reference(self, path):
 		"""
-		# Construct a &Reference instance from &path resolving types according to
+		# Construct a &host &Reference instance from &path resolving types according to
 		# the session's configuration.
 		"""
 
-		return Reference(
-			self.host.identity,
-			self.lookup_type(path),
-			str(path),
-			path.context or path ** 1,
-			path,
-		)
+		return self.host.reference(self.lookup_type(path), path)
 
 	def allocate_prompt_resource(self):
 		ref = Reference(
@@ -498,7 +360,10 @@ class Session(Core):
 		# A &Resource instance is created if the path has not been loaded.
 		"""
 
-		source = self.import_resource(self.reference(path))
+		typref = self.lookup_type(path)
+		syntype = self.load_type(typref)
+		source = self.sources.import_resource(self.host, typref, syntype, path)
+		ref = source.origin
 
 		rf = Refraction(source)
 		rf.keyboard = self.keyboard
@@ -827,9 +692,17 @@ class Session(Core):
 		# Overrides &trace by default.
 		pass
 
+	@staticmethod
+	def _content_system(session, focus):
+		ref = focus['content'].source.origin
+		return session.systems[ref.ref_system]
+
 	# Resolves the arguments for AI parameters.
 	airs = {
 		'session': (lambda s, f, k: s),
+		'sources': (lambda s, f, k: s.sources),
+		'system': (lambda s, f, k: s._content_system(s, f)),
+		'log': (lambda s, f, k: s.log),
 		'focus': (lambda s, f, k: f),
 		'key': (lambda s, f, k: k),
 		'device': (lambda s, f, k: s.device),
@@ -1034,12 +907,10 @@ class Session(Core):
 		self.load()
 
 	@comethod('resource', 'close')
-	def s_close_resource(self):
-		frame = self.focus
-		rf = frame.focus
-		self.delete_resource(rf.source)
-		devnull = rf.source.origin.ref_path@'/dev/null'
-		self.chresource(self.focus, devnull)
+	def s_close_resource(self, frame, resource):
+		self.sources.delete_resource(resource)
+		devnull = resource.origin.ref_path@'/dev/null'
+		self.chresource(frame, devnull)
 		self.keyboard.set('control')
 		frame.refocus()
 
@@ -1049,7 +920,7 @@ class Session(Core):
 		# Remove the resource from the session releasing any associated memory.
 		"""
 
-		self.delete_resource(resource)
+		self.sources.delete_resource(resource)
 		self.chresource(frame, resource.origin.ref_path)
 		self.keyboard.set('control')
 		frame.refocus()

@@ -2285,8 +2285,11 @@ class Frame(Core):
 
 		# Construct reference and load dependencies.
 		dpath = (self.vertical, self.division)
-		ref = session.reference(self.rl_compose_path(li.ln_content for li in src.select(0, 2)))
-		src = session.import_resource(ref)
+		fspath = self.rl_compose_path(li.ln_content for li in src.select(0, 2))
+		typref = session.lookup_type(fspath)
+		syntype = session.load_type(typref)
+
+		src = session.sources.import_resource(session.host, typref, syntype, fspath)
 		new = content.__class__(src)
 		new.keyboard = content.keyboard
 
@@ -2299,7 +2302,7 @@ class Frame(Core):
 
 	@comethod('location', 'save/resource')
 	def rl_save(self, session, location, content):
-		session.store_resource(content.source)
+		session.host.store_resource(session.log, content.source)
 		self.refocus()
 
 	def chpath(self, dpath, reference):

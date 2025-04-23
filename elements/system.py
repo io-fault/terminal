@@ -7,6 +7,7 @@ import sys
 import codecs
 import signal
 import errno
+import itertools
 
 from collections.abc import Mapping, Sequence, Iterable, Iterator
 from typing import Callable
@@ -21,7 +22,7 @@ from fault.system.kernel import Invocation
 from fault.system.kernel import Scheduler
 
 from .annotations import ExecutionStatus
-from .types import Core, System
+from .types import Core, System, Line, Reference
 from .view import Refraction
 
 Decode = codecs.getincrementaldecoder('utf-8')
@@ -33,6 +34,32 @@ def joinlines(decoder, linesep='\n', character=''):
 	while True:
 		buf = decoder(data)
 		data = (yield buf.replace(linesep, character))
+
+def buffer_data(size, file):
+	buf = file.read(size)
+	while len(buf) >= size:
+		yield buf
+		buf = file.read(size)
+	yield buf
+
+def buffer_lines(ilines):
+	# iter(elements) is critical here; repeating the running iterator
+	# as islice continues to take processing units to be buffered.
+	ielements = itertools.repeat(iter(ilines))
+	ilinesets = (itertools.islice(i, 512) for i in ielements)
+
+	buf = bytearray()
+	for lines in ilinesets:
+		bl = len(buf)
+		for line in lines:
+			buf += line
+
+		if bl == len(buf):
+			yield buf
+			break
+		elif len(buf) > 0xffff:
+			yield buf
+			buf = bytearray()
 
 def bufferlines(limit, lines):
 	buffer = b''
@@ -376,6 +403,19 @@ class Execution(Core):
 	interface: Sequence[str]
 	environment: Mapping[str, str]
 
+	def reference(self, typref, path):
+		"""
+		# Construct a &Reference to the given &path and configured type, &typref.
+		"""
+
+		return Reference(
+			self.identity,
+			typref,
+			str(path),
+			path.context or path ** 1,
+			path,
+		)
+
 	def __str__(self):
 		return ''.join(x[1] for x in self.i_status())
 
@@ -529,3 +569,75 @@ class Execution(Core):
 		# Report status via annotation.
 		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
 		rf.annotate(ca)
+
+	def store_resource(self, log, source):
+		"""
+		# Write the elements of the process local resource, &source, to the file
+		# identified by &source.origin using the origin's system context.
+		"""
+
+		ref = source.origin
+		codec = source.forms.lf_codec
+		lform = source.forms.lf_lines
+		log(f"Writing {len(source.elements)} [{str(source.forms)}] lines to [{ref}]")
+
+		path = ref.ref_path
+		if path.fs_type() == 'void':
+			leading = (path ** 1)
+			if leading.fs_type() == 'void':
+				log(f"Allocating directories: " + str(leading))
+				path.fs_alloc() # Leading path not present on save.
+
+		ln_count = source.ln_count()
+		ilines = lform.sequence((li.ln_level, li.ln_content) for li in source.select(0, ln_count))
+		ibytes = codec.sequence(ilines)
+		idata = buffer_lines(ibytes)
+		size = 0
+
+		with open(ref.ref_identity, 'wb') as file:
+			for data in idata:
+				size += len(data)
+				file.write(data)
+
+		st = path.fs_status()
+		log(f"Finished writing {size!r} bytes.")
+
+		if st.size != size:
+			log(f"Calculated write size differs from system reported size: {st.size}")
+
+		if source.status is None:
+			log("No previous modification time, file is new.")
+		else:
+			age = source.age(st.last_modified)
+			if age is not None:
+				log("Last modification was " + age + " ago.")
+
+		source.saved = source.modifications.snapshot()
+		source.status = st
+		source.stored_line_count = ln_count
+
+	def load_resource(self, source):
+		"""
+		# Load and retain the lines of the resource identified by &source.origin.
+		"""
+
+		path = source.origin.ref_path
+		lf = source.forms
+		codec = lf.lf_codec
+		lines = lf.lf_lines
+
+		try:
+			with path.fs_open('rb') as f:
+				source.status = path.fs_status()
+				ilines = lines.structure(codec.structure(buffer_data(1024, f)))
+				cpr = map(lf.ln_sequence, (Line(-1, il, lc) for il, lc in ilines))
+				del source.elements[:]
+				source.elements.partition(cpr)
+				if source.ln_count() == 0:
+					source.ln_initialize()
+		except Exception:
+			log("Writing will attempt to create the file and any leading paths.")
+			raise
+		else:
+			# Initialized.
+			return

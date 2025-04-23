@@ -3,7 +3,7 @@
 
 # &Resource implementation and supporting functionality.
 """
-from collections.abc import Sequence, Iterable
+from collections.abc import Sequence, Iterable, Mapping
 import collections
 import itertools
 import weakref
@@ -783,15 +783,76 @@ class Resource(types.Core):
 		session.store_resource(self)
 
 	@comethod('resource', 'copy')
-	def r_copy_resource(self, text, session):
+	def r_copy_resource(self, log, text, system, files):
 		url = text
 		if not url.startswith('/'):
 			raise ValueError("not a filesystem path: " + url) # Expects an absolute path.
 
 		re = self.origin.ref_path@url
-		src = session.allocate_resource(session.reference(re))
+		src = files.allocate_resource(system.reference(self.origin.ref_type, re), self.forms)
 		src.elements = self.elements
 		if src.origin.ref_path.fs_type() != 'void':
 			src.status = src.origin.ref_path.fs_status()
 
-		session.store_resource(src)
+		system.store_resource(log, src)
+
+class Directory(types.Core):
+	"""
+	# Collection of process local resources, normally, held by a session.
+
+	# A nearly pointless abstraction to a mapping for binding instructions
+	# and isolating resource management methods.
+
+	# The directory of files is stored as a flat mapping and may refer
+	# to multiple filesystems.
+	"""
+
+	resources: Mapping[str, Resource]
+
+	def __init__(self, Type=dict):
+		self.resources = Type()
+
+	def allocate_resource(self, ref:types.Reference, syntax_type) -> Resource:
+		"""
+		# Create a &Resource instance using the given reference as it's origin.
+
+		# Does not change the state of the collection.
+		"""
+
+		return Resource(ref, syntax_type)
+
+	def insert_resource(self, source:Resource):
+		"""
+		# Add &source to the collection of files.
+		"""
+
+		self.resources[source.origin.ref_path] = source
+
+	def import_resource(self, system, typref, syntype, path) -> Resource:
+		"""
+		# Return a &Resource associated with the contents of &path and
+		# add it to the resource set managed by &self.
+		"""
+
+		if path in self.resources:
+			return self.resources[path]
+
+		ref = types.Reference(
+			system.identity,
+			typref,
+			str(path),
+			path.context or path ** 1,
+			path
+		)
+		src = self.allocate_resource(ref, syntype)
+		self.insert_resource(src)
+		system.load_resource(src)
+
+		return src
+
+	def delete_resource(self, source:Resource):
+		"""
+		# Remove &source from the collection.
+		"""
+
+		del self.resources[source.origin.ref_path]
