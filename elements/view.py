@@ -91,6 +91,14 @@ class Refraction(Core):
 				return ""
 		return d or ""
 
+	def coordinates(self):
+		"""
+		# Construct the line offset, codepoint offset pair of the user cursor.
+		"""
+
+		l, c = self.focus
+		return (l.get(), c.get())
+
 	def annotate(self, annotation):
 		"""
 		# Assign the given &annotation to the refraction after closing
@@ -2040,34 +2048,15 @@ class Refraction(Core):
 	# Execute and cancel handling. (Control-C and Return)
 
 	@comethod('cursor', 'substitute/selected/command')
-	def c_dispatch_system_command(self, view, session):
-		from .system import Completion, Insertion, Invocation, Decode, joinlines
-		from .annotations import ExecutionStatus
-		from fault.system.query import executables
-		rf = view
-		src = rf.source
-
+	def c_dispatch_system_command(self, session, frame):
+		src = self.source
 		# Horizontal Range
-		lo, co, lines = rf.take_horizontal_range()
-		rf.focus[1].magnitude = 0
-		readlines = joinlines(Decode('utf-8').decode)
-		readlines.send(None)
-		readlines = readlines.send
+		lo, co, lines = self.take_horizontal_range()
 		src.commit()
+		self.focus[1].magnitude = 0
 
 		cmd = '\n'.join(lines).split()
-		for exepath in executables(cmd[0]):
-			inv = Invocation(str(exepath), tuple(cmd))
-			break
-		else:
-			# No command found.
-			return
-
-		c = Completion(rf, -1)
-		i = Insertion(rf, (lo, co, ''), readlines)
-		pid = session.io.invoke(c, i, None, inv)
-		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
-		rf.annotate(ca)
+		session.host.execute(session, frame, self, cmd[0], (lo, co))
 
 	@comethod('focus', 'cancel')
 	@comethod('focus', 'activate')
@@ -2288,9 +2277,11 @@ class Frame(Core):
 		fspath = self.rl_compose_path(li.ln_content for li in src.select(0, 2))
 		typref = session.lookup_type(fspath)
 		syntype = session.load_type(typref)
+		system = session.host
 
-		src = session.sources.import_resource(session.host, typref, syntype, fspath)
+		src = session.sources.create_resource(system.identity, typref, syntype, fspath)
 		new = content.__class__(src)
+		new.focus[0].set(-1)
 		new.keyboard = content.keyboard
 
 		session.dispatch_delta(self.attach(dpath, new))
@@ -2300,9 +2291,11 @@ class Frame(Core):
 			self.reveal(dpath, session.prompting.pg_line_allocation)
 		self.switch(dpath)
 
+		system.load_resource(src, new)
+
 	@comethod('location', 'save/resource')
 	def rl_save(self, session, location, content):
-		session.host.store_resource(session.log, content.source)
+		session.host.store_resource(session.log, content.source, content)
 		self.refocus()
 
 	def chpath(self, dpath, reference):
@@ -2575,7 +2568,7 @@ class Frame(Core):
 				cmd(string)
 				return
 
-			cmd(session, self, target, string)
+			cmd(session, self, target, string, target.coordinates())
 
 	def prompt(self, dpath, system, command):
 		"""

@@ -541,20 +541,19 @@ class Filesystem(Directory):
 
 class ExecutionStatus(object):
 	"""
-	# Directory query annotation.
-
-	# Provides common features for completion support.
+	# Process execution status.
 	"""
 
 	from os import kill
 
-	def __init__(self, title, pid, status):
+	def __init__(self, operation, title, pid, status):
+		self.operation = operation
 		self.title = title
 		self.xs_process_id = pid
 		self.xs_data = status
 
 	def close(self):
-		if self.xs_data[self.xs_process_id] is not None:
+		if self.xs_data[self.xs_process_id] is None:
 			# SIGINT and other signals are not currently accessible.
 			try:
 				self.kill(self.xs_process_id, 9)
@@ -562,13 +561,14 @@ class ExecutionStatus(object):
 				pass
 		else:
 			# Exit code already present no clean up necessary.
-			pass
+			del self.xs_data[self.xs_process_id]
 
 	def update(self, line, structure):
 		# No response to insertions or deletions.
 		pass
 
 	def image(self):
+		yield ('inclusion-keyword', self.operation)
 		yield ('field-annotation-separator', '[')
 		yield ('literal-words', f"{self.xs_process_id}")
 		yield ('field-annotation-separator', ']')

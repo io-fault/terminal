@@ -411,7 +411,16 @@ class Resource(types.Core):
 		first, *wholes = text.split(ln_format.termination)
 
 		level_line = ln_format.level
-		target_line = self.sole(lo)
+		try:
+			target_line = self.sole(lo)
+		except IndexError:
+			if lo > self.ln_count():
+				raise
+
+			# Allow initialization at end of file.
+			self.ln_initialize(offset=lo)
+			self.commit()
+			target_line = self.sole(lo)
 
 		# Handle indentation extension case. Previous splice has a partial
 		# read on an indented, currently, content-less line. When this happens,
@@ -821,16 +830,9 @@ class Directory(types.Core):
 
 		return Resource(ref, syntax_type)
 
-	def insert_resource(self, source:Resource):
+	def create_resource(self, system, typref, syntype, path) -> Resource:
 		"""
-		# Add &source to the collection of files.
-		"""
-
-		self.resources[source.origin.ref_path] = source
-
-	def import_resource(self, system, typref, syntype, path) -> Resource:
-		"""
-		# Return a &Resource associated with the contents of &path and
+		# Create an empty &Resource associated with &path and
 		# add it to the resource set managed by &self.
 		"""
 
@@ -838,17 +840,40 @@ class Directory(types.Core):
 			return self.resources[path]
 
 		ref = types.Reference(
-			system.identity,
+			system,
 			typref,
 			str(path),
 			path.context or path ** 1,
 			path
 		)
+
 		src = self.allocate_resource(ref, syntype)
 		self.insert_resource(src)
-		system.load_resource(src)
+		src.ln_initialize()
+		src.commit()
 
 		return src
+
+	def list_resources(self, Type=list) -> list[Resource]:
+		"""
+		# Construct a new list containing reference copies of all the resources.
+		"""
+
+		return Type(self.resources.items())
+
+	def select_resource(self, path):
+		"""
+		# Get the &Resource instance associated with &path in the collection.
+		"""
+
+		return self.resources[path]
+
+	def insert_resource(self, source:Resource):
+		"""
+		# Add &source to the collection of files.
+		"""
+
+		self.resources[source.origin.ref_path] = source
 
 	def delete_resource(self, source:Resource):
 		"""

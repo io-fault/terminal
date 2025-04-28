@@ -20,13 +20,11 @@ from fault.system.kernel import Event
 from fault.system.kernel import Link
 from fault.system.kernel import Invocation
 from fault.system.kernel import Scheduler
+from fault.syntax.format import Characters
 
 from .annotations import ExecutionStatus
 from .types import Core, System, Line, Reference
 from .view import Refraction
-
-Decode = codecs.getincrementaldecoder('utf-8')
-Encode = codecs.getincrementalencoder('utf-8')
 
 def joinlines(decoder, linesep='\n', character=''):
 	# Used in conjunction with an incremental decoder to collapse line ends.
@@ -119,10 +117,12 @@ class Insertion(IO):
 
 	target: Refraction
 	cursor: tuple[int, int, str]
+	trim: bool
 	state: Callable
+	finish: Callable
 
 	level: int = 0
-	read_size: int = 512
+	read_size: int = 1024
 	system_operation = os.read
 	event_type = Event.io_receive
 
@@ -143,12 +143,22 @@ class Insertion(IO):
 		self.cursor = src.splice_text(flines, lo, co, leading + lines_txt, ln_level=self.level)
 		src.commit()
 
-	def final(self):
+	def final(self, ignored=None):
 		src = self.target.source
+
+		flines = src.forms.lf_lines
 		lo, co, remainder = self.cursor
-		if remainder:
-			src.insert_codepoints(lo, co, remainder)
+		ftxt = remainder + self.finish()
+		if ftxt:
+			self.cursor = src.splice_text(flines, lo, co, ftxt, ln_level=self.level)
 			src.commit()
+
+		fl = self.cursor[0]
+		if self.trim and fl < src.ln_count():
+			if src.sole(fl).ln_void:
+				src.delete_lines(fl, fl+1)
+				src.commit()
+
 		src.modifications.checkpoint()
 
 	def interrupt(self):
@@ -157,13 +167,13 @@ class Insertion(IO):
 
 	def transition(self, scheduler, log, link):
 		try:
-			xfer = b'\x00'
+			xfer = b'\x00' # Overwritten, allows loop entrance.
 			while len(xfer) > 0:
 				xfer = self.system_operation(link.event.port, self.read_size)
-				log.append((self, xfer))
+				log.append((self.execute, xfer))
 			else:
 				scheduler.cancel(link)
-				scheduler.enqueue(self.final)
+				log.append((self.final, None))
 				return
 		except OSError as err:
 			if err.errno != errno.EAGAIN:
@@ -191,9 +201,8 @@ class Transmission(IO):
 		"""
 
 		self.total += len(written)
-		rf = self.target
 
-	def final(self):
+	def final(self, ignored):
 		pass
 
 	def transferred(self, transfer):
@@ -218,19 +227,22 @@ class Transmission(IO):
 	def transition(self, scheduler, log, link):
 		byteswritten = self.system_operation(link.event.port, self.data[:self.write_size])
 		xfer = self.data[:byteswritten]
-		log.append((self, xfer))
+		log.append((self.execute, xfer))
 
 		if self.transferred(xfer):
 			scheduler.cancel(link)
-
+			log.append((self.final, None))
 			# Workaround to trigger ev_clear to release the file descriptor.
-			scheduler.enqueue(self.final)
+			scheduler.enqueue(lambda: None)
+			del link
 
 @dataclass()
 class Completion(IO):
 	target: Refraction
 	pid: int = None
 
+	exit_code = None
+	usage = None
 	interrupt_signal = signal.SIGKILL
 
 	try:
@@ -243,24 +255,29 @@ class Completion(IO):
 	event_type = Event.process_exit
 
 	def interrupt(self):
-		os.kill(self.pid, self.interrupt_signal)
+		if self.exit_code is None:
+			os.kill(self.pid, self.interrupt_signal)
 
 	def execute(self, status):
-		pid, exitcode, rusage = status
-		self.target.system_execution_status[pid] = (exitcode, rusage)
+		pid, self.exit_code, self.usage = status
+		self.target.system_execution_status[pid] = (self.exit_code, self.usage)
 
 		if self.target.annotation is None:
 			return
 		if not isinstance(self.target.annotation, ExecutionStatus):
 			return
 
-		if pid == self.target.annotation.xs_process_id:
-			self.target.annotate(None)
+		if self.pid == self.target.annotation.xs_process_id:
+			if self.exit_code == 0:
+				self.target.annotate(None)
+			else:
+				# Leave annotation to signal failure.
+				pass
 
 	def transition(self, scheduler, log, link):
 		rpid, status, rusage = self.system_operation(self.pid, 0)
 		code = os.waitstatus_to_exitcode(status)
-		log.append((self, (rpid, code, rusage)))
+		log.append((self.execute, (rpid, code, rusage)))
 
 def loop(scheduler, pending, signal, *, delay=16, limit=16):
 	"""
@@ -337,16 +354,23 @@ class IOManager(object):
 		"""
 
 		ri, wi = os.pipe()
-		ro, wo = os.pipe()
+
+		if readcontext is not None:
+			ro, wo = os.pipe()
+		else:
+			ro = None
+			wo = os.open('/dev/null', os.O_WRONLY)
 
 		# Adjust flags for our file descriptors.
-		for x in [wi, ro]:
+		for x in filter(None, [wi, ro]):
 			flags = fcntl.fcntl(x, fcntl.F_GETFL)
 			fcntl.fcntl(x, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
 		wl = rl = xl = None
 		try:
 			if writecontext is not None:
+				# Trigger first buffer.
+				writecontext.transferred(b'')
 				wl = self.dispatch(writecontext, None, wi)
 			else:
 				# No input.
@@ -354,11 +378,12 @@ class IOManager(object):
 
 			if readcontext is not None:
 				rl = self.dispatch(readcontext, None, ro)
-			else:
+			elif ro is not None:
 				# No output.
 				os.close(ro)
 
 			pid = invocation.spawn(fdmap=[(ri, 0), (wo, 1), (wo, 2)])
+			exitcontext.pid = pid
 			exitcontext.target.system_execution_status[pid] = None
 			xl = self.dispatch(exitcontext, pid)
 
@@ -377,6 +402,8 @@ class Execution(Core):
 	# System process execution status and interface.
 
 	# [ Elements ]
+	# /io/
+		# The I/O event handler used to service and spawn &Executable processes.
 	# /identity/
 		# The identity of the system that operations are dispatched on.
 		# The object that is used to identify an &Execution instance within a &Session.
@@ -396,6 +423,7 @@ class Execution(Core):
 		# operations in the system context.
 	"""
 
+	io: IOManager
 	identity: System
 
 	encoding: str
@@ -459,15 +487,17 @@ class Execution(Core):
 		self.environment['PWD'] = path
 		return current
 
-	def __init__(self, identity:System, encoding, ifpath, argv):
+	def __init__(self, io, identity:System, encoding, ifpath, argv):
+		self.io = io
 		self.identity = identity
 		self.environment = {}
 		self.encoding = encoding
+		self.codec = Characters.from_codec(encoding, 'surrogateescape')
 		self.executable = ifpath
 		self.interface = argv
 
 	@comethod('system', 'system')
-	def execute(self, session, frame, rf, string):
+	def execute(self, session, frame, rf, string, cursor):
 		"""
 		# Send the selected elements to the device manager.
 		"""
@@ -483,17 +513,13 @@ class Execution(Core):
 			return
 
 		c = Completion(rf, -1)
-		lo = rf.focus[0].get()
-		co = rf.focus[1].get()
-		readlines = Decode('utf-8').decode
-
-		ins = Insertion(rf, (lo, co, ''), readlines)
-		pid = session.io.invoke(c, ins, None, inv)
-		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+		ins = Insertion(rf, (*cursor, ''), False, *self.codec.Decoder())
+		pid = self.io.invoke(c, ins, None, inv)
+		ca = ExecutionStatus("+ " + cmd[0], 'insert', pid, rf.system_execution_status)
 		rf.annotate(ca)
 
 	@comethod('system', 'transform')
-	def transform(self, session, frame, rf, system):
+	def transform(self, session, frame, rf, system, cursor):
 		"""
 		# Send the selected elements to the device manager.
 		"""
@@ -506,7 +532,6 @@ class Execution(Core):
 			# No command found.
 			return
 
-		readlines = Decode('utf-8').decode
 		src = rf.source
 		src.checkpoint()
 
@@ -516,8 +541,8 @@ class Execution(Core):
 
 		rf.focus[0].magnitude = 0
 
-		i = Insertion(rf, (start, 0, ''), readlines)
-		lfb = src.forms.lf_codec.sequence
+		i = Insertion(rf, (start, 0, ''), False, *self.codec.Decoder())
+		lfb = self.codec.sequence
 		lfl = src.forms.lf_lines.sequence
 		try:
 			cil = min(li.ln_level for li in lines if li.ln_content)
@@ -534,21 +559,19 @@ class Execution(Core):
 
 		x = Transmission(rf, bufferlines(2048, lfb(lfl(ilines))), b'', 0)
 
-		# Trigger first buffer.
-		x.transferred(b'')
-
-		pid = session.io.invoke(c, i, x, inv)
+		pid = self.io.invoke(c, i, x, inv)
 
 		# Report status via annotation.
-		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+		ca = ExecutionStatus("<-> " + cmd[0], 'transform', pid, rf.system_execution_status)
 		rf.annotate(ca)
 
 	@comethod('system', 'transmit')
-	def transmit(self, session, frame, rf, system):
+	def transmit(self, session, frame, rf, system, cursor):
 		"""
 		# Send the selected elements to the system command.
 		"""
 
+		src = rf.source
 		cmd = system.split()
 		for exepath in query.executables(cmd[0]):
 			inv = Invocation(str(exepath), tuple(cmd))
@@ -558,86 +581,56 @@ class Execution(Core):
 			return
 
 		c = Completion(rf, -1)
-		lines = rf.source.serialize(*rf.focus[0].range())
-		x = Transmission(rf, bufferlines(2048, lines), b'', 0)
+		cil = 0
+		lfb = self.codec.sequence
+		lfl = src.forms.lf_lines.sequence
+		lines = src.select(*rf.focus[0].range())
+		ilines = ((li.ln_level - cil, li.ln_content) for li in lines)
+		x = Transmission(rf, bufferlines(2048, lfb(lfl(ilines))), b'', 0)
 
-		# Trigger first buffer.
-		x.transferred(b'')
-
-		pid = session.io.invoke(c, None, x, inv)
+		pid = self.io.invoke(c, None, x, inv)
 
 		# Report status via annotation.
-		ca = ExecutionStatus("system-process", pid, rf.system_execution_status)
+		ca = ExecutionStatus("<- " + path, 'transmit', pid, rf.system_execution_status)
 		rf.annotate(ca)
 
-	def store_resource(self, log, source):
-		"""
-		# Write the elements of the process local resource, &source, to the file
-		# identified by &source.origin using the origin's system context.
-		"""
-
-		ref = source.origin
-		codec = source.forms.lf_codec
-		lform = source.forms.lf_lines
-		log(f"Writing {len(source.elements)} [{str(source.forms)}] lines to [{ref}]")
-
-		path = ref.ref_path
-		if path.fs_type() == 'void':
-			leading = (path ** 1)
-			if leading.fs_type() == 'void':
-				log(f"Allocating directories: " + str(leading))
-				path.fs_alloc() # Leading path not present on save.
-
-		ln_count = source.ln_count()
-		ilines = lform.sequence((li.ln_level, li.ln_content) for li in source.select(0, ln_count))
-		ibytes = codec.sequence(ilines)
-		idata = buffer_lines(ibytes)
-		size = 0
-
-		with open(ref.ref_identity, 'wb') as file:
-			for data in idata:
-				size += len(data)
-				file.write(data)
-
-		st = path.fs_status()
-		log(f"Finished writing {size!r} bytes.")
-
-		if st.size != size:
-			log(f"Calculated write size differs from system reported size: {st.size}")
-
-		if source.status is None:
-			log("No previous modification time, file is new.")
-		else:
-			age = source.age(st.last_modified)
-			if age is not None:
-				log("Last modification was " + age + " ago.")
-
-		source.saved = source.modifications.snapshot()
-		source.status = st
-		source.stored_line_count = ln_count
-
-	def load_resource(self, source):
-		"""
-		# Load and retain the lines of the resource identified by &source.origin.
-		"""
-
-		path = source.origin.ref_path
+	def store_resource(self, log, source, view):
 		lf = source.forms
-		codec = lf.lf_codec
-		lines = lf.lf_lines
+		path = source.origin.ref_identity
 
-		try:
-			with path.fs_open('rb') as f:
-				source.status = path.fs_status()
-				ilines = lines.structure(codec.structure(buffer_data(1024, f)))
-				cpr = map(lf.ln_sequence, (Line(-1, il, lc) for il, lc in ilines))
-				del source.elements[:]
-				source.elements.partition(cpr)
-				if source.ln_count() == 0:
-					source.ln_initialize()
-		except Exception:
-			log("Writing will attempt to create the file and any leading paths.")
-			raise
+		# The current use of tee here is suspect, but the goal is to have
+		# the file path present in the process status without unusual incantations.
+		for exepath in query.executables('tee'):
+			inv = Invocation(str(exepath), ('tee', path))
+			break
 		else:
-			# Initialized.
+			# No command found.
 			return
+
+		c = Completion(view, -1)
+		lfb = self.codec.sequence
+		lfl = source.forms.lf_lines.sequence
+		lines = source.select(0, source.ln_count())
+		ilines = ((li.ln_level, li.ln_content) for li in lines)
+		x = Transmission(view, bufferlines(2048, lfb(lfl(ilines))), b'', 0)
+
+		pid = self.io.invoke(c, None, x, inv)
+		ca = ExecutionStatus("-> " + path, 'store', pid, view.system_execution_status)
+		view.annotate(ca)
+
+	def load_resource(self, source, view):
+		lf = source.forms
+		path = source.origin.ref_identity
+
+		for exepath in query.executables('cat'):
+			inv = Invocation(str(exepath), ('cat', path))
+			break
+		else:
+			# No command found.
+			return
+
+		c = Completion(view, -1)
+		i = Insertion(view, (0, 0, ''), True, *lf.lf_codec.Decoder())
+		pid = self.io.invoke(c, i, None, inv)
+		ca = ExecutionStatus("<- " + path, 'load', pid, view.system_execution_status)
+		view.annotate(ca)

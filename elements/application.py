@@ -85,8 +85,6 @@ class Session(Core):
 		# The system execution context of the host machine.
 	# /logfile/
 		# Transcript override for logging.
-	# /io/
-		# System I/O abstraction for command substitution and file I/O.
 	# /device/
 		# The target display and event source.
 	# /types/
@@ -181,7 +179,7 @@ class Session(Core):
 			cfgprompts.execution_types,
 		)
 
-	def __init__(self, cfg, system, io, executable, terminal:Device, position=(0,0), dimensions=None):
+	def __init__(self, cfg, system, executable, terminal:Device, position=(0,0), dimensions=None):
 		self.focus = None
 		self.frame = 0
 		self.frames = []
@@ -193,7 +191,6 @@ class Session(Core):
 		self.local_modifiers = ''
 		self.host = system
 		self.logfile = None
-		self.io = io
 		self.placement = (position, dimensions)
 
 		self.executable = executable.delimit()
@@ -219,10 +216,12 @@ class Session(Core):
 		self.transcript = Resource(editor_log, self.load_type('lambda'))
 		self.transcript.ln_initialize()
 		self.transcript.commit()
+
 		self.sources = Directory()
 		self.sources.insert_resource(self.transcript)
 
 		self.process = Execution(
+			None,
 			System(
 				'process',
 				system.identity.sys_credentials,
@@ -319,6 +318,84 @@ class Session(Core):
 
 		return lf.replace(lf_fields=pathfields)
 
+	@staticmethod
+	def load_resource(source):
+		"""
+		# Load the syntax lines of the host file identified by &source.origin.
+
+		# Synchronous, process local, variant of &host.load_resource.
+		"""
+
+		path = source.origin.ref_path
+		lf = source.forms
+		codec = lf.lf_codec
+		lines = lf.lf_lines
+
+		try:
+			with path.fs_open('rb') as f:
+				source.status = path.fs_status()
+				ilines = lines.structure(codec.structure(buffer_data(1024, f)))
+				cpr = map(lf.ln_sequence, (Line(-1, il, lc) for il, lc in ilines))
+				del source.elements[:]
+				source.elements.partition(cpr)
+				if source.ln_count() == 0:
+					source.ln_initialize()
+		except Exception:
+			log("Writing will attempt to create the file and any leading paths.")
+			raise
+		else:
+			# Initialized.
+			return
+
+	@staticmethod
+	def store_resource(log, source):
+		"""
+		# Write the elements of the process local resource, &source, to the file
+		# identified by &source.origin on the host.
+
+		# Synchronous, process local, variant of &host.store_resource.
+		"""
+
+		ref = source.origin
+		codec = source.forms.lf_codec
+		lform = source.forms.lf_lines
+		log(f"Writing {len(source.elements)} [{str(source.forms)}] lines to [{ref}]")
+
+		path = ref.ref_path
+		if path.fs_type() == 'void':
+			leading = (path ** 1)
+			if leading.fs_type() == 'void':
+				log(f"Allocating directories: " + str(leading))
+				path.fs_alloc() # Leading path not present on save.
+
+		ln_count = source.ln_count()
+		ilines = lform.sequence((li.ln_level, li.ln_content) for li in source.select(0, ln_count))
+		ibytes = codec.sequence(ilines)
+		idata = buffer_lines(ibytes)
+		size = 0
+
+		with open(ref.ref_identity, 'wb') as file:
+			for data in idata:
+				size += len(data)
+				file.write(data)
+
+		st = path.fs_status()
+		log(f"Finished writing {size!r} bytes.")
+
+		if st.size != size:
+			log(f"Calculated write size differs from system reported size: {st.size}")
+
+		if source.status is None:
+			log("No previous modification time, file is new.")
+		else:
+			age = source.age(st.last_modified)
+			if age is not None:
+				log("Last modification was " + age + " ago.")
+
+		source.saved = source.modifications.snapshot()
+		source.status = st
+		source.stored_line_count = ln_count
+
 	def reference(self, path):
 		"""
 		# Construct a &host &Reference instance from &path resolving types according to
@@ -362,11 +439,21 @@ class Session(Core):
 
 		typref = self.lookup_type(path)
 		syntype = self.load_type(typref)
-		source = self.sources.import_resource(self.host, typref, syntype, path)
-		ref = source.origin
+		system = self.host
+
+		try:
+			source = self.sources.select_resource(path)
+			load = False
+		except KeyError:
+			source = self.sources.create_resource(system.identity, typref, syntype, path)
+			load = True
 
 		rf = Refraction(source)
 		rf.keyboard = self.keyboard
+		rf.focus[0].set(-1)
+
+		if load:
+			system.load_resource(source, rf)
 
 		if addressing is not None:
 			rf.restore(addressing)
@@ -449,6 +536,7 @@ class Session(Core):
 			return
 
 		if self.focus:
+			# Never to be seen.
 			del self.focus.deltas[:]
 			self.focus.focus.control_mode = self.keyboard.mapping
 
@@ -461,6 +549,9 @@ class Session(Core):
 
 		self.frame = index
 		self.refocus()
+
+		# Anything in the new focus frame is stale.
+		del self.focus.deltas[:]
 
 		for (l, rf, p) in self.focus.views:
 			l.frame_visible = True
@@ -719,6 +810,8 @@ class Session(Core):
 		'content': (lambda s, f, k: f['content']),
 		'prompt': (lambda s, f, k: f['prompt']),
 		'location': (lambda s, f, k: f['location']),
+
+		'cursor': (lambda s, f, k: f['view'].coordinates()),
 	}
 
 	@staticmethod
@@ -841,7 +934,7 @@ class Session(Core):
 		# Naturally exits when &frames is empty.
 		"""
 
-		self.io.service() # Dispatch event loop for I/O integration.
+		self.host.io.service() # Dispatch event loop for I/O integration.
 		self._focus = {'frame': None, 'view': None, 'cursor': None}
 
 		# Expects initial synchronize instruction to draw first cursor.
@@ -876,11 +969,11 @@ class Session(Core):
 		"""
 
 		# Acquire events prepared by &.system.IO.loop.
-		events = self.io.take()
+		events = self.host.io.take()
 
 		for io_context, io_transfer in events:
 			# Apply the performed transfer using the &io_context.
-			io_context.execute(io_transfer)
+			io_context(io_transfer)
 
 	@comethod('session', 'ineffective')
 	def s_operation_not_found(self):
@@ -1144,8 +1237,10 @@ def main(inv:process.Invocation) -> process.Exit:
 	wd = configure_working_directory(config)
 
 	configuration.load_sections()
+	device = Device()
 
 	host = Execution(
+		IOManager.allocate(device.synchronize_io),
 		System(
 			'system',
 			query.username(),
@@ -1159,12 +1254,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	host.export(os.environ.items())
 	host.chdir(str(wd))
 
-	device = Device()
-	editor = Session(
-		configuration, host,
-		IOManager.allocate(device.synchronize_io),
-		path, device
-	)
+	editor = Session(configuration, host, path, device)
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 	if 'instructions' not in config['traces']:
 		editor.trace = editor.discard
