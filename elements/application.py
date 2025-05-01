@@ -181,7 +181,7 @@ class Session(Core):
 
 	def __init__(self, cfg, system, executable, terminal:Device, position=(0,0), dimensions=None):
 		self.focus = None
-		self.frame = 0
+		self.frame = -1
 		self.frames = []
 
 		self.configuration = cfg
