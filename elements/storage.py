@@ -813,7 +813,7 @@ class Directory(types.Core):
 	# and isolating resource management methods.
 
 	# The directory of files is stored as a flat mapping and may refer
-	# to multiple filesystems.
+	# to resources across multiple filesystems.
 	"""
 
 	resources: Mapping[str, Resource]

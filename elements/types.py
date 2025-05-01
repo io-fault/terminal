@@ -1384,7 +1384,7 @@ class Reference(object):
 
 	# [ Elements ]
 	# /ref_system/
-		# The system context that should be used to interact with the resource.
+		# The system context that should be used to interface with the resource.
 	# /ref_type/
 		# The source of the selector used to get the syntax type from the session.
 	# /ref_identity/
