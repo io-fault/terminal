@@ -392,6 +392,7 @@ class Refraction(Core):
 				assert deletion == removed
 
 		src.checkpoint()
+		return True
 
 	@comethod('command', 'find')
 	def p_find(self, string):
@@ -404,6 +405,7 @@ class Refraction(Core):
 		ctl = self.forward(self.source.ln_count(), v.get(), h.maximum)
 		self.find(ctl, string)
 		self.recursor()
+		return True
 
 	@comethod('command', 'seek')
 	def p_seek(self, string):
@@ -415,7 +417,7 @@ class Refraction(Core):
 			whence, target_s = string.split()
 		except ValueError:
 			log("Unrecognized seek arguments " + repr(string) + ".")
-			return
+			return False
 
 		target = int(target_s.strip())
 
@@ -425,6 +427,9 @@ class Refraction(Core):
 			self.c_seek_relative(target)
 		else:
 			log("Unrecognized seek whence " + repr(whence) + ".")
+			return False
+
+		return True
 
 	def select_field(self, lo:int, fi:int):
 		"""
