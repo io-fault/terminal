@@ -8,6 +8,7 @@ import codecs
 import signal
 import errno
 import itertools
+from collections import defaultdict
 
 from collections.abc import Mapping, Sequence, Iterable, Iterator
 from typing import Callable
@@ -15,7 +16,6 @@ from dataclasses import dataclass
 
 from fault.context.tools import partial
 from fault.system import files
-from fault.system import query
 from fault.system.kernel import Event
 from fault.system.kernel import Link
 from fault.system.kernel import Invocation
@@ -421,6 +421,11 @@ class Execution(Core):
 	# /interface/
 		# The local system command, argument vector, to use to dispatch
 		# operations in the system context.
+	# /index/
+		# The index of executables. Normally, initialized with &rehash,
+		# this represents the environment's (system/environ)`PATH` in its
+		# entirety. The values are a list of paths that match the key with
+		# the lower index entries having priority over the higher.
 	"""
 
 	io: IOManager
@@ -430,6 +435,16 @@ class Execution(Core):
 	executable: str
 	interface: Sequence[str]
 	environment: Mapping[str, str]
+	path_separator: str
+	index: Mapping[str, list[files.Path]]
+
+	# Defaults are failsafes presuming a POSIX environment.
+	# &store_resource and &load_resource currently depend on this.
+	cached_tools = {
+		'cat': '/bin/cat',
+		'tee': '/bin/tee',
+		'env': '/usr/bin/env',
+	}
 
 	def reference(self, typref, path):
 		"""
@@ -487,14 +502,72 @@ class Execution(Core):
 		self.environment['PWD'] = path
 		return current
 
-	def __init__(self, io, identity:System, encoding, ifpath, argv):
+	def paths(self, varname:str='PATH') -> list[files.Path]:
+		"""
+		# Reconstruct a list of path instances from the environment local
+		# (system/environ)`PATH`.
+		"""
+
+		# For POSIX, there is no escape for the path separator.
+		return [self.fs_root@x for x in self.getenv('PATH').split(self.path_separator)]
+
+	@staticmethod
+	def scan_paths(paths, suffix, default):
+		for path in paths:
+			exe = (path@suffix)
+			if exe.fs_type() != 'void':
+				return exe
+		else:
+			# Use default.
+			return self.fs_root@default
+
+	def rehash(self):
+		"""
+		# Rebuild the index of executables.
+
+		# Named after the traditional command used to re-scan (system/environ)`PATH`.
+		"""
+
+		self.index = defaultdict(list)
+
+		for x in self.paths():
+			try:
+				for y in x.fs_list()[1]:
+					self.index[y.identifier].append(y)
+			except:
+				# Likely permission issue.
+				pass
+
+	def retool(self):
+		"""
+		# Update the cache of tool locations for supporting execution using the
+		# &environment local (system/environ)`PATH`.
+		"""
+
+		paths = self.paths()
+
+		for x, default in self.cached_tools.items():
+			self.tools[x] = self.index.get(x, (default,))[0]
+
+	def __init__(self, io, root, identity:System, encoding, ifpath, argv):
 		self.io = io
+		self.fs_root = root
 		self.identity = identity
 		self.environment = {}
 		self.encoding = encoding
 		self.codec = Characters.from_codec(encoding, 'surrogateescape')
 		self.executable = ifpath
 		self.interface = argv
+		self.index = {}
+		self.tools = {}
+		self.path_separator = ':'
+
+	def tool(self, identifier):
+		"""
+		# Retrieve the &fs_root relative path to the tool, using &identifier.
+		"""
+
+		return self.tools[identifier]
 
 	@comethod('system', 'system')
 	def execute(self, session, frame, rf, string, cursor):
@@ -502,21 +575,19 @@ class Execution(Core):
 		# Send the selected elements to the device manager.
 		"""
 
-		src = rf.source
-
 		cmd = string.split()
-		for exepath in query.executables(cmd[0]):
-			inv = Invocation(str(exepath), tuple(cmd))
-			break
-		else:
-			# No command found.
-			return
+		exepath = self.index.get(cmd[0], ())
+		if not exepath:
+			return False
 
+		inv = Invocation(str(exepath[0]), tuple(cmd))
 		c = Completion(rf, -1)
 		ins = Insertion(rf, (*cursor, ''), False, *self.codec.Decoder())
 		pid = self.io.invoke(c, ins, None, inv)
 		ca = ExecutionStatus("+ " + cmd[0], 'insert', pid, rf.system_execution_status)
 		rf.annotate(ca)
+
+		return True
 
 	@comethod('system', 'transform')
 	def transform(self, session, frame, rf, system, cursor):
@@ -525,12 +596,11 @@ class Execution(Core):
 		"""
 
 		cmd = system.split()
-		for exepath in query.executables(cmd[0]):
-			inv = Invocation(str(exepath), tuple(cmd))
-			break
-		else:
-			# No command found.
-			return
+		exepath = self.index.get(cmd[0], ())
+		if not exepath:
+			return False
+
+		inv = Invocation(str(exepath[0]), tuple(cmd))
 
 		src = rf.source
 		src.checkpoint()
@@ -565,6 +635,8 @@ class Execution(Core):
 		ca = ExecutionStatus("<-> " + cmd[0], 'transform', pid, rf.system_execution_status)
 		rf.annotate(ca)
 
+		return True
+
 	@comethod('system', 'transmit')
 	def transmit(self, session, frame, rf, system, cursor):
 		"""
@@ -573,12 +645,11 @@ class Execution(Core):
 
 		src = rf.source
 		cmd = system.split()
-		for exepath in query.executables(cmd[0]):
-			inv = Invocation(str(exepath), tuple(cmd))
-			break
-		else:
-			# No command found.
-			return
+		exepath = self.index.get(cmd[0], ())
+		if not exepath:
+			return False
+
+		inv = Invocation(str(exepath[0]), tuple(cmd))
 
 		c = Completion(rf, -1)
 		cil = 0
@@ -597,15 +668,9 @@ class Execution(Core):
 	def store_resource(self, log, source, view):
 		lf = source.forms
 		path = source.origin.ref_identity
-
 		# The current use of tee here is suspect, but the goal is to have
 		# the file path present in the process status without unusual incantations.
-		for exepath in query.executables('tee'):
-			inv = Invocation(str(exepath), ('tee', path))
-			break
-		else:
-			# No command found.
-			return
+		inv = Invocation(str(self.tool('tee')), ('tee', str(path)))
 
 		c = Completion(view, -1)
 		lfb = self.codec.sequence
@@ -621,13 +686,7 @@ class Execution(Core):
 	def load_resource(self, source, view):
 		lf = source.forms
 		path = source.origin.ref_identity
-
-		for exepath in query.executables('cat'):
-			inv = Invocation(str(exepath), ('cat', path))
-			break
-		else:
-			# No command found.
-			return
+		inv = Invocation(str(self.tool('cat')), ('cat', str(path)))
 
 		c = Completion(view, -1)
 		i = Insertion(view, (0, 0, ''), True, *lf.lf_codec.Decoder())

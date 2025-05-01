@@ -221,7 +221,7 @@ class Session(Core):
 		self.sources.insert_resource(self.transcript)
 
 		self.process = Execution(
-			None,
+			None, None,
 			System(
 				'process',
 				system.identity.sys_credentials,
@@ -862,7 +862,7 @@ class Session(Core):
 			# --trace-instructions
 			self.trace(phy, key, itype, methodpath, op)
 
-			op(*(x(self, self._focus, key) for x in sels), *args) # User Event Operation
+			return op(*(x(self, self._focus, key) for x in sels), *args) # User Event Operation
 		except Exception as operror:
 			self.keyboard.reset('control')
 			self.error('Operation Failure', operror)
@@ -1241,6 +1241,7 @@ def main(inv:process.Invocation) -> process.Exit:
 
 	host = Execution(
 		IOManager.allocate(device.synchronize_io),
+		files.root,
 		System(
 			'system',
 			query.username(),
@@ -1253,6 +1254,8 @@ def main(inv:process.Invocation) -> process.Exit:
 	)
 	host.export(os.environ.items())
 	host.chdir(str(wd))
+	host.rehash()
+	host.retool()
 
 	editor = Session(configuration, host, path, device)
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))

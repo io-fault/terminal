@@ -2517,17 +2517,19 @@ class Frame(Core):
 
 	@comethod('prompt', 'execute/close')
 	def pg_execute_close(self, dpath, session, prompt):
-		r = self.prompt_execute(dpath, session)
-		self.cancel(dpath, prompt)
-		session.keyboard.set('control')
-		return r
+		if self.prompt_execute(dpath, session):
+			self.cancel(dpath, prompt)
+			session.keyboard.set('control')
+			return True
+		return False
 
 	@comethod('prompt', 'execute/reset')
 	def pg_execute_reset(self, dpath, session):
-		r = self.prompt_execute(dpath, session)
-		l, c, p = self.select(dpath)
-		self.prompt(dpath, c.source.origin.ref_system, ['system', ''])
-		return r
+		if self.prompt_execute(dpath, session):
+			l, c, p = self.select(dpath)
+			self.prompt(dpath, c.source.origin.ref_system, ['system', ''])
+			return True
+		return False
 
 	@comethod('prompt', 'execute/repeat')
 	def pg_execute_repeat(self, dpath, session):
@@ -2552,23 +2554,23 @@ class Frame(Core):
 		if command[:1] == ':':
 			# Dispatch application instruction to the focused refraction.
 			session.dispatch('(' + command[1:] + ')' + '[-]')
-		else:
-			try:
-				# Eliminate this in favor of direct application instructions
-				# once type signatures can be probed for parameters.
-				cmd = target.comethod('command', command)
-			except:
-				# Currently, select the target refraction's system, but
-				# the prompt intends to allow arbitrary routing. System
-				# should be interpreted by &ctx here.
-				sr = target.source.origin.ref_system
-				exectx = session.systems[sr]
-				cmd = exectx.comethod('system', command)
-			else:
-				cmd(string)
-				return
+			return True
 
-			cmd(session, self, target, string, target.coordinates())
+		try:
+			# Eliminate this in favor of direct application instructions
+			# once type signatures can be probed for parameters.
+			cmd = target.comethod('command', command)
+		except:
+			# Currently, select the target refraction's system, but
+			# the prompt intends to allow arbitrary routing. System
+			# should be interpreted by &ctx here.
+			sr = target.source.origin.ref_system
+			exectx = session.systems[sr]
+			cmd = exectx.comethod('system', command)
+		else:
+			return cmd(string)
+
+		return cmd(session, self, target, string, target.coordinates())
 
 	def prompt(self, dpath, system, command):
 		"""
