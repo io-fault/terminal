@@ -1432,7 +1432,7 @@ class Refraction(Core):
 		fi, cursor_target = frame.target(ay, ax)
 		rf = frame.focus
 
-		if shift in self.device.key(''):
+		if shift in device.key(''):
 			targets = [cursor_target, frame.focus]
 		else:
 			targets = [cursor_target]
