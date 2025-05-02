@@ -709,12 +709,16 @@ class Session(Core):
 		self.reframe(fi)
 
 	def store(self):
-		sf = retention.sequence_frames(self.snapshot())
-
 		with open(self.fs_snapshot, 'w') as f:
-			f.write(retention.sequence([
-				(self.title, [str(self.frame) + ' ' + str(len(self.frames))]),
-			]))
+			# Leading descriptor validating frame count and designating selection.
+			nframes = len(self.frames)
+			cframe = min(max(0, self.frame), nframes-1)
+
+			frame_synopsis = [str(cframe) + ' ' + str(nframes)]
+			f.write(retention.sequence([(self.title, frame_synopsis)]))
+
+			# Frame details.
+			sf = retention.sequence_frames(self.snapshot())
 			f.write(retention.sequence(sf))
 
 	def chresource(self, frame, path):
