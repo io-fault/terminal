@@ -2284,7 +2284,13 @@ class Frame(Core):
 		syntype = session.load_type(typref)
 		system = session.host
 
-		src = session.sources.create_resource(system.identity, typref, syntype, fspath)
+		try:
+			src = session.sources.select_resource(fspath)
+			load = False
+		except KeyError:
+			src = session.sources.create_resource(system.identity, typref, syntype, fspath)
+			load = True
+
 		new = content.__class__(src)
 		new.focus[0].set(-1)
 		new.keyboard = content.keyboard
@@ -2296,7 +2302,8 @@ class Frame(Core):
 			self.reveal(dpath, session.prompting.pg_line_allocation)
 		self.switch(dpath)
 
-		system.load_resource(src, new)
+		if load:
+			system.load_resource(src, new)
 
 	@comethod('location', 'save/resource')
 	def rl_save(self, session, location, content):
