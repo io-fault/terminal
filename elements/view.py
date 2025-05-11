@@ -332,23 +332,13 @@ class Refraction(Core):
 				position, rscroll, area = alignment.forward(total, edge, current, sunit)
 				self.scroll(rscroll.__add__)
 
-	def prepare_rewrite(self, command):
+	@staticmethod
+	def prepare_field_rewrite(command):
 		"""
 		# Identify the requested change.
 		"""
 
-		strctx, remainder = command.split(None, 1)
-
-		if strctx == 'field':
-			*index, di, arg = remainder.strip().split()
-			# field indexes
-			index = int(index[0])
-			assert strctx == 'field'
-			selector = self.select_field
-		elif strctx == 'line':
-			index = None
-			di, arg = remainder.strip().split()
-			selector = (lambda lo, idx: (slice(0, self.source.sole(lo).ln_length), ('line', self.source.sole(lo).ln_content)))
+		di, arg = command.split(None, 1)
 
 		op = {
 			'prefix': (lambda a, tf: (a.start, arg, "")),
@@ -356,15 +346,31 @@ class Refraction(Core):
 			'replace': (lambda a, tf: (a.start, arg, tf[1])),
 		}[di]
 
-		return selector, index, op
+		return op
 
-	@comethod('command', 'rewrite')
-	def p_rewrite(self, string):
+	def select_line(self, lo, index):
+		"""
+		# Line selector for replace operations.
+		"""
+
+		ln = self.source.sole(lo)
+		return (slice(0, ln.ln_length), ('line', ln.ln_content))
+
+	def select_field(self, lo:int, fi:int):
+		"""
+		# Get the area-field pair identified by &lo and &fi.
+		"""
+
+		field_areas, field_records = self.fields(lo)
+		return (field_areas[fi], field_records[fi])
+
+	def replace(self, selector, text, index=None):
 		"""
 		# Rewrite the lines or fields of a vertical range.
 		"""
 
-		s, index, d = self.prepare_rewrite(string)
+		s = selector
+		d = self.prepare_field_rewrite(text)
 		v, h = self.focus
 		lspan = v.slice()
 
@@ -394,50 +400,21 @@ class Refraction(Core):
 		src.checkpoint()
 		return True
 
-	@comethod('command', 'find')
-	def p_find(self, string):
+	@comethod('cursor', 'replace/fields')
+	def c_replace_fields(self, text, quantity=None):
 		"""
-		# Perform a find operation against the subject's elements.
-		"""
-
-		v, h = self.focus
-		self.query['search'] = string
-		ctl = self.forward(self.source.ln_count(), v.get(), h.maximum)
-		self.find(ctl, string)
-		self.recursor()
-		return True
-
-	@comethod('command', 'seek')
-	def p_seek(self, string):
-		"""
-		# Perform a seek operation on the refraction.
+		# Rewrite the fields of the selected lines.
 		"""
 
-		try:
-			whence, target_s = string.split()
-		except ValueError:
-			log("Unrecognized seek arguments " + repr(string) + ".")
-			return False
+		return self.replace(self.select_field, text, index=quantity)
 
-		target = int(target_s.strip())
-
-		if whence == 'absolute':
-			self.c_seek_absolute(target)
-		elif whence == 'relative':
-			self.c_seek_relative(target)
-		else:
-			log("Unrecognized seek whence " + repr(whence) + ".")
-			return False
-
-		return True
-
-	def select_field(self, lo:int, fi:int):
+	@comethod('cursor', 'replace/lines')
+	def c_replace_lines(self, text, quantity=None):
 		"""
-		# Get the area-field pair identified by &lo and &fi.
+		# Rewrite the selected lines.
 		"""
 
-		field_areas, field_records = self.fields(lo)
-		return (field_areas[fi], field_records[fi])
+		return self.replace(self.select_line, text, index=quantity)
 
 	def field_areas(self, element):
 		"""
@@ -1326,7 +1303,7 @@ class Refraction(Core):
 		l = self.focus[0].magnitude
 		self.focus[0].offset = (l // (2 ** quantity))
 
-	@comethod('cursor', 'find/previous/pattern')
+	@comethod('cursor', 'seek/match/previous')
 	@comethod('elements', 'previous')
 	def c_find_previous_string(self):
 		v, h = self.focus
@@ -1334,7 +1311,7 @@ class Refraction(Core):
 		self.find(self.backward(self.source.ln_count(), v.get(), h.minimum), term)
 		self.recursor()
 
-	@comethod('cursor', 'find/next/pattern')
+	@comethod('cursor', 'seek/match/next')
 	@comethod('elements', 'next')
 	def c_find_next_string(self):
 		v, h = self.focus
@@ -1342,9 +1319,16 @@ class Refraction(Core):
 		self.find(self.forward(self.source.ln_count(), v.get(), h.maximum), term)
 		self.recursor()
 
-	@comethod('cursor', 'configure/find/pattern')
-	def c_configure_find_pattern(self):
+	@comethod('cursor', 'configure/pattern')
+	def c_configure_pattern_from_cs(self):
+		# Set from character selection.
 		self.query['search'] = self.horizontal_selection_text()
+
+	@comethod('cursor', 'seek/pattern')
+	def c_seek_pattern_match(self, text=None):
+		if text is not None:
+			self.query['search'] = str(text)
+		self.c_find_next_string()
 
 	# View Controls
 
@@ -1564,7 +1548,7 @@ class Refraction(Core):
 
 		self.focus[0].set(0)
 		self.keyboard.set('insert')
-		self.v_scroll_first('')
+		self.v_scroll_first()
 
 	@comethod('cursor', 'open/last')
 	def c_open_last(self, quantity=1):
@@ -1576,7 +1560,7 @@ class Refraction(Core):
 
 		self.focus[0].set(lo)
 		self.keyboard.set('insert')
-		self.v_scroll_last('')
+		self.v_scroll_last()
 
 	@comethod('cursor', 'insert/string')
 	def c_insert_string(self, quantity, /, string=""):
@@ -2114,6 +2098,36 @@ class Frame(Core):
 	def focus_path(self):
 		return (self.vertical, self.division)
 
+	def process_path(self, dpath:tuple[int,int]) -> str:
+		"""
+		# Construct the string representation of a division path.
+		"""
+
+		if self.title:
+			s = self.title
+		else:
+			s = str(self.index + 1)
+
+		return '/' + s + '/' + '/'.join(str(x+1) for x in dpath)
+
+	def select_path(self, vertical:int, division:int, type=None):
+		"""
+		# Select the view triple identified by &vertical and &division along
+		# with the exact focus identified by &type.
+		"""
+
+		vi = int(vertical) - 1
+		di = int(division) - 1
+		ds = self.views[self.paths[(vi, di)]]
+
+		fe = ds[1]
+		if type == 'location':
+			fe = ds[0]
+		elif type == 'prompt':
+			fe = ds[2]
+
+		return *ds, fe
+
 	def __init__(self, prompting, define, theme, fs, keyboard, area, index=None, title=None):
 		self.prompting = prompting
 		self.define = define
@@ -2341,9 +2355,10 @@ class Frame(Core):
 		for dpath, index in self.paths.items():
 			l, rf, p = self.views[index]
 
+			# Reveal the prompt for reporting types. (transcripts)
 			if rf.reporting(self.prompting):
 				self.reveal(dpath, self.prompting.pg_line_allocation)
-				self.prompt(dpath, rf.system, ['system', ''])
+				self.prompt(dpath, rf.system, [])
 
 	def remodel(self, area=None, divisions=None):
 		"""
@@ -2527,9 +2542,46 @@ class Frame(Core):
 			)
 		)
 
+	@staticmethod
+	def pg_configure_command(prompt, system, path, command):
+		"""
+		# Initialize the prompt for &dpath division to issue &command to the &system.
+		"""
+
+		src = prompt.source
+		src.delete_lines(0, src.ln_count())
+		cmdstr = ' '.join(command)
+		src.extend_lines(map(src.forms.ln_interpret, [str(system)+str(path), cmdstr]))
+		src.commit()
+
+		# Set line cursor to the command.
+		prompt.focus[0].restore((1, 1, 2))
+
+		# Set character cursor to the end of the command string.
+		ctxlen = len(cmdstr)
+		prompt.focus[1].restore((ctxlen, ctxlen, ctxlen))
+
+	def pg_execute(self, dpath, session):
+		"""
+		# Execute the command present on the prompt of the &dpath division.
+		"""
+
+		l, target, p = self.select(dpath)
+		src = p.source
+		ctx = src.sole(0).ln_content
+		commands = '\n'.join(x.ln_content for x in src.select(1, src.ln_count()))
+
+		parse_sys = session.host.identity.structure
+		sys, path = parse_sys(ctx)
+		if sys not in session.systems:
+			return False
+		exectx = session.systems[sys]
+
+		return exectx.execute(session, target, path, commands)
+
 	@comethod('prompt', 'execute/close')
 	def pg_execute_close(self, dpath, session, prompt):
-		if self.prompt_execute(dpath, session):
+		if self.pg_execute(dpath, session):
 			self.cancel(dpath, prompt)
 			session.keyboard.set('control')
 			return True
@@ -2537,94 +2589,36 @@ class Frame(Core):
 
 	@comethod('prompt', 'execute/reset')
 	def pg_execute_reset(self, dpath, session):
-		if self.prompt_execute(dpath, session):
+		if self.pg_execute(dpath, session):
 			l, c, p = self.select(dpath)
-			self.prompt(dpath, c.source.origin.ref_system, ['system', ''])
+			ctx = p.source.sole(0).ln_content
+			self.prompt(dpath, ctx, '', [])
+			self.deltas.extend(p.refresh(0))
 			return True
 		return False
 
 	@comethod('prompt', 'execute/repeat')
 	def pg_execute_repeat(self, dpath, session):
-		return self.prompt_execute(dpath, session)
+		return self.pg_execute(dpath, session)
 
-	def prompt_execute(self, dpath, session):
-		"""
-		# Execute the command present on the prompt of the &dpath division.
-		"""
-
-		l, target, p = self.select(dpath)
-		src = p.source
-		ctx, *commands = src.select(0, src.ln_count())
-
-		prompt_string = ' '.join(x.ln_content for x in commands)
-		try:
-			command, string = prompt_string.split(' ', 1)
-		except ValueError:
-			command = prompt_string
-			string = ''
-
-		if command[:1] == ':':
-			# Dispatch application instruction to the focused refraction.
-			session.dispatch('(' + command[1:] + ')' + '[-]')
-			return True
-
-		try:
-			# Eliminate this in favor of direct application instructions
-			# once type signatures can be probed for parameters.
-			cmd = target.comethod('command', command)
-		except:
-			# Currently, select the target refraction's system, but
-			# the prompt intends to allow arbitrary routing. System
-			# should be interpreted by &ctx here.
-			sr = target.source.origin.ref_system
-			exectx = session.systems[sr]
-			cmd = exectx.comethod('system', command)
-		else:
-			return cmd(string)
-
-		return cmd(session, self, target, string, target.coordinates())
-
-	def prompt(self, dpath, system, command):
-		"""
-		# Initialize the prompt for &dpath division to issue &command to the &system.
-		"""
-
-		prompt = self.views[self.paths[dpath]][2]
-
-		src = prompt.source
-		src.delete_lines(0, src.ln_count())
-		cmdstr = ' '.join(command)
-		src.extend_lines(map(src.forms.ln_interpret, [str(system), cmdstr]))
-		src.commit()
-
-		prompt.focus[0].restore((1, 1, 2))
-		ctxlen = len(command[0]) + 1
-		prompt.focus[1].restore((ctxlen, ctxlen, len(cmdstr)))
-		self.deltas.extend(prompt.refresh(0))
-
-	def prepare(self, system, type, dpath, *, extension=None):
+	def prompt(self, dpath, system, path, command):
 		"""
 		# Shift the focus to the prompt of the focused refraction.
-		# If no prompt is open, initialize it.
+		# If the prompt is not visible, open it.
 		"""
 
 		vi = self.paths[dpath]
-		state = self.focus.query.get(type, None) or ''
 
 		# Update session state.
 		prompt = self.views[vi][2]
-		if extension is not None:
-			qtype = type + ' ' + extension
-		else:
-			qtype = type
+		self.pg_configure_command(prompt, system, path, command)
 
 		# Make footer visible if the view is empty.
 		if prompt.area.lines == 0:
 			self.reveal(dpath, self.prompting.pg_line_allocation)
+			self.deltas.extend(prompt.refresh(0))
 
 		self.focus = prompt
-
-		self.prompt(dpath, system, [qtype, state])
 		return prompt
 
 	def relocate(self, dpath):
@@ -2767,57 +2761,64 @@ class Frame(Core):
 			yield vstat.area.__class__(y, x, 1, 1), (picell,)
 
 	@comethod('frame', 'view/next')
-	def f_select_next_view(self, quantity=1):
+	def f_select_next_view(self, dpath, quantity=1):
 		self.switch((self.vertical, self.division + quantity))
 
 	@comethod('frame', 'view/previous')
-	def f_select_previous_view(self, quantity=1):
+	def f_select_previous_view(self, dpath, quantity=1):
 		self.switch((self.vertical, self.division - quantity))
 
 	@comethod('frame', 'view/return')
 	def f_select_return_view(self):
 		self.deltas.extend(self.returnview((self.vertical, self.division)))
 
-	@comethod('frame', 'prepare/command')
-	def prompt_command(self):
-		sys = self.focus.system
-		self.prepare(sys, "system", (self.vertical, self.division))
-		self.focus.keyboard.set('insert')
+	@comethod('frame', 'prompt/host')
+	def f_prompt_host(self, prompt, host, dpath):
+		if prompt.area.lines == 0:
+			self.prompt(dpath, host.identity, str(host.pwd()), [])
+			prompt.keyboard.set('insert')
+		else:
+			self.focus = prompt
+
+	@comethod('frame', 'prompt/process')
+	def f_prompt_process(self, session, prompt, system, dpath):
+		self.prompt(dpath, session.process.identity, self.process_path(dpath), [])
+		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/seek/absolute')
-	def prompt_seek_absolute(self):
-		sys = self.focus.system
-		self.prepare(sys, "seek", (self.vertical, self.division), extension='absolute')
-		self.focus.keyboard.set('insert')
+	def prompt_seek_absolute(self, prompt, process, dpath):
+		ppath = self.process_path(dpath)
+		self.prompt(dpath, process.identity, ppath, ["cursor/seek/absolute/line", ""])
+		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/seek/relative')
-	def prompt_seek_relative(self):
-		sys = self.focus.system
-		self.prepare(sys, "seek", (self.vertical, self.division), extension='relative')
-		self.focus.keyboard.set('insert')
+	def prompt_seek_relative(self, prompt, process, dpath):
+		ppath = self.process_path(dpath)
+		self.prompt(dpath, process.identity, ppath, ["cursor/seek/relative/line", ""])
+		prompt.keyboard.set('insert')
 
-	@comethod('frame', 'prompt/rewrite')
-	def prompt_rewrite(self):
+	@comethod('frame', 'prompt/replace')
+	def prompt_rewrite(self, content, prompt, process, dpath):
 		# Identify the field for preparing the rewrite context.
-		rf = self.focus
-		sys = rf.system
-
-		areas, ef = rf.fields(rf.focus[0].get())
-		hs = rf.focus[1].slice()
-		i = rf.field_index(areas, hs.start)
+		areas, ef = content.fields(content.focus[0].get())
+		hs = content.focus[1].slice()
+		i = content.field_index(areas, hs.start)
 		if areas[i] != hs:
-			i = rf.field_index(areas, rf.focus[1].get())
+			i = content.field_index(areas, content.focus[1].get())
 
-		ext = "field " + str(i)
-		self.prepare(sys, "rewrite", (self.vertical, self.division), extension=ext)
-		rf.keyboard.set('insert')
+		ppath = self.process_path(dpath)
+		pfields = ["cursor/replace/fields", str(i), ""]
+		self.prompt(dpath, process.identity, ppath, pfields)
+		prompt.keyboard.set('insert')
 
-	@comethod('frame', 'prompt/find')
+	@comethod('frame', 'prompt/pattern')
 	@comethod('elements', 'find')
-	def prompt_find(self):
-		sys = self.focus.system
-		self.prepare(sys, "find", (self.vertical, self.division))
-		self.focus.keyboard.set('insert')
+	def prompt_cursor_pattern(self, prompt, process, dpath):
+		ppath = self.process_path(dpath)
+		fields = ["cursor/seek/pattern", ""]
+		self.prompt(dpath, process.identity, ppath, fields)
+
+		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'select/absolute')
 	def f_select_absolute(self, cellstatus):

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from fault.context import comethod
 from fault.context import tools
 from fault.syntax import format
+from fault.internet import ri
 
 from collections.abc import Sequence, Mapping, Iterable, Container
 from typing import Optional, Protocol, Literal, Callable
@@ -1339,27 +1340,27 @@ class System(object):
 
 		yield ('system-context', '')
 		yield ('system-method', self.sys_method)
-		yield ('delimiter', '://')
+		yield ('system-delimiter', '://')
 
 		if self.sys_credentials:
 			yield ('system-credentials', self.sys_credentials)
 			if self.sys_authorization:
-				yield ('delimiter', ':')
+				yield ('system-delimiter', ':')
 				yield ('system-authorization', self.sys_authorization)
-			yield ('delimiter', '@')
+			yield ('system-delimiter', '@')
 
 		yield ('system-identity', self.sys_identity)
 
 		if self.sys_title:
-			yield ('delimiter', '[')
+			yield ('system-delimiter', '[')
 			yield ('system-title', self.sys_title)
-			yield ('delimiter', ']')
+			yield ('system-delimiter', ']')
 
 		if path is None:
 			return
 
 		if path[:1] == '/':
-			yield ('delimiter', '/')
+			yield ('system-delimiter', '/')
 			path = path[1:]
 
 		yield ('system-path', path)
@@ -1376,6 +1377,26 @@ class System(object):
 			return self
 		else:
 			return self._replace(sys_title=title)
+
+	@classmethod
+	def structure(Class, si:str, *, ri_load=ri.parse):
+		"""
+		# Construct a &System instance using the string representation, &si.
+
+		# While this parses &si as a resource indicator, the query portion is
+		# discarded and the path is returned as a sequence parallel to the
+		# &System instance.
+		"""
+
+		parts = ri_load(si)
+
+		return Class(
+			parts['scheme'] or '',
+			parts.get('user', ''),
+			parts.get('password', ''),
+			parts.get('host', ''),
+			parts.get('address', ''),
+		), parts.get('path')
 
 @tools.struct()
 class Reference(object):
@@ -1881,3 +1902,162 @@ class Reformulations(object):
 		yield ('syntax-line-form', self.represent_line_form(self.lf_lines))
 		yield ('delimiter', '/')
 		yield ('syntax-character-encoding', self.lf_encoding)
+
+@dataclass()
+class Syntax(object):
+	"""
+	# Syntax context for prompt formatting and command directory access.
+
+	# [ Elements ]
+	# /source/
+		# A self pointer to the resource being formatted by this instance.
+		# This avoids a reference cycle by only being present on the
+		# the view's &Reformulations, not the source's.
+	# /executions/
+		# The work context elements for reference. Allows for filesystem
+		# queries and command indexes to be referenced.
+	"""
+
+	source: object = None
+	executions: object = None
+	_field_sets = {}
+	_type_map = {
+		'host': 'system-identity',
+		'user': 'system-credentials',
+		'password': 'system-authorization',
+		'path': 'system-path',
+		'scheme': 'system-method',
+		'address': 'system-title',
+		'port': 'system-invalid-field',
+
+		'delimiter': 'system-delimiter',
+		'type': 'system-delimiter',
+		'delimiter-path-only': 'system-delimiter',
+		'delimiter-path-segments': 'system-delimiter',
+		'delimiter-path-final': 'system-delimiter',
+		'delimiter-path-initial': 'system-delimiter',
+
+		'path-segment': 'system-path',
+		'resource': 'system-path',
+	}
+
+	def _classify_command(self, command:str, *, invalid='invalid-command'):
+		"""
+		# Identify the type of the command.
+		"""
+
+		sys, path = System.structure(self.source.sole(0).ln_content)
+		if sys in self.executions:
+			exe = self.executions[sys]
+			if command in exe.index:
+				return exe.command_type
+
+		return invalid
+
+	def update_field_sets(self):
+		self._field_sets['system-delimiter'] = {'://', '/', '@', ':', '[', ']'}
+		self._field_sets['system-title'] = {''}
+		self._field_sets['system-authorization'] = {''}
+		ignored = {'system-path'}
+
+		for sys in self.executions:
+			for typ, v in sys.i_format():
+				if typ in ignored:
+					continue
+
+				if typ not in self._field_sets:
+					self._field_sets[typ] = set()
+
+				self._field_sets[typ].add(v)
+
+	def valid_system_field(self, ftype, v):
+		if not self._field_sets:
+			self.update_field_sets()
+
+		if ftype not in self._field_sets:
+			# Not checked. (paths)
+			return True
+
+		if v in self._field_sets[ftype]:
+			return True
+
+		return False
+
+	def split_line_fields(self, text, Compose='|'):
+		"""
+		# Split the space-separated fields in a line of &text.
+		"""
+
+		for section in text.split(Compose):
+			if section:
+				yield section.split(' ')
+			else:
+				yield []
+
+	def classify_command(self, section):
+		for i, v in enumerate(section):
+			# First non-empty field
+			if v:
+				yield (self._classify_command(v), v)
+				break
+			else:
+				yield ('command-field-separator', ' ')
+		else:
+			return
+
+		i += 1
+		if len(section) == i:
+			# No following arguments.
+			return
+
+		for x in section[i:]:
+			yield ('command-field-separator', ' ')
+			if x:
+				yield ('command-argument', x)
+
+	def classify_arguments(self, section):
+		if not section:
+			return
+
+		yield ('command-argument', section[0])
+
+		for arg in section[1:]:
+			yield ('command-field-separator', ' ')
+			if arg:
+				yield ('command-argument', arg)
+
+	def structure_locator(self, string):
+		parts = ri.parse(string)
+
+		for typ, v in ri.tokens(parts):
+			stype = self._type_map[typ]
+
+			if self.valid_system_field(stype, v):
+				yield (stype, v)
+			else:
+				yield ('system-invalid-field', v)
+
+	def isolate_prompt_fields(self, ln):
+		"""
+		# Identify the field types of the prompt lines.
+		"""
+
+		if ln.ln_offset == 0:
+			yield from self.structure_locator(ln.ln_content)
+			return
+
+		# Composition operator, `|`, given highest precedence.
+		sections = list(self.split_line_fields(ln.ln_content))
+		if not sections:
+			return
+
+		if ln.ln_offset == 1:
+			yield from self.classify_command(sections[0])
+		else:
+			# First section is a continuation of arguments.
+			yield from self.classify_arguments(sections[0])
+
+		for x in sections[1:]:
+			yield ('composition', '|')
+			if x:
+				yield from self.classify_command(x)

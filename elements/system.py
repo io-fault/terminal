@@ -397,7 +397,106 @@ class IOManager(object):
 
 		return pid
 
-class Execution(Core):
+class WorkContext(Core):
+	"""
+	# The common system context for dispatching and managing jobs.
+	"""
+
+	identity: System
+
+	def execute(self):
+		pass
+
+class Process(WorkContext):
+	"""
+	# Application instruction interface and thread manager for user
+	# dispatched operations.
+
+	# [ Elements ]
+	# /identity/
+		# The identity of the system that operations are dispatched on.
+		# The object that is used to identify an &Execution instance within a &Session.
+	# /index/
+		# The index of application instructions.
+	"""
+
+	command_type = 'application-instruction'
+
+	def __init__(self, sysid):
+		self.identity = sysid
+		self.index = {}
+
+	def rehash(self, types):
+		"""
+		# Construct a single index of comethods for resolution during execution
+		# and command validation during formatting.
+		"""
+
+		self.index = {}
+
+		for t in types:
+			for (etype, path), um in t.__comethods__.items():
+				sk = etype[:1] + ''.join(x[:1] for x in path.split('/'))
+				lk = '/'.join((etype, path))
+
+				# Bind shorthand and long name.
+				self.index[lk] = (t, um)
+				self.index[sk] = lk
+
+	def execute(self, session, rf, path, string):
+		"""
+		# Execute the application instruction with respect to the focus identified by &path.
+		"""
+
+		# The target view is selected by the path for application instructions.
+		rsession, frame, l, content, p, rf = session.select_path(path)
+		cmd = string.split()
+
+		if '/' in cmd[0]:
+			# Full path.
+			iname = cmd[0]
+			isrc = ''
+		else:
+			# Initials shorthand.
+			iname = self.index[cmd[0]]
+			isrc = cmd[0]
+
+		if iname not in self.index:
+			# No such command.
+			return False
+
+		itype, mpath = iname.split('/', 1)
+		args = ()
+		phypath = [rf.source, rf, frame, rsession]
+		phy, op, sels = rsession.lookup(phypath, itype, mpath)
+
+		# First argument is used as quantity if it is an integer string.
+		try:
+			q = int(cmd[1])
+		except ValueError:
+			q = 1
+			i = 1
+		else:
+			i = 2
+
+		text = ' '.join(cmd[i:])
+
+		focus = {
+			'frame': frame,
+			'view': rf,
+			'resource': rf.source,
+			'prompt': p,
+			'content': content,
+			'location': l,
+			'text': text,
+			'quantity': q,
+		}
+
+		rsession.trace(phy, isrc, itype, mpath, op)
+		op(*(x(rsession, focus, '') for x in sels), *args) # Prompt instruction.
+		return True
+
+class Host(WorkContext):
 	"""
 	# System process execution status and interface.
 
@@ -428,9 +527,9 @@ class Execution(Core):
 		# the lower index entries having priority over the higher.
 	"""
 
-	io: IOManager
-	identity: System
+	command_type = 'host-executable'
 
+	io: IOManager
 	encoding: str
 	executable: str
 	interface: Sequence[str]
@@ -493,7 +592,7 @@ class Execution(Core):
 
 		return self.environment['PWD']
 
-	def chdir(self, path: str, *, default=None) -> str|None:
+	def chdir(self, path:str, *, default=None) -> str|None:
 		"""
 		# Locally set (system/environ)`PWD` and return the old value or &default if unset.
 		"""
@@ -569,11 +668,13 @@ class Execution(Core):
 
 		return self.tools[identifier]
 
-	@comethod('system', 'system')
-	def execute(self, session, frame, rf, string, cursor):
+	def execute(self, session, rf, path, string):
 		"""
 		# Send the selected elements to the device manager.
 		"""
+
+		# &path is the local pwd. Prompts inherit PWD from origin's system,
+		# or from history inheritance and reconfigurations.
 
 		cmd = string.split()
 		exepath = self.index.get(cmd[0], ())
@@ -582,20 +683,19 @@ class Execution(Core):
 
 		inv = Invocation(str(exepath[0]), tuple(cmd))
 		c = Completion(rf, -1)
-		ins = Insertion(rf, (*cursor, ''), False, *self.codec.Decoder())
+		ins = Insertion(rf, (*rf.coordinates(), ''), False, *self.codec.Decoder())
 		pid = self.io.invoke(c, ins, None, inv)
 		ca = ExecutionStatus("+ " + cmd[0], 'insert', pid, rf.system_execution_status)
 		rf.annotate(ca)
 
 		return True
 
-	@comethod('system', 'transform')
-	def transform(self, session, frame, rf, system, cursor):
+	def transform(self, session, rf, path, command):
 		"""
 		# Send the selected elements to the device manager.
 		"""
 
-		cmd = system.split()
+		cmd = command.split()
 		exepath = self.index.get(cmd[0], ())
 		if not exepath:
 			return False
@@ -637,14 +737,13 @@ class Execution(Core):
 
 		return True
 
-	@comethod('system', 'transmit')
-	def transmit(self, session, frame, rf, system, cursor):
+	def transmit(self, session, rf, path, command):
 		"""
 		# Send the selected elements to the system command.
 		"""
 
 		src = rf.source
-		cmd = system.split()
+		cmd = command.split()
 		exepath = self.index.get(cmd[0], ())
 		if not exepath:
 			return False

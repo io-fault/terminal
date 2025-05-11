@@ -125,6 +125,25 @@ text = {
 	'path-directory': 'gray',
 	'path-link': 'purple',
 	'path-empty': 'foreground',
+
+	# Execution Prompts and Resource Locations
+	'system-context': 'foreground',
+	'system-method': 'blue',
+	'system-credentials': 'purple',
+	'system-authorization': 'red',
+	'system-identity': 'foreground',
+	'system-title': 'gray',
+	'system-path': 'gray',
+	'system-delimiter': 'gray',
+	'system-invalid-field': 'red',
+
+	'invalid-command': 'red',
+	'host-executable': 'green',
+	'application-instruction': 'purple',
+	'composition': 'orange',
+	'command-argument': 'foreground',
+	'command-field-separator': 'gray',
+	'delimiter': 'absolute-red',
 }
 
 # Cell fill colors. Usually, just default assigned to background.

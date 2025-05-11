@@ -20,10 +20,10 @@ from . import annotations
 from . import types
 from . import retention
 
-from .types import Core, Reference, Glyph, Device, System, Reformulations
+from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax
 from .storage import Resource, Directory, delta
 from .view import Refraction, Frame
-from .system import Execution, IOManager
+from .system import WorkContext, Host, Process, IOManager
 
 # Disable signal exits for multiple interpreter cases.
 process.__signal_exit__ = (lambda x: None)
@@ -66,13 +66,15 @@ def fs_isolate_path(pathref, ln, *, separator='/', relative=None, tpf=annotation
 
 	s = separator
 	lc = ln.ln_content
-	if lc:
-		if relative or not lc.startswith(s):
-			return tpf(pathref(), lc.split(s), separator=s)
-		else:
-			return tpf(files.root, lc.split(s), separator=s)
-	else:
+	if not lc:
 		return ()
+
+	if relative or not lc.startswith(s):
+		# pathref defaults to pwd, but is overwritten to fetch initial
+		# line of the location's resource.
+		return tpf(pathref(), lc.split(s), separator=s)
+	else:
+		return tpf(files.root, lc.split(s), separator=s)
 
 class Session(Core):
 	"""
@@ -106,7 +108,7 @@ class Session(Core):
 	host: System
 	executable: files.Path
 	resources: Mapping[files.Path, Resource]
-	systems: Mapping[System, Execution]
+	systems: Mapping[System, WorkContext]
 
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	types: Mapping[files.Path, tuple[object, object]]
@@ -162,14 +164,22 @@ class Session(Core):
 		)
 
 		from fault.syntax import format
-
-		return Reformulations(
+		ltype = Reformulations(
 			"", theme,
 			format.Characters.from_codec(ce, 'surrogateescape'),
 			format.Lines(ltc, lic),
 			None,
 			cus,
 		)
+
+		fs_parser = format.Fields(process.fs_pwd, fs_isolate_path)
+		pg_parser = format.Fields(Syntax(), Syntax.isolate_prompt_fields)
+
+		return {
+			"": ltype,
+			'filesystem': ltype.replace(lf_fields=fs_parser),
+			'execution': ltype.replace(lf_fields=pg_parser),
+		}
 
 	@staticmethod
 	def integrate_prompts(cfgprompts) -> types.Prompting:
@@ -178,6 +188,22 @@ class Session(Core):
 			cfgprompts.syntax_type,
 			cfgprompts.execution_types,
 		)
+
+	def select_path(self, path:list[str|int]):
+		"""
+		# Get the focus context for the given &path of identifiers.
+
+		# The elements may be integers, titles, or integer strings.
+		"""
+
+		fid = path[0]
+		for f in self.frames:
+			if f.title == fid:
+				break
+		else:
+			f = self.frames[int(fid)-1]
+
+		return (self, f, *f.select_path(*path[1:]))
 
 	def __init__(self, cfg, system, executable, terminal:Device, position=(0,0), dimensions=None):
 		self.focus = None
@@ -197,14 +223,18 @@ class Session(Core):
 		self.device = terminal
 		self.cache = [] # Lines
 
-		ltype = self.integrate_types(self.configuration.types, self.theme)
-		from fault.syntax.format import Fields
-		fs_parser = Fields(process.fs_pwd, fs_isolate_path)
+		self.title = ''
+		self.process = Process(
+			System(
+				'process',
+				system.identity.sys_credentials,
+				'',
+				self.host.identity.sys_identity,
+				self.title,
+			),
+		)
 
-		self.types = {
-			"": ltype, # Root type.
-			'filesystem': ltype.replace(lf_fields=fs_parser),
-		}
+		self.types = self.integrate_types(self.configuration.types, self.theme)
 		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
 
 		exepath = self.executable/'transcript'
@@ -220,23 +250,20 @@ class Session(Core):
 		self.sources = Directory()
 		self.sources.insert_resource(self.transcript)
 
-		self.process = Execution(
-			None, None,
-			System(
-				'process',
-				system.identity.sys_credentials,
-				'',
-				system.identity.sys_identity,
-			),
-			'utf-8',
-			None,
-			[],
-		)
-
 		self.systems = {
 			self.host.identity: self.host,
 			self.process.identity: self.process,
 		}
+
+	@comethod('session', 'retitle')
+	def retitle(self, title):
+		self.title = title
+
+		procid = self.process.identity
+		del self.systems[procid]
+
+		self.process.identity = procid._replace(sys_title=title)
+		self.systems[self.process.identity] = self.process
 
 	def configure_logfile(self, logfile):
 		"""
@@ -293,7 +320,7 @@ class Session(Core):
 
 	def fs_forms(self, source, pathcontext):
 		"""
-		# Allocate and configure the syntax type for editing the path in &source.
+		# Allocate and configure the syntax type for editing the location.
 
 		# [ Parameters ]
 		# /source/
@@ -317,6 +344,32 @@ class Session(Core):
 		pathfields = replace(lf.lf_fields, separation=pathctx)
 
 		return lf.replace(lf_fields=pathfields)
+
+	def pg_forms(self, source:Resource) -> Reformulations:
+		"""
+		# Allocate and configure the syntax type for editing the prompt.
+
+		# [ Parameters ]
+		# /source/
+			# The &Resource instance holding the system context.
+
+		# [ Returns ]
+		# The reconfigured &Reformulations instance.
+		"""
+
+		from dataclasses import replace
+		lf = source.forms
+
+		ctx = replace(
+			lf.lf_fields.separation,
+			source=source,
+			executions=self.systems,
+		)
+
+		# Override the separation context to read the first line of &source.
+		pg_fields = replace(lf.lf_fields, separation=ctx)
+
+		return lf.replace(lf_fields=pg_fields)
 
 	@staticmethod
 	def load_resource(source):
@@ -407,14 +460,14 @@ class Session(Core):
 	def allocate_prompt_resource(self):
 		ref = Reference(
 			self.process.identity,
-			'lambda',
+			'execution',
 			'.prompt',
 			# Point at a division path allowing use as a resource.
 			files.root@'/dev',
 			files.root@'/dev/null',
 		)
 
-		return Resource(ref, self.load_type('lambda'))
+		return Resource(ref, self.load_type('execution'))
 
 	def allocate_location_resource(self, reference):
 		ref = Reference(
@@ -462,6 +515,7 @@ class Session(Core):
 		l.keyboard = self.keyboard
 
 		p = Refraction(self.allocate_prompt_resource())
+		p.forms = self.pg_forms(p.source)
 		p.keyboard = self.keyboard
 
 		if rf.reporting(self.prompting):
@@ -780,7 +834,11 @@ class Session(Core):
 			iaproc = 'none'
 		else:
 			iaproc = '.'.join((receiver.__class__.__name__, ev_op.__name__))
-		self.log(f"{key} -> ({ev_cat}/{ipath}) -> {iaproc}")
+
+		if key:
+			key += ' -> '
+
+		self.log(f"{key}({ev_cat}/{ipath}) -> {iaproc}")
 
 	@staticmethod
 	def discard(*args):
@@ -792,18 +850,20 @@ class Session(Core):
 		ref = focus['content'].source.origin
 		return session.systems[ref.ref_system]
 
-	# Resolves the arguments for AI parameters.
+	# Application Instruction Reference Selectors
 	airs = {
 		'session': (lambda s, f, k: s),
 		'sources': (lambda s, f, k: s.sources),
 		'system': (lambda s, f, k: s._content_system(s, f)),
+		'process': (lambda s, f, k: s.process),
+		'host': (lambda s, f, k: s.host),
 		'log': (lambda s, f, k: s.log),
 		'focus': (lambda s, f, k: f),
 		'key': (lambda s, f, k: k),
 		'device': (lambda s, f, k: s.device),
 		'cellstatus': (lambda s, f, k: s.device.cursor_cell_status()),
 		'statusmodifiers': (lambda s, f, k: s._frame_status_modifiers(f)),
-		'text': (lambda s, f, k: s.device.transfer_text()),
+		'text': (lambda s, f, k: f.get('text', s.device.transfer_text())),
 		'view': (lambda s, f, k: f['view']),
 		'frame': (lambda s, f, k: f['frame']),
 		'dpath': (lambda s, f, k: f['frame'].focus_path),
@@ -1243,7 +1303,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	configuration.load_sections()
 	device = Device()
 
-	host = Execution(
+	host = Host(
 		IOManager.allocate(device.synchronize_io),
 		files.root,
 		System(
@@ -1262,6 +1322,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	host.retool()
 
 	editor = Session(configuration, host, path, device)
+	editor.process.rehash([Host, Process, Resource, Refraction, Frame, Session])
 	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 	if 'instructions' not in config['traces']:
 		editor.trace = editor.discard
@@ -1272,6 +1333,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	else:
 		session_file = (query.home()/'.syntax/Frames')
 	editor.fs_snapshot = session_file
+	editor.retitle(editor.fs_snapshot.identifier)
 
 	try:
 		editor.load()

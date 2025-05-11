@@ -70,6 +70,41 @@ def test_System_variant(test):
 		test/s3.variant(s1) == False
 		test/s3.variant(s2) == False
 
+def test_System_structure(test):
+	"""
+	# - &module.System.structure
+
+	# Validate class instantiation from a string.
+	"""
+
+	ss = module.System.structure
+
+	sys, path = ss('method://host[name]/path/to/file')
+	test/sys.sys_authorization == ''
+	test/sys.sys_credentials == ''
+	test/sys.sys_method == 'method'
+	test/sys.sys_identity == 'host'
+	test/sys.sys_title == 'name'
+	test/path == ['path', 'to', 'file']
+
+	# No title
+	sys, path = ss('method://host/path/to/file')
+	test/sys.sys_authorization == ''
+	test/sys.sys_credentials == ''
+	test/sys.sys_method == 'method'
+	test/sys.sys_identity == 'host'
+	test/sys.sys_title == ''
+	test/path == ['path', 'to', 'file']
+
+	# Everything
+	sys, path = ss('method://user:auth@host[label]/path/to/file')
+	test/sys.sys_credentials == 'user'
+	test/sys.sys_authorization == 'auth'
+	test/sys.sys_method == 'method'
+	test/sys.sys_identity == 'host'
+	test/sys.sys_title == 'label'
+	test/path == ['path', 'to', 'file']
+
 def test_Reference_string(test):
 	"""
 	# - &module.Reference.__str__

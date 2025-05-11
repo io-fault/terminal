@@ -13,7 +13,7 @@ km_meta = "Meta"
 km_void = "None"
 km_d = "Distribution"
 
-# Status modifiers used to control actions based on the selected view.
+# Status modifiers used to control actions based on the focused view.
 km_location = "Location"
 km_writing = "Writing"
 km_executing = "Executing"
@@ -144,7 +144,8 @@ if 'controls':
 	a(('c', km_executing, km_conceal, km_control), 'frame/cancel')
 	a(('c', km_writing, km_control), 'frame/cancel')
 
-	a((k_space, km_control), 'frame/prepare/command')
+	a((k_space, km_control), 'frame/prompt/host')
+	a((k_space, km_shift, km_control), 'frame/prompt/process')
 
 	a(('a'), 'cursor/transition/insert/end-of-field')
 	a(('a', km_shift), 'cursor/transition/insert/end-of-line')
@@ -195,10 +196,10 @@ if 'controls':
 	a(('m', km_control), 'cursor/copy/line/selection/ahead')
 	a(('m', km_control, km_shift), 'cursor/copy/line/selection/behind')
 
-	a(('n'), 'cursor/find/next/pattern')
-	a(('n', km_shift), 'cursor/find/previous/pattern')
-	a(('n', km_shift, km_control), 'cursor/configure/find/pattern')
-	a(('n', km_control), 'frame/prompt/find')
+	a(('n'), 'cursor/seek/match/next')
+	a(('n', km_shift), 'cursor/seek/match/previous')
+	a(('n', km_shift, km_control), 'cursor/configure/pattern')
+	a(('n', km_control), 'frame/prompt/pattern')
 
 	a(('o'), 'cursor/open/ahead')
 	a(('o', km_shift), 'cursor/open/behind')
@@ -211,7 +212,7 @@ if 'controls':
 	a(('r'), 'cursor/transition/capture/replace')
 	a(('r', km_shift), 'cursor/swap/case/character')
 	a(('r', km_shift, km_d), 'cursor/swap/case/selected/characters')
-	a(('r', km_control), 'frame/prompt/rewrite')
+	a(('r', km_control), 'frame/prompt/replace')
 	a(('r', km_meta), 'view/refresh')
 
 	a(('s'), 'cursor/select/field/series')
