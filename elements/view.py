@@ -1439,52 +1439,80 @@ class Refraction(Core):
 		self.source.checkpoint()
 		self.keyboard.set('control')
 
-	@comethod('cursor', 'insert/character')
-	def c_insert_characters(self, text, quantity=1):
-		lo, co = (x.get() for x in self.focus)
-		src = self.source
+	@comethod('cursor', 'insert/characters')
+	def c_insert_characters(self, resource, cursor, text, quantity=1):
+		lo, co = cursor
+		src = resource
 		string = text * quantity
+
+		# Handle empty document case.
 		if lo == 0 and src.ln_count() == 0:
 			src.ln_initialize()
+
 		src.insert_codepoints(lo, co, string)
 		src.commit()
 
-	@comethod('cursor', 'indentation/increment')
+	@comethod('cursor', 'insert/text')
+	@comethod('elements', 'insert')
+	def c_insert_text(self, resource, cursor, text, quantity=1):
+		lo, co = cursor
+		src = resource
+
+		src.splice_text(src.forms.lf_lines, lo, co, text * quantity)
+		src.checkpoint()
+
+	@comethod('cursor', 'insert/annotation')
+	def c_insert_annotation(self, resource, cursor, quantity=1):
+		lo, co = cursor
+		src = resource
+
+		ca = self.annotation
+		if ca is None:
+			return
+
+		string = ''
+		for i in range(quantity):
+			string += ca.insertion()
+
+		src.insert_codepoints(lo, co, string)
+		src.commit()
+
+	@comethod('cursor', 'insert/indentation')
 	def c_increase_indentation_level(self, quantity=1):
 		lo = self.focus[0].get()
 		src = self.source
 		src.increase_indentation(lo, quantity)
 		src.commit()
 
-	@comethod('cursor', 'indentation/decrement')
+	@comethod('cursor', 'delete/indentation')
 	def c_decrease_indentation_level(self, quantity=1):
 		lo = self.focus[0].get()
 		src = self.source
 		src.adjust_indentation(lo, lo+1, -quantity)
 		src.commit()
 
-	@comethod('cursor', 'indentation/zero')
+	@comethod('cursor', 'zero/indentation')
 	def c_delete_indentation(self):
 		lo = self.focus[0].get()
 		src = self.source
 		src.delete_indentation(lo, lo+1)
 		src.commit()
 
-	@comethod('cursor', 'indentation/increment/selected')
+	@comethod('cursor', 'insert/indentation/selected')
 	def c_increase_indentation_levels_v(self, quantity=1):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 		src.adjust_indentation(start, stop, quantity)
 		src.checkpoint()
 
-	@comethod('cursor', 'indentation/decrement/selected')
+	@comethod('cursor', 'delete/indentation/selected')
 	def c_decrease_indentation_levels_v(self, quantity=1):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
 		src.adjust_indentation(start, stop, -quantity)
 		src.checkpoint()
 
-	@comethod('cursor', 'indentation/zero/selected')
+	@comethod('cursor', 'zero/indentation/selected')
 	def c_delete_indentation_v(self):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
@@ -1839,30 +1867,6 @@ class Refraction(Core):
 		src = self.source
 
 		d = src.join(lo, quantity)
-		src.commit()
-
-	@comethod('cursor', 'insert/text')
-	@comethod('elements', 'insert')
-	def c_insert_transfer_text(self, text):
-		src = self.source
-
-		lo = self.focus[0].get()
-		co = self.focus[1].get()
-		lo, co, r = src.splice_text(src.forms.lf_lines, lo, co, text)
-		src.checkpoint()
-
-	@comethod('cursor', 'insert/annotation')
-	def c_insert_annotation(self, quantity):
-		for i in range(quantity):
-			cq = self.annotation
-			if cq is None:
-				return
-
-			src = self.source
-			string = cq.insertion()
-			lo, co = (x.get() for x in self.focus)
-
-			src.insert_codepoints(lo, co, string)
 		src.commit()
 
 	# Modes

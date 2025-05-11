@@ -90,7 +90,7 @@ def a(ks, method, *args):
 
 # Modes
 control = Mode(('cursor', 'move/jump/character', ()))
-insert = Mode(('cursor', 'insert/character', ()))
+insert = Mode(('cursor', 'insert/characters', ()))
 annotations = Mode(('cursor', 'transition/annotation/void', ()))
 relay = Mode(('view', 'dispatch/device/status', ()))
 
@@ -125,13 +125,13 @@ for mode in (control, insert):
 	a((0x21F1), 'view/scroll/first')
 	a((0x21F2), 'view/scroll/last')
 
-	a((0x21E5), 'cursor/indentation/increment')
-	a((0x21E5, km_shift), 'cursor/indentation/decrement')
+	a((0x21E5), 'cursor/insert/indentation')
+	a((0x21E5, km_shift), 'cursor/delete/indentation')
 	a((0x21E5, km_meta), 'frame/switch/view/next')
 	a((0x21E5, km_shift, km_meta), 'frame/switch/view/previous')
 
-	a((0x21E5, km_void, km_d), 'cursor/indentation/increment/selected')
-	a((0x21E5, km_shift, km_d), 'cursor/indentation/decrement/selected')
+	a((0x21E5, km_void, km_d), 'cursor/insert/indentation/selected')
+	a((0x21E5, km_shift, km_d), 'cursor/delete/indentation/selected')
 
 if 'controls':
 	mode = control
@@ -221,8 +221,8 @@ if 'controls':
 
 	a(('v'), 'cursor/transition/annotation/select')
 	a(('v', km_shift), 'cursor/annotation/rotate')
-	a(('v', km_control), 'cursor/indentation/zero')
-	a(('v', km_control, km_d), 'cursor/indentation/zero/selected')
+	a(('v', km_control), 'cursor/zero/indentation')
+	a(('v', km_control, km_d), 'cursor/zero/indentation/selected')
 	a(('v', km_meta), 'cursor/paste/after')
 	a(('v', km_meta, km_shift), 'cursor/paste/before')
 
