@@ -2417,9 +2417,6 @@ class Frame(Core):
 
 		previous = self.returns[self.paths[dpath]]
 		if previous is not None:
-			# Clear deltas before switch.
-			del self.deltas[:]
-
 			self.chpath(dpath, previous.source.origin)
 			yield from self.attach(dpath, previous)
 			self.focus = previous
