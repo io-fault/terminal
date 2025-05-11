@@ -2760,13 +2760,13 @@ class Frame(Core):
 			picell = Glyph(textcolor=ccell.cellcolor, codepoint=ord(ic))
 			yield vstat.area.__class__(y, x, 1, 1), (picell,)
 
-	@comethod('frame', 'view/next')
-	def f_select_next_view(self, dpath, quantity=1):
-		self.switch((self.vertical, self.division + quantity))
+	@comethod('frame', 'switch/view/next')
+	def f_switch_next_view(self, dpath, quantity=1):
+		self.switch((dpath[0], dpath[1] + quantity))
 
-	@comethod('frame', 'view/previous')
-	def f_select_previous_view(self, dpath, quantity=1):
-		self.switch((self.vertical, self.division - quantity))
+	@comethod('frame', 'switch/view/previous')
+	def f_switch_previous_view(self, dpath, quantity=1):
+		self.switch((dpath[0], dpath[1] - quantity))
 
 	@comethod('frame', 'view/return')
 	def f_select_return_view(self):

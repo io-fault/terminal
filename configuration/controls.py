@@ -127,8 +127,8 @@ for mode in (control, insert):
 
 	a((0x21E5), 'cursor/indentation/increment')
 	a((0x21E5, km_shift), 'cursor/indentation/decrement')
-	a((0x21E5, km_meta), 'frame/view/next')
-	a((0x21E5, km_shift, km_meta), 'frame/view/previous')
+	a((0x21E5, km_meta), 'frame/switch/view/next')
+	a((0x21E5, km_shift, km_meta), 'frame/switch/view/previous')
 
 	a((0x21E5, km_void, km_d), 'cursor/indentation/increment/selected')
 	a((0x21E5, km_shift, km_d), 'cursor/indentation/decrement/selected')
@@ -179,12 +179,12 @@ if 'controls':
 	a(('j'), 'cursor/move/forward/line')
 	a(('j', km_shift), 'cursor/move/stop/line')
 	a(('j', km_control), 'cursor/move/forward/line/void')
-	a(('j', km_meta), 'frame/view/next')
+	a(('j', km_meta), 'frame/switch/view/next')
 
 	a(('k'), 'cursor/move/backward/line')
 	a(('k', km_shift), 'cursor/move/start/line')
 	a(('k', km_control), 'cursor/move/backward/line/void')
-	a(('k', km_meta), 'frame/view/previous')
+	a(('k', km_meta), 'frame/switch/view/previous')
 
 	a(('l'), 'cursor/select/indentation')
 	a(('l', km_shift), 'cursor/select/indentation/level')

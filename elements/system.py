@@ -473,7 +473,7 @@ class Process(WorkContext):
 		# First argument is used as quantity if it is an integer string.
 		try:
 			q = int(cmd[1])
-		except ValueError:
+		except (IndexError, ValueError):
 			q = 1
 			i = 1
 		else:
