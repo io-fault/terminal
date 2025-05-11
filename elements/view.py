@@ -2758,16 +2758,16 @@ class Frame(Core):
 			yield vstat.area.__class__(y, x, 1, 1), (picell,)
 
 	@comethod('frame', 'switch/view/next')
-	def f_switch_next_view(self, dpath, quantity=1):
+	def f_switch_view_next(self, dpath, quantity=1):
 		self.switch((dpath[0], dpath[1] + quantity))
 
 	@comethod('frame', 'switch/view/previous')
-	def f_switch_previous_view(self, dpath, quantity=1):
+	def f_switch_view_previous(self, dpath, quantity=1):
 		self.switch((dpath[0], dpath[1] - quantity))
 
-	@comethod('frame', 'view/return')
-	def f_select_return_view(self):
-		self.deltas.extend(self.returnview((self.vertical, self.division)))
+	@comethod('frame', 'switch/view/return')
+	def f_switch_view_return(self, dpath):
+		self.deltas.extend(self.returnview(dpath))
 
 	@comethod('frame', 'prompt/host')
 	def f_prompt_host(self, prompt, host, dpath):

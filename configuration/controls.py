@@ -136,7 +136,7 @@ for mode in (control, insert):
 if 'controls':
 	mode = control
 
-	a((k_return, km_writing, km_control), 'frame/view/return')
+	a((k_return, km_writing, km_control), 'frame/switch/view/return')
 	a((k_return, km_writing, km_shift), 'cursor/move/backward/line/void')
 	a((k_return, km_writing), 'cursor/move/forward/line/void')
 	a(('c', km_location, km_control), 'frame/cancel')
