@@ -917,14 +917,16 @@ class Session(Core):
 				ixn, mods = key.strip('(]').split(')[')
 				itype, methodpath = ixn.split('/', 1)
 				args = ()
+				tkey = ''
 			else:
 				# Key Translation
 				mode, xev = self.keyboard.interpret(key)
 				itype, methodpath, args = xev
+				tkey = key
 
 			phy, op, sels = self._oc(itype, methodpath)
 			# --trace-instructions
-			self.trace(phy, key, itype, methodpath, op)
+			self.trace(phy, tkey, itype, methodpath, op)
 
 			return op(*(x(self, self._focus, key) for x in sels), *args) # User Event Operation
 		except Exception as operror:
