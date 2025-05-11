@@ -245,13 +245,22 @@ class Refraction(Core):
 		# Relocate the cursor to the &co codepoint offset in the line &lo.
 		"""
 
-		src = self.source
-		li = src.sole(lo)
-		width = self.area.span
-
 		self.focus[0].set(lo)
-		self.focus[1].set(co if co is not None else li.ln_length)
-		self.recursor()
+		self.focus[1].set(co)
+
+	def seek_line(self, offset:int):
+		"""
+		# Move the cursor's line position to &offset.
+		"""
+
+		self.focus[0].set(offset)
+
+	def seek_codepoint(self, offset:int):
+		"""
+		# Move the cursor's character position to &offset.
+		"""
+
+		self.focus[1].set(offset)
 
 	@comethod('cursor', 'seek/absolute/line')
 	def c_seek_absolute(self, quantity=0):
@@ -263,11 +272,13 @@ class Refraction(Core):
 			ln = self.source.ln_count() // 2
 
 		self.seek(ln, 0)
+		self.recursor()
 
 	@comethod('cursor', 'seek/relative/line')
 	def c_seek_relative(self, quantity=0):
 		ln = self.focus[0].get() + quantity
 		self.seek(ln, 0)
+		self.recursor()
 
 	def recursor(self):
 		"""
@@ -1036,26 +1047,26 @@ class Refraction(Core):
 		return (cursor_start, cursor_stop), (rstart, rstop), cells
 		# yield ctx.__class__(vy + rln, vx, 1, hedge), cells[hoffset:hoffset+hedge]
 
-	@comethod('cursor', 'move/backward/field')
+	@comethod('cursor', 'seek/field/previous')
 	def c_select_previous_field(self, quantity=1):
 		t = self.field(-quantity)
 		self.focus[1].restore((t.start, t.start, t.stop))
 
-	@comethod('cursor', 'move/forward/field')
+	@comethod('cursor', 'seek/field/next')
 	def c_select_next_field(self, quantity=1):
 		t = self.field(quantity)
 		self.focus[1].restore((t.start, t.start, t.stop))
 
-	@comethod('cursor', 'move/first/character')
-	def c_move_start_of_line(self):
-		self.focus[1].set(0)
+	@comethod('cursor', 'seek/character/first')
+	def c_seek_character_first(self):
+		self.seek_codepoint(0)
 
-	@comethod('cursor', 'move/last/character')
-	def c_move_end_of_line(self):
-		self.focus[1].set(self.cwl().ln_length)
+	@comethod('cursor', 'seek/character/last')
+	def c_seek_character_last(self):
+		self.seek_codepoint(self.cwl().ln_length)
 
-	@comethod('cursor', 'move/start/character')
-	def c_move_start_of_range(self):
+	@comethod('cursor', 'seek/selected/character/first')
+	def c_seek_selected_character_first(self):
 		h = self.focus[1]
 		if h.offset == 0:
 			n = self.field(-1)
@@ -1072,8 +1083,8 @@ class Refraction(Core):
 
 		self.recursor()
 
-	@comethod('cursor', 'move/stop/character')
-	def c_move_end_of_range(self):
+	@comethod('cursor', 'seek/selected/character/last')
+	def c_seek_selected_character_last(self):
 		h = self.focus[1]
 		if h.offset == h.magnitude:
 			n = self.field(+1)
@@ -1087,44 +1098,45 @@ class Refraction(Core):
 
 		self.recursor()
 
-	@comethod('cursor', 'move/forward/character')
-	def c_move_next_character(self, quantity=1):
-		self.focus[1].set(self.unit(quantity))
+	@comethod('cursor', 'seek/character/next')
+	def c_seek_character_next(self, quantity=1):
+		self.seek_codepoint(self.unit(quantity))
 
-	@comethod('cursor', 'move/backward/character')
-	def c_move_back_character(self, quantity=1):
-		self.focus[1].set(self.unit(-quantity))
+	@comethod('cursor', 'seek/character/previous')
+	def c_seek_character_previous(self, quantity=1):
+		self.seek_codepoint(self.unit(-quantity))
 
-	@comethod('cursor', 'move/jump/string')
-	@comethod('cursor', 'move/jump/character')
-	def c_move_to_character(self, text, quantity=1):
-		h = self.focus[1]
-		cwl = self.cwl().ln_content
+	@comethod('cursor', 'seek/character/pattern')
+	def c_seek_character_pattern(self, resource, cursor, text, quantity=1):
+		src = resource
+		lo, co = cursor
+		cwl = src.sole(lo).ln_content
 
 		for i in range(quantity):
-			offset = cwl.find(text, h.get() + 1)
-			if offset > -1:
-				h.set(offset)
-			else:
+			offset = cwl.find(text, co + 1)
+			if offset == -1:
 				break
+			co = offset
 
-	@comethod('cursor', 'move/forward/line')
-	def c_move_next_line(self, quantity=1):
+		self.seek_codepoint(co)
+
+	@comethod('cursor', 'seek/line/next')
+	def c_seek_line_next(self, quantity=1):
 		v = self.focus[0]
 		ln = v.get() + quantity
 		v.set(min(ln, self.source.ln_count()))
 
 		self.recursor()
 
-	@comethod('cursor', 'move/backward/line')
-	def c_move_back_line(self, quantity=1):
+	@comethod('cursor', 'seek/line/previous')
+	def c_seek_line_previous(self, quantity=1):
 		v = self.focus[0]
 		ln = v.get() + -quantity
 		v.set(max(0, ln))
 
 		self.recursor()
 
-	@comethod('cursor', 'move/forward/line/void')
+	@comethod('cursor', 'seek/void/line/next')
 	def c_move_next_void(self, quantity=1):
 		src = self.source
 
@@ -1138,7 +1150,7 @@ class Refraction(Core):
 			self.focus[0].set(lo)
 		self.recursor()
 
-	@comethod('cursor', 'move/backward/line/void')
+	@comethod('cursor', 'seek/void/line/previous')
 	def c_move_back_void(self, quantity=1):
 		src = self.source
 
@@ -1152,9 +1164,9 @@ class Refraction(Core):
 			self.focus[0].set(lo)
 		self.recursor()
 
-	@comethod('cursor', 'move/start/line')
-	def c_seek_start_line(self):
-		src = self.source
+	@comethod('cursor', 'seek/selected/line/first')
+	def c_seek_selected_line_first(self, resource):
+		src = resource
 		start, lo, stop = self.focus[0].snapshot()
 
 		if lo <= start:
@@ -1172,9 +1184,9 @@ class Refraction(Core):
 
 		self.recursor()
 
-	@comethod('cursor', 'move/stop/line')
-	def c_seek_stop_line(self):
-		src = self.source
+	@comethod('cursor', 'seek/selected/line/last')
+	def c_seek_selected_line_last(self, resource):
+		src = resource
 		start, lo, stop = self.focus[0].snapshot()
 
 		if lo >= stop - 1:
@@ -1287,18 +1299,18 @@ class Refraction(Core):
 
 		self.focus[0].restore((hstart, lo, hstop))
 
-	@comethod('cursor', 'move/line/start')
+	@comethod('cursor', 'configure/first/selected/line')
 	def c_move_line_start(self):
 		offset = self.focus[0].offset
 		self.focus[0].offset = 0
 		self.focus[0].datum += offset
 		self.focus[0].magnitude -= offset
 
-	@comethod('cursor', 'move/line/stop')
+	@comethod('cursor', 'configure/last/selected/line')
 	def c_move_line_stop(self):
 		self.focus[0].halt(+1)
 
-	@comethod('cursor', 'move/bisect/line')
+	@comethod('cursor', 'seek/line/bisection')
 	def c_move_bisect_line(self, quantity=1):
 		l = self.focus[0].magnitude
 		self.focus[0].offset = (l // (2 ** quantity))
@@ -1564,17 +1576,17 @@ class Refraction(Core):
 		src.insert_lines(lo + 1, [Line(-1, il, "")] * quantity)
 		src.commit()
 
-		self.focus[0].set(lo + 1)
+		self.seek_line(lo + 1)
 		self.keyboard.set('insert')
 
 	@comethod('cursor', 'open/first')
-	def c_open_first(self, quantity=1):
-		src = self.source
+	def c_open_first(self, resource, cursor, quantity=1):
+		src = resource
 
 		src.insert_lines(0, [Line(-1, 0, "")] * quantity)
 		src.checkpoint()
 
-		self.focus[0].set(0)
+		self.seek_line(0)
 		self.keyboard.set('insert')
 		self.v_scroll_first()
 
@@ -1586,7 +1598,7 @@ class Refraction(Core):
 		src.insert_lines(lo, [Line(-1, 0, "")] * quantity)
 		src.checkpoint()
 
-		self.focus[0].set(lo)
+		self.seek_line(lo)
 		self.keyboard.set('insert')
 		self.v_scroll_last()
 

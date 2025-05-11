@@ -89,7 +89,7 @@ def a(ks, method, *args):
 	mode.assign(ki, itype, action, *args)
 
 # Modes
-control = Mode(('cursor', 'move/jump/character', ()))
+control = Mode(('cursor', 'seek/character/pattern', ()))
 insert = Mode(('cursor', 'insert/characters', ()))
 annotations = Mode(('cursor', 'transition/annotation/void', ()))
 relay = Mode(('view', 'dispatch/device/status', ()))
@@ -137,8 +137,8 @@ if 'controls':
 	mode = control
 
 	a((k_return, km_writing, km_control), 'frame/switch/view/return')
-	a((k_return, km_writing, km_shift), 'cursor/move/backward/line/void')
-	a((k_return, km_writing), 'cursor/move/forward/line/void')
+	a((k_return, km_writing, km_shift), 'cursor/seek/void/line/previous')
+	a((k_return, km_writing), 'cursor/seek/void/line/next')
 	a(('c', km_location, km_control), 'frame/cancel')
 	a(('c', km_executing, km_retain, km_control), 'frame/refocus')
 	a(('c', km_executing, km_conceal, km_control), 'frame/cancel')
@@ -159,31 +159,29 @@ if 'controls':
 	a(('c', km_meta), 'cursor/copy/selected/lines')
 	a(('c', km_shift, km_meta), 'cursor/cut/selected/lines')
 
-	a(('d'), 'cursor/move/backward/field')
-	a(('d', km_shift), 'cursor/move/start/character')
-	a(('d', km_control), 'cursor/horizontal/query/backward')
+	a(('d'), 'cursor/seek/field/previous')
+	a(('d', km_shift), 'cursor/seek/selected/character/first')
 
-	a(('f'), 'cursor/move/forward/field')
-	a(('f', km_shift), 'cursor/move/stop/character')
-	a(('f', km_control), 'cursor/horizontal/query/forward')
+	a(('f'), 'cursor/seek/field/next')
+	a(('f', km_shift), 'cursor/seek/selected/character/last')
 
 	a(('g', km_control), 'frame/prompt/seek/absolute')
 	a(('g', km_shift, km_control), 'frame/prompt/seek/relative')
 
 	a(('h'), 'cursor/select/line')
-	a(('h', km_shift), 'cursor/move/bisect/line')
+	a(('h', km_shift), 'cursor/seek/line/bisection')
 
 	a(('i'), 'cursor/transition/insert')
 	a(('i', km_shift), 'cursor/transition/insert/start-of-line')
 
-	a(('j'), 'cursor/move/forward/line')
-	a(('j', km_shift), 'cursor/move/stop/line')
-	a(('j', km_control), 'cursor/move/forward/line/void')
+	a(('j'), 'cursor/seek/line/next')
+	a(('j', km_shift), 'cursor/seek/selected/line/last')
+	a(('j', km_control), 'cursor/seek/void/line/next')
 	a(('j', km_meta), 'frame/switch/view/next')
 
-	a(('k'), 'cursor/move/backward/line')
-	a(('k', km_shift), 'cursor/move/start/line')
-	a(('k', km_control), 'cursor/move/backward/line/void')
+	a(('k'), 'cursor/seek/line/previous')
+	a(('k', km_shift), 'cursor/seek/selected/line/first')
+	a(('k', km_control), 'cursor/seek/void/line/previous')
 	a(('k', km_meta), 'frame/switch/view/previous')
 
 	a(('l'), 'cursor/select/indentation')
@@ -240,13 +238,13 @@ if 'controls':
 
 	a(('y'), 'cursor/transition/distribution')
 
-	a(('z'), 'cursor/move/line/stop')
-	a(('z', km_shift), 'cursor/move/line/start')
+	a(('z'), 'cursor/configure/last/selected/line')
+	a(('z', km_shift), 'cursor/configure/first/selected/line')
 
-	a((k_space), 'cursor/move/forward/character')
-	a((k_space, km_shift), 'cursor/move/backward/character')
-	a((0x2326), 'cursor/move/backward/character')
-	a((0x232B), 'cursor/move/backward/character')
+	a((k_space), 'cursor/seek/character/next')
+	a((k_space, km_shift), 'cursor/seek/character/previous')
+	a((0x2326), 'cursor/seek/character/previous')
+	a((0x232B), 'cursor/seek/character/previous')
 
 if 'annotations':
 	mode = annotations
@@ -264,10 +262,10 @@ if 'inserts':
 	mode = insert
 	a((k_return, km_writing), 'cursor/line/break/follow')
 
-	a(('a', km_control), 'cursor/move/first/character')
+	a(('a', km_control), 'cursor/seek/character/first')
 	a(('c', km_control), 'cursor/abort')
 	a(('d', km_control), 'cursor/commit')
-	a(('e', km_control), 'cursor/move/last/character')
+	a(('e', km_control), 'cursor/seek/character/last')
 	a(('f', km_control), 'cursor/annotation/select/next')
 	a(('g', km_control), 'cursor/insert/annotation')
 	a(('k', km_control), 'cursor/delete/following')
@@ -281,10 +279,10 @@ if 'inserts':
 	a((0x232B), 'cursor/delete/preceding/character')
 	a((0x2326), 'cursor/delete/preceding/character')
 
-	a((0x2190), 'cursor/move/backward/character')
-	a((0x2191), 'cursor/move/first/character')
-	a((0x2192), 'cursor/move/forward/character')
-	a((0x2193), 'cursor/move/last/character')
+	a((0x2190), 'cursor/seek/character/previous')
+	a((0x2191), 'cursor/seek/character/first')
+	a((0x2192), 'cursor/seek/character/next')
+	a((0x2193), 'cursor/seek/character/last')
 
 	a((k_space, km_control), 'cursor/insert/string', ("\x1f",))
 
