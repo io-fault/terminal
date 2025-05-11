@@ -89,7 +89,7 @@ copy: (id) sender
 	CellMatrix *cm = self.root.contentView;
 
 	cm.device.cmd_status->st_receiver = copy_string;
-	dispatch_application_instruction(cm, nil, 0, ai_elements_select);
+	dispatch_application_instruction(cm, nil, 1, ai_elements_select);
 }
 
 - (void)
@@ -98,8 +98,8 @@ cut: (id) sender
 	CellMatrix *cm = self.root.contentView;
 
 	cm.device.cmd_status->st_receiver = copy_string;
-	dispatch_application_instruction(cm, nil, 0, ai_elements_select);
-	dispatch_application_instruction(cm, nil, 0, ai_elements_delete);
+	dispatch_application_instruction(cm, nil, 1, ai_elements_select);
+	dispatch_application_instruction(cm, nil, 1, ai_elements_delete);
 }
 
 - (void)
@@ -110,7 +110,7 @@ paste: (id) sender
 	NSPasteboard *pb = NSPasteboard.generalPasteboard;
 	NSString *text = [pb stringForType: NSPasteboardTypeString];
 
-	dispatch_application_instruction(cm, text, 0, ai_elements_insert);
+	dispatch_application_instruction(cm, text, 1, ai_elements_insert);
 }
 
 /**
@@ -246,7 +246,7 @@ resizeCellImage: (id) sender
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
 	{
 		[cm configureCellImage];
-		dispatch_application_instruction(cm, nil, 0, ai_screen_resize);
+		dispatch_application_instruction(cm, nil, 1, ai_screen_resize);
 	}
 }
 
@@ -337,7 +337,7 @@ revertScreen: (id) sender
 	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
 	{
 		[cm configureCellImage];
-		dispatch_application_instruction(cm, nil, 0, ai_screen_resize);
+		dispatch_application_instruction(cm, nil, 1, ai_screen_resize);
 	}
 }
 
