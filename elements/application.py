@@ -862,6 +862,7 @@ class Session(Core):
 		'key': (lambda s, f, k: k),
 		'device': (lambda s, f, k: s.device),
 		'cellstatus': (lambda s, f, k: s.device.cursor_cell_status()),
+		'target': (lambda s, f, k: f['frame'].target(*s.device.cursor_cell_status())[1]),
 		'statusmodifiers': (lambda s, f, k: s._frame_status_modifiers(f)),
 		'text': (lambda s, f, k: f.get('text', s.device.transfer_text())),
 		'view': (lambda s, f, k: f['view']),

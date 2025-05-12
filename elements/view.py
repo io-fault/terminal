@@ -1421,31 +1421,16 @@ class Refraction(Core):
 		self.scroll(quantity.__add__)
 
 	@comethod('view', 'scroll')
-	def v_scroll(self, device, frame, quantity=1, *, shift=chr(0x21E7)):
-		ay, ax = device.cursor_cell_status()
-		fi, cursor_target = frame.target(ay, ax)
-
-		if shift in device.key(''):
-			targets = [cursor_target, frame.focus]
-		else:
-			targets = [cursor_target]
-
-		for rf in targets:
-			rf.v_seek_line_relative(quantity)
+	def v_scroll(self, view, target, key, quantity=1, *, shift=chr(0x21E7)):
+		target.v_seek_line_relative(-quantity)
+		if shift in key:
+			view.v_seek_line_relative(-quantity)
 
 	@comethod('view', 'pan')
-	def v_pan(self, device, frame, quantity=1, *, shift=chr(0x21E7)):
-		ay, ax = device.cursor_cell_status()
-		fi, cursor_target = frame.target(ay, ax)
-		rf = frame.focus
-
-		if shift in device.key(''):
-			targets = [cursor_target, frame.focus]
-		else:
-			targets = [cursor_target]
-
-		for rf in targets:
-			rf.v_seek_cell_relative(quantity)
+	def v_pan(self, view, target, key, quantity=1, *, shift=chr(0x21E7)):
+		target.v_seek_cell_relative(-quantity)
+		if shift in key:
+			view.v_seek_cell_relative(-quantity)
 
 	# Deltas
 
