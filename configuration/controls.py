@@ -115,15 +115,15 @@ for mode in (control, insert):
 
 	a(('[M1]'), 'frame/select/absolute')
 
-	a((0x2190), 'view/pan/backward')
-	a((0x2191), 'view/scroll/backward')
-	a((0x2192), 'view/pan/forward')
-	a((0x2193), 'view/scroll/forward')
+	a((0x2190), 'view/seek/cell/previous')
+	a((0x2191), 'view/seek/line/previous')
+	a((0x2192), 'view/seek/cell/next')
+	a((0x2193), 'view/seek/line/next')
 
-	a((0x21DF), 'view/scroll/forward/third')
-	a((0x21DE), 'view/scroll/backward/third')
-	a((0x21F1), 'view/scroll/first')
-	a((0x21F2), 'view/scroll/last')
+	a((0x21DF), 'view/seek/line/next/few')
+	a((0x21DE), 'view/seek/line/previous/few')
+	a((0x21F1), 'view/seek/line/first')
+	a((0x21F2), 'view/seek/line/last')
 
 	a((0x21E5), 'cursor/insert/indentation')
 	a((0x21E5, km_shift), 'cursor/delete/indentation')

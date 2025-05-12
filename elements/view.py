@@ -1355,26 +1355,26 @@ class Refraction(Core):
 		)
 		self.deltas.extend(self.refresh(self.visible[0]))
 
-	@comethod('view', 'scroll/forward')
-	def v_scroll_forward(self, quantity=1):
+	@comethod('view', 'seek/line/next')
+	def v_seek_line_next(self, quantity=1):
 		self.scroll(quantity.__add__)
 
-	@comethod('view', 'scroll/backward')
-	def v_scroll_backward(self, quantity=1):
+	@comethod('view', 'seek/line/previous')
+	def v_seek_line_previous(self, quantity=1):
 		self.scroll((-quantity).__add__)
 
-	@comethod('view', 'scroll/forward/third')
-	def v_scroll_forward_many(self, quantity=1):
+	@comethod('view', 'seek/line/next/few')
+	def v_seek_line_next_few(self, quantity=1):
 		q = ((self.area.lines // 3) or 1) * quantity
 		self.scroll(q.__add__)
 
-	@comethod('view', 'scroll/backward/third')
-	def v_scroll_backward_many(self, quantity=1):
+	@comethod('view', 'seek/line/previous/few')
+	def v_seek_line_previous_few(self, quantity=1):
 		q = ((self.area.lines // 3) or 1) * quantity
 		self.scroll((-q).__add__)
 
-	@comethod('view', 'pan/forward')
-	def v_pan_forward(self, quantity=3):
+	@comethod('view', 'seek/cell/next')
+	def v_seek_cell_next(self, quantity=3):
 		"""
 		# Adjust the horizontal position of the window forward by the given quantity.
 		"""
@@ -1385,8 +1385,8 @@ class Refraction(Core):
 		img.cell_offset += quantity
 		self.deltas.extend(self.v_render())
 
-	@comethod('view', 'pan/backward')
-	def v_pan_backward(self, quantity=3):
+	@comethod('view', 'seek/cell/previous')
+	def v_seek_cell_previous(self, quantity=3):
 		"""
 		# Adjust the horizontal position of the window forward by the given quantity.
 		"""
@@ -1398,13 +1398,21 @@ class Refraction(Core):
 		img.cell_offset = i
 		self.deltas.extend(self.v_render())
 
-	@comethod('view', 'scroll/first')
-	def v_scroll_first(self):
+	@comethod('view', 'seek/line/first')
+	def v_seek_line_first(self):
 		self.scroll((0).__mul__)
 
-	@comethod('view', 'scroll/last')
-	def v_scroll_last(self):
+	@comethod('view', 'seek/line/last')
+	def v_seek_line_last(self):
 		self.scroll(lambda x: self.source.ln_count())
+
+	@comethod('view', 'seek/line/absolute')
+	def v_seek_line_absolute(self, quantity=1):
+		self.scroll(lambda x: (quantity-1))
+
+	@comethod('view', 'seek/line/relative')
+	def v_seek_line_relative(self, quantity=0):
+		self.scroll(quantity.__add__)
 
 	@comethod('view', 'scroll')
 	def v_scroll(self, device, frame, quantity=1, *, shift=chr(0x21E7)):
@@ -1418,9 +1426,9 @@ class Refraction(Core):
 
 		for rf in targets:
 			if quantity < 0:
-				rf.v_scroll_forward(quantity=(-quantity))
+				rf.v_seek_line_next(quantity=(-quantity))
 			else:
-				rf.v_scroll_backward(quantity=(+quantity))
+				rf.v_seek_line_previous(quantity=(+quantity))
 
 	@comethod('view', 'pan')
 	def v_pan(self, device, frame, quantity=1, *, shift=chr(0x21E7)):
