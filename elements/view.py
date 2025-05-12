@@ -1373,30 +1373,36 @@ class Refraction(Core):
 		q = ((self.area.lines // 3) or 1) * quantity
 		self.scroll((-q).__add__)
 
+	@comethod('view', 'seek/cell/absolute')
+	def v_seek_cell_absolute(self, quantity=1):
+		quantity -= 1
+		img = self.image
+		if quantity > img.cell_offset // 2:
+			# Use relative scroll if further from zero.
+			return self.v_seek_cell_relative(quantity - img.cell_offset)
+
+		# Clamp offset to >= 0.
+		self.visible[1] = img.cell_offset = max(0, quantity)
+
+		img.pan_absolute(img.all(), img.cell_offset)
+		self.deltas.extend(self.v_render())
+
+	@comethod('view', 'seek/cell/relative')
+	def v_seek_cell_relative(self, quantity=0):
+		img = self.image
+		current = img.cell_offset
+		self.visible[1] = img.cell_offset = max(0, img.cell_offset + quantity)
+
+		img.pan_relative(img.all(), img.cell_offset - current)
+		self.deltas.extend(self.v_render())
+
 	@comethod('view', 'seek/cell/next')
 	def v_seek_cell_next(self, quantity=3):
-		"""
-		# Adjust the horizontal position of the window forward by the given quantity.
-		"""
-
-		self.visible[1] += quantity
-		img = self.image
-		img.pan_forward(img.all(), quantity)
-		img.cell_offset += quantity
-		self.deltas.extend(self.v_render())
+		self.v_seek_cell_relative(quantity)
 
 	@comethod('view', 'seek/cell/previous')
 	def v_seek_cell_previous(self, quantity=3):
-		"""
-		# Adjust the horizontal position of the window forward by the given quantity.
-		"""
-
-		i = max(0, self.visible[1] - quantity)
-		self.visible[1] = i
-		img = self.image
-		img.pan_absolute(img.all(), i)
-		img.cell_offset = i
-		self.deltas.extend(self.v_render())
+		self.v_seek_cell_relative(-quantity)
 
 	@comethod('view', 'seek/line/first')
 	def v_seek_line_first(self):
@@ -1425,10 +1431,7 @@ class Refraction(Core):
 			targets = [cursor_target]
 
 		for rf in targets:
-			if quantity < 0:
-				rf.v_seek_line_next(quantity=(-quantity))
-			else:
-				rf.v_seek_line_previous(quantity=(+quantity))
+			rf.v_seek_line_relative(quantity)
 
 	@comethod('view', 'pan')
 	def v_pan(self, device, frame, quantity=1, *, shift=chr(0x21E7)):
@@ -1442,10 +1445,7 @@ class Refraction(Core):
 			targets = [cursor_target]
 
 		for rf in targets:
-			if quantity < 0:
-				rf.v_pan_backward(quantity=(-quantity))
-			else:
-				rf.v_pan_forward(quantity=(+quantity))
+			rf.v_seek_cell_relative(quantity)
 
 	# Deltas
 
