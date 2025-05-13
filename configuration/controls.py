@@ -189,10 +189,10 @@ if 'controls':
 	a(('l', km_control), 'frame/open/resource')
 	a(('l', km_meta, km_control), 'session/open/log')
 
-	a(('m'), 'cursor/move/line/selection/ahead')
-	a(('m', km_shift), 'cursor/move/line/selection/behind')
-	a(('m', km_control), 'cursor/copy/line/selection/ahead')
-	a(('m', km_control, km_shift), 'cursor/copy/line/selection/behind')
+	a(('m'), 'cursor/move/selected/lines/ahead')
+	a(('m', km_shift), 'cursor/move/selected/lines/behind')
+	a(('m', km_control), 'cursor/copy/selected/lines/ahead')
+	a(('m', km_control, km_shift), 'cursor/copy/selected/lines/behind')
 
 	a(('n'), 'cursor/seek/match/next')
 	a(('n', km_shift), 'cursor/seek/match/previous')

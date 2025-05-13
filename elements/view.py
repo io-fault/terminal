@@ -1761,7 +1761,7 @@ class Refraction(Core):
 		src.delete_codepoints(lo, start, stop)
 		src.commit()
 
-	@comethod('cursor', 'move/line/selection/ahead')
+	@comethod('cursor', 'move/selected/lines/ahead')
 	def c_move_line_range_ahead(self):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
@@ -1783,7 +1783,7 @@ class Refraction(Core):
 			position -= vr
 		self.focus[0].restore((position, position-1, position + vr))
 
-	@comethod('cursor', 'move/line/selection/behind')
+	@comethod('cursor', 'move/selected/lines/behind')
 	def c_move_line_range_behind(self):
 		start, position, stop = self.focus[0].snapshot()
 		src = self.source
@@ -1810,12 +1810,12 @@ class Refraction(Core):
 
 		dl = src.replicate_lines(lo+offset, start, stop)
 
-	@comethod('cursor', 'copy/line/selection/ahead')
+	@comethod('cursor', 'copy/selected/lines/ahead')
 	def c_copy_line_range_ahead(self, quantity):
 		self.replicate_line_range(+1, quantity)
 		self.source.checkpoint()
 
-	@comethod('cursor', 'copy/line/selection/behind')
+	@comethod('cursor', 'copy/selected/lines/behind')
 	def c_copy_line_range_behind(self, quantity):
 		self.replicate_line_range(+0, quantity)
 		self.source.checkpoint()
