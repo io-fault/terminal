@@ -227,14 +227,14 @@ if 'controls':
 	a(('u'), 'resource/undo')
 	a(('u', km_shift), 'resource/redo')
 
-	a(('x'), 'cursor/delete/current/character')
+	a(('x'), 'cursor/delete/character/next')
 	a(('x', km_void, km_d), 'cursor/delete/selected/characters')
-	a(('x', km_shift), 'cursor/delete/preceding/character')
+	a(('x', km_shift), 'cursor/delete/character/previous')
 	a(('x', km_shift, km_d), 'cursor/delete/column')
 	a(('x', km_control, km_d), 'cursor/delete/selected/lines')
-	a(('x', km_control), 'cursor/delete/current/line')
+	a(('x', km_control), 'cursor/delete/line/next')
 	a(('x', km_meta), 'cursor/cut/selected/lines')
-	a(('x', km_shift, km_control), 'cursor/delete/preceding/line')
+	a(('x', km_shift, km_control), 'cursor/delete/line/previous')
 
 	a(('y'), 'cursor/transition/distribution')
 
@@ -273,11 +273,11 @@ if 'inserts':
 	a(('u', km_control), 'cursor/delete/leading')
 	a(('v', km_control), 'cursor/transition/capture/insert')
 	a(('v', km_control, km_meta), 'cursor/transition/capture/key')
-	a(('w', km_control), 'cursor/delete/preceding/field')
-	a(('x', km_control), 'cursor/delete/preceding/character')
+	a(('w', km_control), 'cursor/delete/field/previous')
+	a(('x', km_control), 'cursor/delete/character/previous')
 
-	a((0x232B), 'cursor/delete/preceding/character')
-	a((0x2326), 'cursor/delete/preceding/character')
+	a((0x232B), 'cursor/delete/character/previous')
+	a((0x2326), 'cursor/delete/character/previous')
 
 	a((0x2190), 'cursor/seek/character/previous')
 	a((0x2191), 'cursor/seek/character/first')

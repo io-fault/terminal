@@ -1652,7 +1652,7 @@ class Refraction(Core):
 		src.swap_case(lo, start, stop)
 		src.commit()
 
-	@comethod('cursor', 'delete/preceding/character')
+	@comethod('cursor', 'delete/character/previous')
 	def c_delete_characters_behind(self, quantity):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
@@ -1662,7 +1662,7 @@ class Refraction(Core):
 		removed = src.delete_codepoints(lo, start, co)
 		src.commit()
 
-	@comethod('cursor', 'delete/current/character')
+	@comethod('cursor', 'delete/character/next')
 	def c_delete_characters_ahead(self, quantity):
 		lo, co = (x.get() for x in self.focus)
 		src = self.source
@@ -1672,11 +1672,11 @@ class Refraction(Core):
 		removed = src.delete_codepoints(lo, co, stop)
 		src.commit()
 
-	@comethod('cursor', 'delete/preceding/line')
+	@comethod('cursor', 'delete/line/previous')
 	def c_delete_lines_behind(self, quantity):
 		return self.c_delete_lines(quantity, offset=-quantity)
 
-	@comethod('cursor', 'delete/current/line')
+	@comethod('cursor', 'delete/line/next')
 	def c_delete_lines(self, quantity, *, offset=0):
 		lo = self.focus[0].get() + offset
 
@@ -1687,7 +1687,7 @@ class Refraction(Core):
 		if offset < 0:
 			self.focus[0].changed(lo, -quantity)
 
-	@comethod('cursor', 'delete/preceding/field')
+	@comethod('cursor', 'delete/field/previous')
 	def c_delete_fields_behind(self):
 		wordtypes = {'identifier', 'keyword', 'coreword', 'projectword'}
 		src = self.source
