@@ -30,8 +30,6 @@ class Refraction(Core):
 		# A path identifying the ranges and targets of each dimension.
 	# /limits/
 		# Per dimension offsets used to trigger margin scrolls.
-	# /visible/
-		# The first elements visible in the view for each dimension.
 	# /area/
 		# The display context of the &image.
 	# /version/
@@ -49,7 +47,6 @@ class Refraction(Core):
 	annotation: Optional[Annotation]
 	focus: Sequence[object]
 	limits: Sequence[int]
-	visible: Sequence[int]
 	cancel = None
 	define: Callable[[str], int]
 	version: object = (0, 0, None)
@@ -75,8 +72,6 @@ class Refraction(Core):
 
 		self.focus[0].restore((lrstart, loffset, lrstop))
 		self.focus[1].restore((crstart, coffset, crstop))
-		self.visible[0] = lo
-		self.visible[1] = co
 		self.image.line_offset = lo
 		self.image.cell_offset = co
 
@@ -148,7 +143,6 @@ class Refraction(Core):
 		self.query = {} # Query state; last search, seek, etc.
 		# View related state.
 		self.limits = (0, 0)
-		self.visible = [0, 0]
 
 		self.image = Image()
 
@@ -164,7 +158,8 @@ class Refraction(Core):
 			self, self.area, mode,
 			self.source.version(),
 			cursor_line,
-			*self.visible,
+			self.image.line_offset,
+			self.image.cell_offset,
 			lo, lstart, lstop,
 			*cs, *rs
 		)
@@ -190,7 +185,7 @@ class Refraction(Core):
 		return self
 
 	def view(self):
-		return self.source.ln_count(), self.area[1], self.visible[1]
+		return self.source.ln_count(), self.area[1], self.image.cell_offset
 
 	def pan(self, delta):
 		"""
@@ -198,11 +193,11 @@ class Refraction(Core):
 		# the visible units of the elements.
 		"""
 
-		to = delta(self.visible[1])
+		to = delta(self.image.cell_offset)
 		if to < 0:
 			to = 0
 
-		self.visible[1] = to
+		self.image.cell_offset = to
 
 	@staticmethod
 	def backward(total, ln, offset):
@@ -286,6 +281,7 @@ class Refraction(Core):
 		"""
 
 		src = self.source
+		img = self.image
 		total = src.ln_count()
 		ln_pos, cp_pos = self.focus
 		cp_offset = cp_pos.get()
@@ -322,7 +318,7 @@ class Refraction(Core):
 		h.set(min(ll, max(0, h.get())))
 
 		# Margin scrolling.
-		current = self.visible[0]
+		current = img.line_offset
 		rln = lo - current
 		climit = max(0, self.limits[0])
 		sunit = max(1, climit * 2)
@@ -674,7 +670,7 @@ class Refraction(Core):
 		"""
 
 		img = self.image
-		to = delta(self.visible[0])
+		to = delta(img.line_offset)
 
 		# Limit to edges.
 		if to < 0:
@@ -685,10 +681,10 @@ class Refraction(Core):
 				to = max(0, last)
 
 		# No change.
-		if self.visible[0] == to:
+		if img.line_offset == to:
 			return
 
-		dv = to - self.visible[0]
+		dv = to - img.line_offset
 		if abs(dv) >= self.area.lines:
 			self.deltas.extend(self.refresh(to))
 			return
@@ -713,7 +709,6 @@ class Refraction(Core):
 			self.deltas.extend(self.v_render(s))
 
 		img.line_offset = to
-		self.visible[0] = to
 
 	def v_update(self, ds, *,
 			len=len, min=min, max=max, sum=sum, list=list,
@@ -914,9 +909,6 @@ class Refraction(Core):
 	def refresh(self, whence:int=0):
 		"""
 		# Refresh the view image with &whence being the beginning of the new view.
-
-		# The &img.line_offset is updated to &whence, but &self.visible is presumed
-		# to be current.
 		"""
 
 		img = self.image
@@ -925,7 +917,6 @@ class Refraction(Core):
 		img.truncate()
 		img.suffix(phrases)
 		img.line_offset = whence
-		self.visible[0] = whence
 
 		return self.v_render(slice(0, visible))
 
@@ -963,8 +954,8 @@ class Refraction(Core):
 		rx, ry = (0, 0)
 		ctx = self.area
 		vx, vy = (ctx.left_offset, ctx.top_offset)
-		hoffset = self.image.cell_offset
-		top, left = self.visible
+		left = hoffset = self.image.cell_offset
+		top = self.image.line_offset
 		hedge, edge = (ctx.span, ctx.lines)
 		empty_cell = theme['empty'].inscribe(ord(' '))
 
@@ -1350,10 +1341,10 @@ class Refraction(Core):
 		log(
 			f"View: {img.line_offset!r} -> {img.cell_offset!r} {self.version!r} {self.area!r}",
 			f"Cursor: {self.focus[0].snapshot()!r}",
-			f"Refraction: {self.visible!r}",
+			f"Refraction: {self.image.line_offset!r} {self.image.cell_offset!r}",
 			f"Lines: {self.source.ln_count()}, {self.source.version()}",
 		)
-		self.deltas.extend(self.refresh(self.visible[0]))
+		self.deltas.extend(self.refresh(img.line_offset))
 
 	@comethod('view', 'seek/line/next')
 	def v_seek_line_next(self, quantity=1):
@@ -1382,7 +1373,7 @@ class Refraction(Core):
 			return self.v_seek_cell_relative(quantity - img.cell_offset)
 
 		# Clamp offset to >= 0.
-		self.visible[1] = img.cell_offset = max(0, quantity)
+		img.cell_offset = max(0, quantity)
 
 		img.pan_absolute(img.all(), img.cell_offset)
 		self.deltas.extend(self.v_render())
@@ -1391,7 +1382,7 @@ class Refraction(Core):
 	def v_seek_cell_relative(self, quantity=0):
 		img = self.image
 		current = img.cell_offset
-		self.visible[1] = img.cell_offset = max(0, img.cell_offset + quantity)
+		img.cell_offset = max(0, img.cell_offset + quantity)
 
 		img.pan_relative(img.all(), img.cell_offset - current)
 		self.deltas.extend(self.v_render())
@@ -2208,11 +2199,8 @@ class Frame(Core):
 
 		# Configure and refresh.
 		rf.configure(self.deltas, self.define, self.areas[vi][1])
-		img = rf.image
-		img.line_offset = rf.visible[0]
-		img.cell_offset = rf.visible[1]
 
-		return rf.refresh(rf.visible[0])
+		return rf.refresh(rf.image.line_offset)
 
 	@staticmethod
 	def rl_determine(context, path):
@@ -2835,7 +2823,7 @@ class Frame(Core):
 		sx = trf.area.left_offset
 		rx = ax - sx
 		ry = ay - sy
-		ry += trf.visible[0]
+		ry += trf.image.line_offset
 		rx = max(0, rx)
 
 		self.vertical = div[0]
@@ -2848,7 +2836,7 @@ class Frame(Core):
 			trf.focus[1].set(0)
 		else:
 			phrase = trf.phrase(ry)
-			cp, re = phrase.seek((0, 0), rx + trf.visible[1], *phrase.m_cell)
+			cp, re = phrase.seek((0, 0), rx + trf.image.line_offset, *phrase.m_cell)
 			h = phrase.tell(cp, *phrase.m_codepoint)
 			trf.focus[1].set(h - li.ln_level)
 

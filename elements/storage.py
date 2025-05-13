@@ -198,8 +198,6 @@ class Resource(types.Core):
 					# Update all image states, but don't dispatch to the display
 					# if it's not frame_visible.
 					rf.deltas.extend(df)
-				rf.visible[0] = img.line_offset
-				rf.visible[1] = img.cell_offset
 
 		for rf in views:
 			rf.recursor()
