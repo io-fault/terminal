@@ -2306,11 +2306,15 @@ class Frame(Core):
 		new.focus[0].set(-1)
 		new.keyboard = content.keyboard
 
-		session.dispatch_delta(self.attach(dpath, new))
+		self.deltas.extend(self.attach(dpath, new))
 		self.chpath(dpath, new.source.origin)
 
 		if new.reporting(session.prompting):
+			wk = session.systems[src.origin.ref_system]
+			prompt = self.views[self.paths[dpath]][2]
+			self.pg_configure_command(prompt, wk.identity, wk.pwd(), [])
 			self.reveal(dpath, session.prompting.pg_line_allocation)
+			self.deltas.extend(prompt.refresh())
 		self.switch(dpath)
 
 		if load:
