@@ -2559,6 +2559,32 @@ class Frame(Core):
 		ctxlen = len(cmdstr)
 		prompt.focus[1].restore((ctxlen, ctxlen, ctxlen))
 
+	@staticmethod
+	def pg_change_context_path(source, ctxline, system, path, new):
+		"""
+		# Adjust the prompt-local system context path.
+		"""
+
+		if new:
+			curdir = +((system.fs_root + (path or ())) @ new)
+			if curdir.fs_type() != 'directory':
+				return False
+		else:
+			# Empty, reset path.
+			curdir = system.pwd()
+
+		cdstr = str(curdir)
+		if cdstr[:2] == '//':
+			cdo = 1
+		else:
+			cdo = 0
+
+		sid = str(system.identity)
+		source.substitute_codepoints(0, 0, len(ctxline), sid + cdstr[cdo:])
+		source.commit()
+
+		return True
+
 	def pg_execute(self, dpath, session):
 		"""
 		# Execute the command present on the prompt of the &dpath division.
@@ -2569,11 +2595,20 @@ class Frame(Core):
 		ctx = src.sole(0).ln_content
 		commands = '\n'.join(x.ln_content for x in src.select(1, src.ln_count()))
 
-		parse_sys = session.host.identity.structure
-		sys, path = parse_sys(ctx)
+		sys, path = System.structure(ctx)
+
+		# System command.
 		if sys not in session.systems:
 			return False
 		exectx = session.systems[sys]
+
+		# Prompt control instruction.
+		if commands.startswith('cd ') or commands == 'cd':
+			try:
+				new = commands.split(maxsplit=1)[1]
+			except IndexError:
+				new = ''
+			return self.pg_change_context_path(src, ctx, exectx, path, new)
 
 		return exectx.execute(session, target, path, commands)
 

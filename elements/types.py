@@ -1941,10 +1941,17 @@ class Syntax(object):
 		'resource': 'system-path',
 	}
 
+	_prompt_commands = {
+		'cd',
+	}
+
 	def _classify_command(self, command:str, *, invalid='invalid-command'):
 		"""
 		# Identify the type of the command.
 		"""
+
+		if command in self._prompt_commands:
+			return 'prompt-control'
 
 		sys, path = System.structure(self.source.sole(0).ln_content)
 		if sys in self.executions:

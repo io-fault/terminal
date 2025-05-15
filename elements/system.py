@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence, Iterable, Iterator
 from typing import Callable
 from dataclasses import dataclass
 
-from fault.context.tools import partial
+from fault.context.tools import partial, cachedcalls
 from fault.system import files
 from fault.system.kernel import Event
 from fault.system.kernel import Link
@@ -668,6 +668,16 @@ class Host(WorkContext):
 
 		return self.tools[identifier]
 
+	@cachedcalls(16)
+	def local(self, pwd):
+		"""
+		# Construct the environment to use for the given &pwd.
+		"""
+
+		env = dict(self.environment)
+		env['PWD'] = pwd.fs_path_string()
+		return env
+
 	def execute(self, session, rf, path, string):
 		"""
 		# Send the selected elements to the device manager.
@@ -681,10 +691,18 @@ class Host(WorkContext):
 		if not exepath:
 			return False
 
-		inv = Invocation(str(exepath[0]), tuple(cmd))
+		fspath = self.fs_root + path
+		inv = Invocation(str(exepath[0]), tuple(cmd), environ=self.local(fspath))
 		c = Completion(rf, -1)
 		ins = Insertion(rf, (*rf.coordinates(), ''), False, *self.codec.Decoder())
-		pid = self.io.invoke(c, ins, None, inv)
+
+		curdir = os.getcwd()
+		try:
+			os.chdir(fspath)
+			pid = self.io.invoke(c, ins, None, inv)
+		finally:
+			os.chdir(curdir)
+
 		ca = ExecutionStatus("+ " + cmd[0], 'insert', pid, rf.system_execution_status)
 		rf.annotate(ca)
 
