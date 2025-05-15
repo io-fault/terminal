@@ -1572,7 +1572,7 @@ class Refraction(Core):
 
 		self.seek_line(0)
 		self.keyboard.set('insert')
-		self.v_scroll_first()
+		self.v_seek_line_first()
 
 	@comethod('cursor', 'open/last')
 	def c_open_last(self, quantity=1):
@@ -1584,7 +1584,7 @@ class Refraction(Core):
 
 		self.seek_line(lo)
 		self.keyboard.set('insert')
-		self.v_scroll_last()
+		self.v_seek_line_last()
 
 	@comethod('cursor', 'insert/string')
 	def c_insert_string(self, quantity, /, string=""):
