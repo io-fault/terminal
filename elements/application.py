@@ -1334,7 +1334,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	if remainder:
 		session_file = (process.fs_pwd()@remainder[-1])
 	else:
-		session_file = (query.home()/'.syntax/Frames')
+		session_file = (query.home()@'.syntax/Frames')
 	editor.fs_snapshot = session_file
 	editor.retitle(editor.fs_snapshot.identifier)
 
