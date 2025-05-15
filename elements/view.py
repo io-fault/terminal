@@ -2359,7 +2359,7 @@ class Frame(Core):
 			# Reveal the prompt for reporting types. (transcripts)
 			if rf.reporting(self.prompting):
 				self.reveal(dpath, self.prompting.pg_line_allocation)
-				self.prompt(dpath, rf.system, [])
+				self.prompt(dpath, rf.system, rf.source.origin.ref_context, [])
 
 	def remodel(self, area=None, divisions=None):
 		"""
