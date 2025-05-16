@@ -2875,7 +2875,7 @@ class Frame(Core):
 			trf.focus[1].set(0)
 		else:
 			phrase = trf.phrase(ry)
-			cp, re = phrase.seek((0, 0), rx + trf.image.line_offset, *phrase.m_cell)
+			cp, re = phrase.seek((0, 0), rx + trf.image.cell_offset, *phrase.m_cell)
 			h = phrase.tell(cp, *phrase.m_codepoint)
 			trf.focus[1].set(h - li.ln_level)
 
