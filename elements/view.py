@@ -1338,10 +1338,12 @@ class Refraction(Core):
 	@comethod('view', 'refresh')
 	def v_refresh_view_image(self):
 		img = self.image
+		tl = (self.area.top_offset, self.area.left_offset)
+		vd = (self.area.lines, self.area.span)
 		log(
-			f"View: {img.line_offset!r} -> {img.cell_offset!r} {self.version!r} {self.area!r}",
+			f"Position: {tl} + {vd}",
+			f"View: {img.line_offset!r} -> {img.cell_offset!r}",
 			f"Cursor: {self.focus[0].snapshot()!r}",
-			f"Refraction: {self.image.line_offset!r} {self.image.cell_offset!r}",
 			f"Lines: {self.source.ln_count()}, {self.source.version()}",
 		)
 		self.deltas.extend(self.refresh(img.line_offset))
