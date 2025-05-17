@@ -686,7 +686,7 @@ class Host(WorkContext):
 		# &path is the local pwd. Prompts inherit PWD from origin's system,
 		# or from history inheritance and reconfigurations.
 
-		cmd = string.split()
+		cmd = [x.replace('\U0010fa01', ' ') for x in string.split()]
 		exepath = self.index.get(cmd[0], ())
 		if not exepath:
 			return False

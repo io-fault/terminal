@@ -261,6 +261,7 @@ if 'annotations':
 if 'inserts':
 	mode = insert
 	a((k_return, km_writing), 'cursor/line/break/follow')
+	a((k_space, km_shift), 'cursor/insert/escaped-space')
 
 	a(('a', km_control), 'cursor/seek/character/first')
 	a(('c', km_control), 'cursor/abort')
@@ -284,7 +285,5 @@ if 'inserts':
 	a((0x2191), 'cursor/seek/character/first')
 	a((0x2192), 'cursor/seek/character/next')
 	a((0x2193), 'cursor/seek/character/last')
-
-	a((k_space, km_control), 'cursor/insert/string', ("\x1f",))
 
 del a

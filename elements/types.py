@@ -1805,7 +1805,12 @@ class Reformulations(object):
 				0x1f: Redirect((1, '\u2038',
 					Glyph(codepoint=ord('-'), textcolor=0x444444),
 					"\x1f"
-				))
+				)),
+				# Field separation escape.
+				0x0010fa01: Redirect((1, '\u2423',
+					Glyph(codepoint=ord(' '), textcolor=0xd9d111),
+					"\U0010fa01"
+				)),
 			},
 			obstruction=Glyph(codepoint=-1, textcolor=0x5050DF),
 			representation=Glyph(codepoint=-1, textcolor=0x777777),
@@ -1815,13 +1820,14 @@ class Reformulations(object):
 		"""
 
 		for i in phrasewords:
-			if len(i.text) == 1 and isinstance(i, Unit):
+			if len(i.text) == 1:
 				o = ord(i.text)
-				if o < 32:
-					if o in constants:
-						yield constants[o]
-						continue
 
+				if o in constants:
+					yield constants[o]
+					continue
+
+				if o < 32 and isinstance(i, Unit):
 					d = hex(o)[2:].rjust(2, '0')
 					yield Redirect((1, '[', obstruction, ''))
 					yield Redirect((len(d), d, representation, i.text))
@@ -2017,21 +2023,31 @@ class Syntax(object):
 			# No following arguments.
 			return
 
-		for x in section[i:]:
-			yield ('command-field-separator', ' ')
-			if x:
-				yield ('command-argument', x)
+		yield ('command-field-separator', ' ')
+		yield from self.classify_arguments(section[i:])
+
+	@staticmethod
+	def isolate_spaces(ftype, arg):
+		if '\U0010fa01' not in arg:
+			yield (ftype, arg)
+			return
+
+		sep = arg.split('\U0010fa01')
+		yield (ftype, sep[0])
+
+		for ap in sep[1:]:
+			yield ('space', '\U0010fa01')
+			yield (ftype, ap)
 
 	def classify_arguments(self, section):
 		if not section:
 			return
 
-		yield ('command-argument', section[0])
+		yield from self.isolate_spaces('command-argument', section[0])
 
 		for arg in section[1:]:
 			yield ('command-field-separator', ' ')
-			if arg:
-				yield ('command-argument', arg)
+			yield from self.isolate_spaces('command-argument', arg)
 
 	def structure_locator(self, string):
 		parts = ri.parse(string)
@@ -2061,7 +2077,7 @@ class Syntax(object):
 		if ln.ln_offset == 1:
 			yield from self.classify_command(sections[0])
 		else:
-			# First section is a continuation of arguments.
+			# Presume first section is a continuation of arguments.
 			yield from self.classify_arguments(sections[0])
 
 		for x in sections[1:]:

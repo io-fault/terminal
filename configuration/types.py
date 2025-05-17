@@ -54,7 +54,7 @@ implementations = {
 	# Unknown syntax, default type used by load_syntax.
 	'lambda': ('keywords', {
 		"terminators": [";", ",", ":", "--", "!"],
-		"routers": [".", "->", "<-"],
+		"routers": [".", "->", "<-", "\U0010fa01"],
 		"operations": list("@#+-*/~&%^|<>") + [
 			":=",
 			"!=", "==", "===", "<=", ">=",

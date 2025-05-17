@@ -302,6 +302,10 @@ class Session(Core):
 		from fault.syntax import format, keywords
 
 		if fimethod == 'keywords':
+			if 'routers' not in ficonfig:
+				ficonfig['routers'] = []
+			ficonfig['routers'].append("\U0010fa01")
+
 			fiprofile = keywords.Profile.from_keywords_v1(**ficonfig)
 			fiparser = keywords.Parser.from_profile(fiprofile)
 			fields = format.Fields(fiparser, kwf_isolate)

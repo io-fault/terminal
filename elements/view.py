@@ -1468,6 +1468,10 @@ class Refraction(Core):
 		src.insert_codepoints(lo, co, string)
 		src.commit()
 
+	@comethod('cursor', 'insert/escaped-space')
+	def c_insert_escaped_space(self, resource, cursor, quantity=1):
+		return self.c_insert_characters(resource, cursor, "\U0010fa01", quantity=quantity)
+
 	@comethod('cursor', 'insert/text')
 	@comethod('elements', 'insert')
 	def c_insert_text(self, resource, cursor, text, quantity=1):
