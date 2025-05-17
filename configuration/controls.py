@@ -139,10 +139,10 @@ if 'controls':
 	a((k_return, km_writing, km_control), 'frame/switch/view/return')
 	a((k_return, km_writing, km_shift), 'cursor/seek/void/line/previous')
 	a((k_return, km_writing), 'cursor/seek/void/line/next')
-	a(('c', km_location, km_control), 'frame/cancel')
+	a(('c', km_location, km_control), 'frame/refocus')
 	a(('c', km_executing, km_retain, km_control), 'frame/refocus')
-	a(('c', km_executing, km_conceal, km_control), 'frame/cancel')
-	a(('c', km_writing, km_control), 'frame/cancel')
+	a(('c', km_executing, km_conceal, km_control), 'prompt/close')
+	a(('c', km_writing, km_control), 'annotation/interrupt')
 
 	a((k_space, km_control), 'frame/prompt/host')
 	a((k_space, km_shift, km_control), 'frame/prompt/process')

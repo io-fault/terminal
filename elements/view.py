@@ -105,6 +105,14 @@ class Refraction(Core):
 
 		self.annotation = annotation
 
+	@comethod('annotation', 'interrupt')
+	def a_interrupt(self):
+		if self.annotation is None:
+			return
+
+		self.annotation.close()
+		self.annotation = None
+
 	def retype(self, lf:Reformulations):
 		"""
 		# Reconstruct &self with a new syntax type.
@@ -2202,7 +2210,11 @@ class Frame(Core):
 		# Configure and refresh.
 		rf.configure(self.deltas, self.define, self.areas[vi][1])
 
-		return rf.refresh(rf.image.line_offset)
+		# Reveal the prompt for reporting types. (transcripts)
+		if rf.reporting(self.prompting):
+			self.pg_open(dpath, rf.system, rf.source.origin.ref_context)
+
+		self.deltas.extend(rf.refresh(rf.image.line_offset))
 
 	@staticmethod
 	def rl_determine(context, path):
@@ -2308,15 +2320,8 @@ class Frame(Core):
 		new.focus[0].set(-1)
 		new.keyboard = content.keyboard
 
-		self.deltas.extend(self.attach(dpath, new))
+		self.attach(dpath, new)
 		self.chpath(dpath, new.source.origin)
-
-		if new.reporting(session.prompting):
-			wk = session.systems[src.origin.ref_system]
-			prompt = self.views[self.paths[dpath]][2]
-			self.pg_configure_command(prompt, wk.identity, wk.pwd(), [])
-			self.reveal(dpath, session.prompting.pg_line_allocation)
-			self.deltas.extend(prompt.refresh())
 		self.switch(dpath)
 
 		if load:
@@ -2360,8 +2365,7 @@ class Frame(Core):
 
 			# Reveal the prompt for reporting types. (transcripts)
 			if rf.reporting(self.prompting):
-				self.reveal(dpath, self.prompting.pg_line_allocation)
-				self.prompt(dpath, rf.system, rf.source.origin.ref_context, [])
+				self.pg_open(dpath, rf.system, rf.source.origin.ref_context, [])
 
 	def remodel(self, area=None, divisions=None):
 		"""
@@ -2420,9 +2424,12 @@ class Frame(Core):
 
 		previous = self.returns[self.paths[dpath]]
 		if previous is not None:
+			self.pg_close(dpath)
 			self.chpath(dpath, previous.source.origin)
-			yield from self.attach(dpath, previous)
-			self.focus = previous
+			self.attach(dpath, previous)
+
+			if not previous.reporting(self.prompting):
+				self.focus = previous
 
 	def render(self, *, ichain=itertools.chain.from_iterable):
 		"""
@@ -2534,13 +2541,16 @@ class Frame(Core):
 			a = Area(*avalues)
 			yield a, [Type.inscribe(ord(fill_char))] * a.volume
 
-	def reveal(self, dpath, lines):
-		self.resize_footer(dpath, lines)
-		self.deltas.extend(
-			self.fill_areas(
-				self.structure.r_patch_footer(dpath[0], dpath[1])
-			)
-		)
+	@staticmethod
+	def pg_clear_command(prompt):
+		"""
+		# Clear all lines but the first.
+		"""
+
+		src = prompt.source
+		src.delete_lines(1, src.ln_count())
+		src.extend_lines([src.forms.ln_interpret('')])
+		src.checkpoint()
 
 	@staticmethod
 	def pg_configure_command(prompt, system, path, command):
@@ -2549,17 +2559,21 @@ class Frame(Core):
 		"""
 
 		src = prompt.source
+		if command:
+			cmdlines = [' '.join(command)]
+		else:
+			cmdlines = [ln.ln_content for ln in src.select(1, src.ln_count())] or ['']
 		src.delete_lines(0, src.ln_count())
-		cmdstr = ' '.join(command)
-		src.extend_lines(map(src.forms.ln_interpret, [str(system)+str(path), cmdstr]))
-		src.commit()
+		src.extend_lines(map(src.forms.ln_interpret, [str(system)+str(path)] + cmdlines))
+		src.checkpoint()
 
-		# Set line cursor to the command.
+		# Set line cursor to the first command line.
 		prompt.focus[0].restore((1, 1, 2))
 
-		# Set character cursor to the end of the command string.
-		ctxlen = len(cmdstr)
-		prompt.focus[1].restore((ctxlen, ctxlen, ctxlen))
+		if command:
+			# Set character cursor to the end of the command string.
+			ctxlen = len(cmdlines[0])
+			prompt.focus[1].restore((ctxlen, ctxlen, ctxlen))
 
 	@staticmethod
 	def pg_change_context_path(source, ctxline, system, path, new):
@@ -2583,9 +2597,35 @@ class Frame(Core):
 
 		sid = str(system.identity)
 		source.substitute_codepoints(0, 0, len(ctxline), sid + cdstr[cdo:])
-		source.commit()
+		source.checkpoint()
 
 		return True
+
+	@comethod('prompt', 'open')
+	def pg_open(self, dpath, system, path, command=()):
+		"""
+		# Shift the focus to the prompt of the focused refraction.
+		# If the prompt is not visible, open it.
+		"""
+
+		vi = self.paths[dpath]
+
+		# Update session state.
+		prompt = self.views[vi][2]
+		self.pg_configure_command(prompt, system, path, command)
+
+		# Make footer visible if the view is empty.
+		if prompt.area.lines == 0:
+			self.resize_footer(dpath, self.prompting.pg_line_allocation)
+			self.deltas.extend(
+				self.fill_areas(
+					self.structure.r_patch_footer(dpath[0], dpath[1])
+				)
+			)
+		self.deltas.extend(prompt.refresh(0))
+
+		self.focus = prompt
+		return prompt
 
 	def pg_execute(self, dpath, session):
 		"""
@@ -2614,47 +2654,47 @@ class Frame(Core):
 
 		return exectx.execute(session, target, path, commands)
 
+	@comethod('prompt', 'close')
+	def pg_close(self, dpath) -> int:
+		"""
+		# Set the footer size of the division identified by &dpath to zero
+		# and refocus the division if the prompt was focused by the frame.
+
+		# [ Returns ]
+		# The change in the footer allocation that was necessary to close
+		# the prompt.
+		"""
+
+		d = 0
+		location, content, prompt = self.select(dpath)
+
+		if prompt.area.lines > 0:
+			d = self.resize_footer(dpath, 0)
+			self.deltas.extend(content.refresh(content.image.line_offset))
+
+			if prompt is self.focus:
+				self.refocus()
+		return d
+
 	@comethod('prompt', 'execute/close')
 	def pg_execute_close(self, dpath, session, prompt):
 		if self.pg_execute(dpath, session):
-			self.cancel(dpath, prompt)
+			self.pg_clear_command(prompt)
+			self.pg_close(dpath)
 			session.keyboard.set('control')
 			return True
 		return False
 
 	@comethod('prompt', 'execute/reset')
-	def pg_execute_reset(self, dpath, session):
+	def pg_execute_reset(self, dpath, session, prompt):
 		if self.pg_execute(dpath, session):
-			l, c, p = self.select(dpath)
-			ctx = p.source.sole(0).ln_content
-			self.prompt(dpath, ctx, '', [])
-			self.deltas.extend(p.refresh(0))
+			self.pg_clear_command(prompt)
 			return True
 		return False
 
 	@comethod('prompt', 'execute/repeat')
 	def pg_execute_repeat(self, dpath, session):
 		return self.pg_execute(dpath, session)
-
-	def prompt(self, dpath, system, path, command):
-		"""
-		# Shift the focus to the prompt of the focused refraction.
-		# If the prompt is not visible, open it.
-		"""
-
-		vi = self.paths[dpath]
-
-		# Update session state.
-		prompt = self.views[vi][2]
-		self.pg_configure_command(prompt, system, path, command)
-
-		# Make footer visible if the view is empty.
-		if prompt.area.lines == 0:
-			self.reveal(dpath, self.prompting.pg_line_allocation)
-			self.deltas.extend(prompt.refresh(0))
-
-		self.focus = prompt
-		return prompt
 
 	def relocate(self, dpath):
 		"""
@@ -2700,52 +2740,6 @@ class Frame(Core):
 	@comethod('frame', 'save/resource')
 	def f_update_resource(self):
 		self.rewrite((self.vertical, self.division))
-
-	@comethod('frame', 'cancel')
-	def cancel(self, dpath, view):
-		"""
-		# Refocus the subject refraction and discard any state changes
-		# performed to the location heading.
-		"""
-
-		rf = view
-		vi = self.paths[dpath]
-		vl, vc, vp = self.views[vi]
-
-		if rf is vp:
-			# Overwrite the prompt.
-			d = self.close_prompt(dpath)
-			assert d < 0
-
-			self.deltas.extend(vc.refresh(vc.image.line_offset))
-			self.refocus()
-			return
-
-		self.refocus()
-		if rf is self.focus:
-			# Previous focus was not a location or prompt; check annotation.
-			if rf.annotation is not None:
-				rf.annotation.close()
-				rf.annotation = None
-			return
-
-		# Restore location.
-		self.chpath(dpath, self.focus.source.origin)
-
-	def close_prompt(self, dpath):
-		"""
-		# Set the footer size of the division identified by &dpath to zero
-		# and refocus the division if the prompt was focused by the frame.
-		"""
-
-		d = 0
-		vi = self.paths[dpath]
-		location, content, prompt = self.views[vi]
-
-		if prompt.area.lines > 0:
-			d = self.resize_footer(dpath, 0)
-
-		return d
 
 	def target(self, top, left):
 		"""
@@ -2805,31 +2799,28 @@ class Frame(Core):
 
 	@comethod('frame', 'switch/view/return')
 	def f_switch_view_return(self, dpath):
-		self.deltas.extend(self.returnview(dpath))
+		self.returnview(dpath)
 
 	@comethod('frame', 'prompt/host')
 	def f_prompt_host(self, prompt, host, dpath):
-		if prompt.area.lines == 0:
-			self.prompt(dpath, host.identity, str(host.pwd()), [])
-			prompt.keyboard.set('insert')
-		else:
-			self.focus = prompt
+		self.pg_open(dpath, host.identity, str(host.pwd()))
+		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/process')
-	def f_prompt_process(self, session, prompt, system, dpath):
-		self.prompt(dpath, session.process.identity, self.process_path(dpath), [])
+	def f_prompt_process(self, prompt, process, dpath):
+		self.pg_open(dpath, process.identity, self.process_path(dpath))
 		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/seek/absolute')
 	def prompt_seek_absolute(self, prompt, process, dpath):
 		ppath = self.process_path(dpath)
-		self.prompt(dpath, process.identity, ppath, ["cursor/seek/absolute/line", ""])
+		self.pg_open(dpath, process.identity, ppath, ["cursor/seek/absolute/line", ""])
 		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/seek/relative')
 	def prompt_seek_relative(self, prompt, process, dpath):
 		ppath = self.process_path(dpath)
-		self.prompt(dpath, process.identity, ppath, ["cursor/seek/relative/line", ""])
+		self.pg_open(dpath, process.identity, ppath, ["cursor/seek/relative/line", ""])
 		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/replace')
@@ -2843,7 +2834,7 @@ class Frame(Core):
 
 		ppath = self.process_path(dpath)
 		pfields = ["cursor/replace/fields", str(i), ""]
-		self.prompt(dpath, process.identity, ppath, pfields)
+		self.pg_open(dpath, process.identity, ppath, pfields)
 		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/pattern')
@@ -2851,7 +2842,7 @@ class Frame(Core):
 	def prompt_cursor_pattern(self, prompt, process, dpath):
 		ppath = self.process_path(dpath)
 		fields = ["cursor/seek/pattern", ""]
-		self.prompt(dpath, process.identity, ppath, fields)
+		self.pg_open(dpath, process.identity, ppath, fields)
 
 		prompt.keyboard.set('insert')
 

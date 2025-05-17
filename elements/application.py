@@ -780,7 +780,7 @@ class Session(Core):
 		rf = self.refract(path)[1]
 		src = rf.source
 		frame.chpath(dpath, src.origin)
-		frame.deltas.extend(frame.attach(dpath, rf))
+		frame.attach(dpath, rf)
 		return rf
 
 	def error(self, context, exception):
