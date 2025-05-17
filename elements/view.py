@@ -2289,6 +2289,12 @@ class Frame(Core):
 
 		return path
 
+	@comethod('location', 'reset')
+	def rl_reset(self, location, content):
+		ref = content.source.origin
+		self.rl_update_path(location.source, ref.ref_context, ref.ref_path)
+		self.refocus()
+
 	@comethod('location', 'execute/operation')
 	def rl_execute(self, location, session, content):
 		if location.annotation.title == 'open':
