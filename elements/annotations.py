@@ -19,7 +19,7 @@ def rotate(ai, quantity=1):
 	if ai.index >= n:
 		ai.index = 0
 	elif ai.index < 0:
-		ai.index = n
+		ai.index = n - 1
 
 	return ai.index
 

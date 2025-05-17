@@ -113,6 +113,16 @@ class Refraction(Core):
 		self.annotation.close()
 		self.annotation = None
 
+	@comethod('annotation', 'select/next')
+	def a_select_next(self, quantity):
+		if self.annotation is not None:
+			self.annotation.rotate(quantity)
+
+	@comethod('annotation', 'select/previous')
+	def a_select_previous(self, quantity):
+		if self.annotation is not None:
+			self.annotation.rotate(-quantity)
+
 	def retype(self, lf:Reformulations):
 		"""
 		# Reconstruct &self with a new syntax type.
@@ -1994,11 +2004,6 @@ class Refraction(Core):
 	def c_transition_no_such_annotation(self):
 		self.annotate(None)
 		self.keyboard.revert()
-
-	@comethod('cursor', 'annotation/select/next')
-	def c_annotation_rotate(self, quantity):
-		if self.annotation is not None:
-			self.annotation.rotate(quantity)
 
 	@comethod('cursor', 'transition/annotation/select')
 	def c_transition_capture_insert(self):
