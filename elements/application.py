@@ -779,7 +779,6 @@ class Session(Core):
 		dpath = (frame.vertical, frame.division)
 		rf = self.refract(path)[1]
 		src = rf.source
-		frame.chpath(dpath, src.origin)
 		frame.attach(dpath, rf)
 		return rf
 

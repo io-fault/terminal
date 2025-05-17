@@ -2214,6 +2214,8 @@ class Frame(Core):
 		if rf.reporting(self.prompting):
 			self.pg_open(dpath, rf.system, rf.source.origin.ref_context)
 
+		ref = rf.source.origin
+		self.rl_update_path(l.source, ref.ref_context, ref.ref_path)
 		self.deltas.extend(rf.refresh(rf.image.line_offset))
 
 	@staticmethod
@@ -2321,7 +2323,6 @@ class Frame(Core):
 		new.keyboard = content.keyboard
 
 		self.attach(dpath, new)
-		self.chpath(dpath, new.source.origin)
 		self.switch(dpath)
 
 		if load:
@@ -2331,15 +2332,6 @@ class Frame(Core):
 	def rl_save(self, session, location, content):
 		session.host.store_resource(session.log, content.source, content)
 		self.refocus()
-
-	def chpath(self, dpath, reference):
-		"""
-		# Update the view's location.
-		"""
-
-		vi = self.paths[dpath]
-		l, c, p = self.views[vi]
-		self.rl_update_path(l.source, reference.ref_context, reference.ref_path)
 
 	def fill(self, views):
 		"""
@@ -2425,7 +2417,6 @@ class Frame(Core):
 		previous = self.returns[self.paths[dpath]]
 		if previous is not None:
 			self.pg_close(dpath)
-			self.chpath(dpath, previous.source.origin)
 			self.attach(dpath, previous)
 
 			if not previous.reporting(self.prompting):
