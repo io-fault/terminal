@@ -998,7 +998,8 @@ class Refraction(Core):
 		# Prepare phrase and cells.
 		lfields = lf.lf_fields.partial()(li)
 		if fai is not None:
-			fai.update(li.ln_content, lfields)
+			lfields = list(lfields)
+			fai.update(li, lfields)
 			caf = phc(Line(ln, 0, ""), delimit(fai))
 			phrase = phc(li, lfields)
 			phrase = Phrase(itertools.chain(phc(li, lfields), caf))

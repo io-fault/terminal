@@ -171,7 +171,7 @@ class Status(object):
 	def mode(self):
 		return self.keyboard.current[0]
 
-	def update(self, line, structure):
+	def update(self, li, structure):
 		pass
 
 	def image(self):
@@ -238,8 +238,8 @@ class Preview(object):
 	def close(self):
 		pass
 
-	def update(self, line, structure):
-		status = line[self.horizontal.slice()]
+	def update(self, li, structure):
+		status = li.ln_content[self.horizontal.slice()]
 		if self.status[0] != status:
 			self.status = (status, *self.convert(status))
 
@@ -491,22 +491,21 @@ class Filesystem(Directory):
 		super().chdir(context, location)
 		self.snapshot = list(self.location.fs_iterfiles())
 
-	def update(self, line, structure):
-		# Presumes resource location editing.
-		ln = self.vertical.get()
-		if ln == 0 or self.source.ln_count() < 2:
-			rpath = files.root
-		else:
-			ln_ctx, ln_file = self.source.select(0, 2)
+	def identify_path_context(self, li):
+		if li.ln_offset > 0:
+			if not li.ln_content.startswith('/'):
+				ln_ctx = self.source.sole(0)
+				return (files.root@ln_ctx.ln_content)
 
-			if ln_file.ln_content.startswith('/'):
-				rpath = files.root
-			else:
-				rpath = (files.root@ln_ctx.ln_content)
+		return files.root
+
+	def update(self, li, structure):
+		# Presumes resource location editing.
+		rpath = self.identify_path_context(li)
 
 		# Identify field.
 		current = self.horizontal.get()
-		prefix = line.rfind('/', 0, current)
+		prefix = li.ln_content.rfind('/', 0, current)
 		if prefix == -1:
 			# No slash before cursor.
 			prefix = self.start = 0
@@ -514,12 +513,12 @@ class Filesystem(Directory):
 			# Position after slash.
 			self.start = prefix + 1
 
-		self.stop = line.find('/', max(current, self.start))
+		self.stop = li.ln_content.find('/', max(current, self.start))
 		if self.stop == -1:
-			self.stop = len(line)
+			self.stop = li.ln_length
 
 		# Update location.
-		pathstr = line[:prefix]
+		pathstr = li.ln_content[:prefix]
 		if pathstr:
 			if pathstr.startswith('/'):
 				path = rpath@pathstr
@@ -528,7 +527,7 @@ class Filesystem(Directory):
 		else:
 			path = rpath
 
-		status = line[self.start:self.stop]
+		status = li.ln_content[self.start:self.stop]
 
 		# Check for leading path changes.
 		if self.location != path:
@@ -563,7 +562,7 @@ class ExecutionStatus(object):
 			# Exit code already present no clean up necessary.
 			del self.xs_data[self.xs_process_id]
 
-	def update(self, line, structure):
+	def update(self, li, structure):
 		# No response to insertions or deletions.
 		pass
 
