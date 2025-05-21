@@ -45,6 +45,7 @@ filename_extensions = {
 	"rs": 'rust',
 
 	"transcript": 'transcript',
+	"iv": 'ivectors',
 }
 
 Default = ''

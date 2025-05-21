@@ -173,12 +173,10 @@ class Session(Core):
 		)
 
 		fs_parser = format.Fields(process.fs_pwd, fs_isolate_path)
-		pg_parser = format.Fields(Syntax(), Syntax.isolate_prompt_fields)
 
 		return {
 			"": ltype,
 			'filesystem': ltype.replace(lf_fields=fs_parser),
-			'execution': ltype.replace(lf_fields=pg_parser),
 		}
 
 	@staticmethod
@@ -362,18 +360,16 @@ class Session(Core):
 		"""
 
 		from dataclasses import replace
+		from fault.syntax.format import Fields
+
+		# Get the keywords syntax parser instance.
 		lf = source.forms
+		parser = lf.lf_fields.separation
 
-		ctx = replace(
-			lf.lf_fields.separation,
-			source=source,
-			executions=self.systems,
-		)
+		pg_syntax = Syntax(source, self.systems, parser, kwf_isolate)
+		pg_parser = Fields(pg_syntax, Syntax.isolate_prompt_fields)
 
-		# Override the separation context to read the first line of &source.
-		pg_fields = replace(lf.lf_fields, separation=ctx)
-
-		return lf.replace(lf_fields=pg_fields)
+		return lf.replace(lf_fields=pg_parser)
 
 	@staticmethod
 	def load_resource(source):
@@ -464,14 +460,14 @@ class Session(Core):
 	def allocate_prompt_resource(self):
 		ref = Reference(
 			self.process.identity,
-			'execution',
+			'ivectors',
 			'.prompt',
 			# Point at a division path allowing use as a resource.
 			files.root@'/dev',
 			files.root@'/dev/null',
 		)
 
-		return Resource(ref, self.load_type('execution'))
+		return Resource(ref, self.load_type('ivectors'))
 
 	def allocate_location_resource(self, reference):
 		ref = Reference(

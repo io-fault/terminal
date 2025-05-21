@@ -1926,6 +1926,20 @@ class Syntax(object):
 
 	source: object = None
 	executions: object = None
+	ivectors: object = None
+	iv_isolate: object = None
+
+	_ec_interpret = str.maketrans(
+		''.join(chr(0x10fa00 + x) for x in range(1, 5)),
+		' \n\r"',
+	)
+	_ec_protect = str.maketrans(
+		' \n\r"',
+		''.join(chr(0x10fa00 + x) for x in range(1, 5)),
+	)
+	_decode_escapes = (lambda x: x.translate(Syntax._ec_interpret))
+	_encode_escapes = (lambda x: x.translate(Syntax._ec_protect))
+
 	_field_sets = {}
 	_type_map = {
 		'host': 'system-identity',
@@ -1951,7 +1965,42 @@ class Syntax(object):
 		'cd',
 	}
 
-	def _classify_command(self, command:str, *, invalid='invalid-command'):
+	@classmethod
+	def interpret_field_text(Class, parts):
+		"""
+		# Compose the parts into a formatted string.
+
+		# Translate escapes and combine literals.
+		"""
+
+		out = ''
+		lit = None
+
+		for ft, fs in parts:
+			if ft.startswith('inclusion-'):
+				out += Class._decode_escapes(fs)
+			elif lit is not None:
+				if ft == 'literal-stop':
+					lit += fs[:-1]
+					out += lit
+					lit = None
+				elif ft != 'literal-start':
+					lit += fs
+				else:
+					lit += fs
+			elif ft == 'literal-start':
+				lit = fs[1:]
+			else:
+				# Exclusion
+				pass
+		else:
+			if lit:
+				# Open literal.
+				out += lit
+
+		return out
+
+	def classify_command(self, command:str, *, invalid='invalid-command'):
 		"""
 		# Identify the type of the command.
 		"""
@@ -1964,6 +2013,20 @@ class Syntax(object):
 			exe = self.executions[sys]
 			if command in exe.index:
 				return exe.command_type
+		else:
+			# No system.
+			return invalid
+
+		try:
+			pwd = exe.fs_root + path
+		except AttributeError:
+			pass
+		else:
+			try:
+				if (pwd @ command).fs_status().executable:
+					return exe.command_type
+			except OSError:
+				pass
 
 		return invalid
 
@@ -1996,59 +2059,6 @@ class Syntax(object):
 
 		return False
 
-	def split_line_fields(self, text, Compose='|'):
-		"""
-		# Split the space-separated fields in a line of &text.
-		"""
-
-		for section in text.split(Compose):
-			if section:
-				yield section.split(' ')
-			else:
-				yield []
-
-	def classify_command(self, section):
-		for i, v in enumerate(section):
-			# First non-empty field
-			if v:
-				yield (self._classify_command(v), v)
-				break
-			else:
-				yield ('command-field-separator', ' ')
-		else:
-			return
-
-		i += 1
-		if len(section) == i:
-			# No following arguments.
-			return
-
-		yield ('command-field-separator', ' ')
-		yield from self.classify_arguments(section[i:])
-
-	@staticmethod
-	def isolate_spaces(ftype, arg):
-		if '\U0010fa01' not in arg:
-			yield (ftype, arg)
-			return
-
-		sep = arg.split('\U0010fa01')
-		yield (ftype, sep[0])
-
-		for ap in sep[1:]:
-			yield ('space', '\U0010fa01')
-			yield (ftype, ap)
-
-	def classify_arguments(self, section):
-		if not section:
-			return
-
-		yield from self.isolate_spaces('command-argument', section[0])
-
-		for arg in section[1:]:
-			yield ('command-field-separator', ' ')
-			yield from self.isolate_spaces('command-argument', arg)
-
 	def structure_locator(self, string):
 		parts = ri.parse(string)
 
@@ -2060,6 +2070,89 @@ class Syntax(object):
 			else:
 				yield ('system-invalid-field', v)
 
+	skip_types = {
+		'literal-space',
+		'inclusion-space',
+
+		'inclusion-stop-exclusion',
+		'exclusion-start',
+		'exclusion-stop',
+		'exclusion-delimit',
+		'exclusion-space',
+		'exclusion-words',
+		'exclusion-fragment',
+	}
+	_redirects = {
+		'>', '<', '>>',
+		'<=', '>=', '>>=',
+	}
+
+	def isolate_instructions(self, fi):
+		"""
+		# Scan the iterator for the first identifier and validate its
+		# index presence or filesystem location.
+		"""
+
+		cmdparts = []
+		continued = True
+
+		while continued:
+			continued = False
+
+			for tf in fi:
+				# Skip leading spaces.
+				if tf[0] in self.skip_types:
+					yield tf
+					continue
+
+				if tf == ('inclusion-operation', '\\'):
+					# Arguments until terminator.
+					yield tf
+					return
+				elif tf[0] == 'inclusion-terminator':
+					# Empty command? Continue seeking.
+					yield ('command-terminator', tf[1])
+					continue
+
+				# Hold start of command.
+				cmdparts.append(tf)
+				break
+
+			tail = None
+			for tf in fi:
+				if tf[0] in {'inclusion-space', 'inclusion-terminator'}:
+					# End of field with space or terminator.
+					tail = tf
+					break
+				elif tf[0] == 'inclusion-operation' and tf[1] in self._redirects:
+					# End of field with, likely, redirect.
+					tail = tf
+					break
+				else:
+					# Part of the command.
+					cmdparts.append(tf)
+
+			# Get the text of the command for validation.
+			command = self.interpret_field_text(cmdparts)
+			ctype = self.classify_command(command)
+			for ft, fs in cmdparts:
+				if not ft.startswith('exclusion-') and ft not in {'literal-start', 'literal-stop'}:
+					# Classify parts that are not comments or literal boundaries.
+					yield (ctype, fs)
+				else:
+					# Primarily for revealing comments.
+					yield (ft, fs)
+
+			if tail is not None:
+				# Last field
+				if tail[0] == 'inclusion-terminator':
+					continued = True
+					yield ('command-terminator', tail[1])
+				else:
+					yield tail
+				tail = None
+			cmdparts = []
+
 	def isolate_prompt_fields(self, ln):
 		"""
 		# Identify the field types of the prompt lines.
@@ -2069,18 +2162,13 @@ class Syntax(object):
 			yield from self.structure_locator(ln.ln_content)
 			return
 
-		# Composition operator, `|`, given highest precedence.
-		sections = list(self.split_line_fields(ln.ln_content))
-		if not sections:
-			return
+		fi = iter(self.iv_isolate(self.ivectors, ln))
 
-		if ln.ln_offset == 1:
-			yield from self.classify_command(sections[0])
-		else:
-			# Presume first section is a continuation of arguments.
-			yield from self.classify_arguments(sections[0])
+		yield from self.isolate_instructions(fi)
 
-		for x in sections[1:]:
-			yield ('composition', '|')
-			if x:
-				yield from self.classify_command(x)
+		for tf in fi:
+			if tf[0] == 'inclusion-terminator':
+				yield ('command-terminator', tf[1])
+				yield from self.isolate_instructions(fi)
+			else:
+				yield tf

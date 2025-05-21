@@ -140,11 +140,9 @@ text = {
 	'invalid-command': 'red',
 	'host-executable': 'green',
 	'application-instruction': 'purple',
-	'prompt-control': 'blue',
+	'prompt-control': 'orange',
 
-	'composition': 'orange',
-	'command-argument': 'foreground',
-	'command-field-separator': 'gray',
+	'command-terminator': 'red',
 	'delimiter': 'absolute-red',
 }
 
