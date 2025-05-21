@@ -686,12 +686,16 @@ class Host(WorkContext):
 		# &path is the local pwd. Prompts inherit PWD from origin's system,
 		# or from history inheritance and reconfigurations.
 
+		fspath = self.fs_root + path
 		cmd = [x.replace('\U0010fa01', ' ') for x in string.split()]
+
 		exepath = self.index.get(cmd[0], ())
 		if not exepath:
-			return False
+			xpath = (fspath @ cmd[0])
+			if xpath.fs_type() == 'void':
+				return False
+			exepath = (str(xpath),)
 
-		fspath = self.fs_root + path
 		inv = Invocation(str(exepath[0]), tuple(cmd), environ=self.local(fspath))
 		c = Completion(rf, -1)
 		ins = Insertion(rf, (*rf.coordinates(), ''), False, *self.codec.Decoder())
