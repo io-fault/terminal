@@ -1,7 +1,6 @@
 """
 # Refraction cursor annotations for completion support and ephemeral information displays.
 """
-from os.path import islink
 import functools
 from typing import Sequence
 
@@ -322,8 +321,12 @@ class Directory(object):
 		return self.matches
 
 	rotate = rotate
-	def __init__(self, title):
+	def __init__(self, title, lf, source, vertical, horizontal):
 		self.title = title
+		self.forms = lf
+		self.source = source
+		self.vertical = vertical
+		self.horizontal = horizontal
 
 		self.context = None
 		self.location = None
@@ -341,7 +344,7 @@ class Directory(object):
 		self.status = None
 
 	@staticmethod
-	def file_name_priority(string):
+	def fs_name_priority(string):
 		"""
 		# Sort key for ordering some operator charcters after.
 		"""
@@ -358,6 +361,7 @@ class Directory(object):
 
 		self.context = context
 		self.location = location
+		self.snapshot = list(self.location.fs_iterfiles())
 
 	def select(self, query):
 		self.matches = [
@@ -380,7 +384,7 @@ class Directory(object):
 				break
 			ms.add(m[offset:offset+1])
 
-		prefixset = sorted(ms, key=self.file_name_priority)
+		prefixset = sorted(ms, key=self.fs_name_priority)
 		if len(prefixset) > 0:
 			prefixsample = "".join(prefixset)
 		else:
@@ -411,114 +415,43 @@ class Directory(object):
 		else:
 			return ""
 
-class Filesystem(Directory):
-	"""
-	# Filesystem Directory query annotation for file path completion support.
-	"""
-
-	@staticmethod
-	def typed_path_fields(root, extension, *, separator='/'):
-		"""
-		# Format the path components in &extension relative to &root.
-		"""
-
-		current = root
-		for f in extension[:-1]:
-			if not f:
-				yield ('path-empty', '')
-			else:
-				current = current/f
-
-				if f in {'.', '..'}:
-					yield ('relatives', f)
-				else:
-					if islink(current):
-						yield ('path-link', f)
-					else:
-						try:
-							typ = current.fs_type()
-						except OSError:
-							typ = 'warning'
-
-						if typ == 'directory':
-							yield ('path-directory', f)
-						elif typ == 'void':
-							yield ('file-not-found', f)
-						else:
-							yield (typ, f)
-
-			yield ('path-separator', separator)
-
-		f = extension[-1]
-		final = current/f
-		try:
-			typ = final.fs_type()
-		except OSError:
-			typ = 'warning'
-
-		# Slightly different from path segments.
-		if typ == 'data':
-			try:
-				if final.fs_executable():
-					typ = 'executable'
-				elif f[:1] == '.':
-					typ = 'dot-file'
-				else:
-					# No subtype override.
-					pass
-			except OSError:
-				typ = 'warning'
-		elif typ == 'void':
-			typ = 'file-not-found'
-		else:
-			# No adjustments necessary.
-			pass
-
-		yield (typ, f)
-
-	def __init__(self, title, lf, source, vertical, horizontal):
-		super().__init__(title)
-		self.forms = lf
-		self.source = source
-		self.vertical = vertical
-		self.horizontal = horizontal
-
 	def structure_path(self, match):
 		# Only displaying the match's filename.
-		return self.typed_path_fields(self.location, match.split('/'), separator='/')
-
-	def chdir(self, context, location):
-		super().chdir(context, location)
-		self.snapshot = list(self.location.fs_iterfiles())
+		return types.Syntax.typed_path_fields(self.location, match.split('/'), separator='/')
 
 	def identify_path_context(self, li):
-		if li.ln_offset > 0:
-			if not li.ln_content.startswith('/'):
-				ln_ctx = self.source.sole(0)
-				return (files.root@ln_ctx.ln_content)
+		sys, exe, path = self.forms.lf_fields.separation.system_context()
+		lc = li.ln_content
 
-		return files.root
+		if li.ln_offset == 0:
+			return exe.fs_root, lc.find('/', lc.find('://')+3)
+		if lc.startswith('/'):
+			return exe.fs_root, 0
+
+		return exe.fs_root + path, 0
 
 	def update(self, li, structure):
 		# Presumes resource location editing.
-		rpath = self.identify_path_context(li)
+		rpath, offset = self.identify_path_context(li)
+		pattern = li.ln_content[offset:]
 
 		# Identify field.
-		current = self.horizontal.get()
-		prefix = li.ln_content.rfind('/', 0, current)
+		current = self.horizontal.get() - offset
+		prefix = pattern.rfind('/', 0, current)
 		if prefix == -1:
 			# No slash before cursor.
-			prefix = self.start = 0
+			prefix = 0
+			self.start = offset
 		else:
 			# Position after slash.
-			self.start = prefix + 1
+			self.start = offset + prefix + 1
 
-		self.stop = li.ln_content.find('/', max(current, self.start))
+		self.stop = pattern.find('/', max(current, self.start - offset))
 		if self.stop == -1:
 			self.stop = li.ln_length
 
 		# Update location.
-		pathstr = li.ln_content[:prefix]
+		pathstr = pattern[:prefix]
 		if pathstr:
 			if pathstr.startswith('/'):
 				path = rpath@pathstr

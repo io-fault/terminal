@@ -58,24 +58,6 @@ def kwf_qualify(tokens, context='inclusion'):
 def kwf_isolate(parser, ln):
 	return kwf_qualify(parser.process_line(ln.ln_content))
 
-def fs_isolate_path(pathref, ln, *, separator='/', relative=None, tpf=annotations.Filesystem.typed_path_fields):
-	"""
-	# Structure the path components of &line relative to &rpath.
-	# If &line begins with a root directory, it is interpreted absolutely.
-	"""
-
-	s = separator
-	lc = ln.ln_content
-	if not lc:
-		return ()
-
-	if relative or not lc.startswith(s):
-		# pathref defaults to pwd, but is overwritten to fetch initial
-		# line of the location's resource.
-		return tpf(pathref(), lc.split(s), separator=s)
-	else:
-		return tpf(files.root, lc.split(s), separator=s)
-
 class Session(Core):
 	"""
 	# Root application state.
@@ -172,11 +154,10 @@ class Session(Core):
 			cus,
 		)
 
-		fs_parser = format.Fields(process.fs_pwd, fs_isolate_path)
-
 		return {
 			"": ltype,
-			'filesystem': ltype.replace(lf_fields=fs_parser),
+			# Location does not have a syntax factor.
+			'location': ltype,
 		}
 
 	@staticmethod
@@ -320,7 +301,7 @@ class Session(Core):
 		self.types[sti] = lf
 		return lf
 
-	def fs_forms(self, source, pathcontext):
+	def rl_forms(self, source, pathcontext):
 		"""
 		# Allocate and configure the syntax type for editing the location.
 
@@ -336,16 +317,20 @@ class Session(Core):
 		"""
 
 		from dataclasses import replace
+		from fault.syntax.format import Fields
 
-		# Base filesystem type.
 		lf = self.load_type(source.origin.ref_type)
 
-		pathctx = (lambda: pathcontext@source.sole(0).ln_content)
+		root = pathcontext
+		while root.context is not None:
+			root = root.context
+		while root.container != root:
+			root = root.container
 
-		# Override the separation context to read the first line of &source.
-		pathfields = replace(lf.lf_fields, separation=pathctx)
+		rl_syntax = Syntax(source, self.systems, root)
+		rl_parser = Fields(rl_syntax, Syntax.isolate_rl_path)
 
-		return lf.replace(lf_fields=pathfields)
+		return lf.replace(lf_fields=rl_parser)
 
 	def pg_forms(self, source:Resource) -> Reformulations:
 		"""
@@ -457,7 +442,7 @@ class Session(Core):
 
 		return self.host.reference(self.lookup_type(path), path)
 
-	def allocate_prompt_resource(self):
+	def allocate_prompt(self):
 		ref = Reference(
 			self.process.identity,
 			'ivectors',
@@ -467,22 +452,32 @@ class Session(Core):
 			files.root@'/dev/null',
 		)
 
-		return Resource(ref, self.load_type('ivectors'))
+		src = Resource(ref, self.load_type('ivectors'))
 
-	def allocate_location_resource(self, reference):
+		rf = Refraction(src)
+		rf.forms = self.pg_forms(src)
+		rf.keyboard = self.keyboard
+
+		return rf
+
+	def allocate_location(self, reference):
 		ref = Reference(
 			self.process.identity,
-			'filesystem',
+			'location',
 			'.location',
 			# Point at a division path allowing use as a resource.
 			files.root@'/dev',
 			files.root@'/dev/null',
 		)
 
-		src = Resource(ref, self.load_type('filesystem'))
-		Frame.rl_update_path(src, reference.ref_context, reference.ref_path)
-		src.forms = self.fs_forms(src, reference.ref_context)
-		return src
+		src = Resource(ref, self.load_type('location'))
+		Frame.rl_update_path(src, reference)
+
+		rf = Refraction(src)
+		rf.forms = self.rl_forms(src, reference.ref_context)
+		rf.keyboard = self.keyboard
+
+		return rf
 
 	def refract(self, path, addressing=None):
 		"""
@@ -511,17 +506,13 @@ class Session(Core):
 		if addressing is not None:
 			rf.restore(addressing)
 
-		l = Refraction(self.allocate_location_resource(source.origin))
-		l.keyboard = self.keyboard
-
-		p = Refraction(self.allocate_prompt_resource())
-		p.forms = self.pg_forms(p.source)
-		p.keyboard = self.keyboard
+		rl = self.allocate_location(source.origin)
+		pg = self.allocate_prompt()
 
 		if rf.reporting(self.prompting):
-			p.control_mode = 'insert'
+			pg.control_mode = 'insert'
 
-		return (l, rf, p)
+		return (rl, rf, pg)
 
 	def log(self, *lines):
 		"""
@@ -647,7 +638,7 @@ class Session(Core):
 		f = Frame(
 			self.prompting,
 			self.device.define, self.theme,
-			self.load_type('filesystem'),
+			self.load_type('location'),
 			self.keyboard, area,
 			index=len(self.frames),
 			title=title
@@ -874,6 +865,10 @@ class Session(Core):
 		'content': (lambda s, f, k: f['content']),
 		'prompt': (lambda s, f, k: f['prompt']),
 		'location': (lambda s, f, k: f['location']),
+
+		# Access to location and prompt syntax perception.
+		'rl_syntax': (lambda s, f, k: f['location'].forms.lf_fields.separation),
+		'pg_syntax': (lambda s, f, k: f['prompt'].forms.lf_fields.separation),
 
 		'cursor': (lambda s, f, k: f['view'].coordinates()),
 	}

@@ -105,7 +105,7 @@ text = {
 	'warning': 'yellow',
 
 	# Filesystem paths.
-	'filesystem-root': 'orange',
+	'filesystem-root': 'gray',
 
 	'directory': 'blue',
 	'relatives': 'blue',

@@ -12,7 +12,7 @@ from . import annotations
 from . import storage
 
 from .types import Core, Annotation, Position, Status, Model, System
-from .types import Reformulations, Line, Prompting
+from .types import Reference, Reformulations, Line, Prompting
 from .types import Area, Image, Phrase, Words, Glyph, LineStyle
 
 class Refraction(Core):
@@ -2224,12 +2224,11 @@ class Frame(Core):
 		if rf.reporting(self.prompting):
 			self.pg_open(dpath, rf.system, rf.source.origin.ref_context)
 
-		ref = rf.source.origin
-		self.rl_update_path(l.source, ref.ref_context, ref.ref_path)
+		self.rl_update_path(l.source, rf.source.origin)
 		self.deltas.extend(rf.refresh(rf.image.line_offset))
 
 	@staticmethod
-	def rl_determine(context, path):
+	def rl_determine(system, context, path):
 		"""
 		# Identify the strings to use to represent the context path
 		# and the subject path.
@@ -2244,17 +2243,19 @@ class Frame(Core):
 		else:
 			ipath = str(path)
 
-		return str(context), ipath
+		return str(system) + str(context), ipath
 
 	@classmethod
-	def rl_update_path(Class, src:storage.Resource, pathcontext, path):
+	def rl_update_path(Class, src:storage.Resource, ref:Reference):
 		"""
 		# Rewrite the lines in &src with the given &pathcontext and &path.
 		"""
 
 		src.delete_lines(0, src.ln_count())
 		src.commit()
-		src.extend_lines(map(src.forms.ln_interpret, Class.rl_determine(pathcontext, path)))
+
+		lines = Class.rl_determine(ref.ref_system, ref.ref_context, ref.ref_path)
+		src.extend_lines(map(src.forms.ln_interpret, lines))
 		src.commit()
 
 	@staticmethod
@@ -2268,45 +2269,13 @@ class Frame(Core):
 		name = last.ln_content.rfind('/') + 1
 		rf.focus[1].restore((name, name, last.ln_length))
 
-	@staticmethod
-	def rl_compose_path(pathlines, *, default='/dev/null'):
-		"""
-		# Construct a Path from an iterable of path segments where all
-		# leading segments up to the last are composed as the context
-		# of the returned path.
-
-		# Whitespace *only* lines are treated as empty strings,
-		# but whitespace is verbatim in all other cases.
-
-		# If the iterable has no path strings after filtering,
-		# the &default is used.
-		"""
-
-		pathv = [x for x in pathlines if not x.isspace()]
-		if not pathv:
-			pathv = [default]
-
-		*pathctxv, pathstr = pathv
-		if pathstr.startswith('/'):
-			# Ignore context if absolute.
-			path = files.root@pathstr
-		else:
-			pathctx = (files.root@'/'.join(x.strip('/') for x in pathctxv)).delimit()
-			if pathstr:
-				path = pathctx@pathstr
-			else:
-				path = pathctx
-
-		return path
-
 	@comethod('location', 'reset')
 	def rl_reset(self, location, content):
-		ref = content.source.origin
-		self.rl_update_path(location.source, ref.ref_context, ref.ref_path)
+		self.rl_update_path(location.source, content.source.origin)
 		self.refocus()
 
 	@comethod('location', 'execute/operation')
-	def rl_execute(self, location, session, content):
+	def rl_execute(self, location, dpath, rl_syntax, session, content):
 		if location.annotation.title == 'open':
 			rl_operation = self.rl_open
 		elif location.annotation.title == 'save':
@@ -2314,18 +2283,15 @@ class Frame(Core):
 		else:
 			return
 
-		return rl_operation(session, location, content)
+		return rl_operation(dpath, rl_syntax, session, content)
 
 	@comethod('location', 'open/resource')
-	def rl_open(self, session, location, content):
-		src = location.source
-
+	def rl_open(self, dpath, rl_syntax, session, content):
 		# Construct reference and load dependencies.
-		dpath = (self.vertical, self.division)
-		fspath = self.rl_compose_path(li.ln_content for li in src.select(0, 2))
+		system, fspath = rl_syntax.location_path()
+
 		typref = session.lookup_type(fspath)
 		syntype = session.load_type(typref)
-		system = session.host
 
 		try:
 			src = session.sources.select_resource(fspath)
@@ -2334,9 +2300,9 @@ class Frame(Core):
 			src = session.sources.create_resource(system.identity, typref, syntype, fspath)
 			load = True
 
-		new = content.__class__(src)
+		new = Refraction(src)
 		new.focus[0].set(-1)
-		new.keyboard = content.keyboard
+		new.keyboard = session.keyboard
 
 		self.attach(dpath, new)
 		self.switch(dpath)
@@ -2345,8 +2311,9 @@ class Frame(Core):
 			system.load_resource(src, new)
 
 	@comethod('location', 'save/resource')
-	def rl_save(self, session, location, content):
-		session.host.store_resource(session.log, content.source, content)
+	def rl_save(self, dpath, rl_syntax, session, content):
+		system, fspath = rl_syntax.location_path()
+		system.store_resource(session.log, content.source, content)
 		self.refocus()
 
 	def fill(self, views):
@@ -2369,7 +2336,7 @@ class Frame(Core):
 				v.configure(self.deltas, self.define, a)
 
 		for dpath, index in self.paths.items():
-			l, rf, p = self.views[index]
+			rl, rf, pg = self.views[index]
 
 			# Reveal the prompt for reporting types. (transcripts)
 			if rf.reporting(self.prompting):
@@ -2715,7 +2682,7 @@ class Frame(Core):
 		self.rl_place_cursor(location_rf)
 
 		self.focus = location_rf
-		self.focus.annotation = annotations.Filesystem('open',
+		self.focus.annotation = annotations.Directory('open',
 			self.focus.forms,
 			self.focus.source,
 			*self.focus.focus
@@ -2733,7 +2700,7 @@ class Frame(Core):
 		self.rl_place_cursor(location_rf)
 
 		self.focus = location_rf
-		self.focus.annotation = annotations.Filesystem('save',
+		self.focus.annotation = annotations.Directory('save',
 			self.focus.forms,
 			self.focus.source,
 			*self.focus.focus

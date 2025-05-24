@@ -1912,7 +1912,9 @@ class Reformulations(object):
 @dataclass()
 class Syntax(object):
 	"""
-	# Syntax context for prompt formatting and command directory access.
+	# Syntax context for prompt and location formatting.
+
+	# Both views make heavy use of system contexts.
 
 	# [ Elements ]
 	# /source/
@@ -2030,6 +2032,129 @@ class Syntax(object):
 
 		return invalid
 
+	@staticmethod
+	def typed_path_fields(root, extension, *, separator='/'):
+		"""
+		# Format the path components in &extension relative to &root.
+		"""
+
+		current = root
+		for f in extension[:-1]:
+			if not f:
+				yield ('path-empty', '')
+			else:
+				current = current/f
+
+				if f in {'.', '..'}:
+					yield ('relatives', f)
+				else:
+					for l in current.fs_follow_links():
+						yield ('path-link', f)
+						break
+					else:
+						try:
+							typ = current.fs_type()
+						except OSError:
+							typ = 'warning'
+
+						if typ == 'directory':
+							yield ('path-directory', f)
+						elif typ == 'void':
+							yield ('file-not-found', f)
+						else:
+							yield (typ, f)
+
+			yield ('path-separator', separator)
+
+		f = extension[-1]
+		final = current/f
+		try:
+			typ = final.fs_type()
+		except OSError:
+			typ = 'warning'
+
+		# Slightly different from path segments.
+		if typ == 'data':
+			try:
+				if final.fs_executable():
+					typ = 'executable'
+				elif f[:1] == '.':
+					typ = 'dot-file'
+				else:
+					# No subtype override.
+					pass
+			except OSError:
+				typ = 'warning'
+		elif typ == 'void':
+			typ = 'file-not-found'
+		else:
+			# No adjustments necessary.
+			pass
+
+		yield (typ, f)
+
+	def system_context(self, lo=0):
+		"""
+		# Identify the system context from the first line of the source.
+
+		# [ Returns ]
+		# The &System, &.system.WorkContext, and the context's path as a sequence.
+		"""
+
+		sys, path = System.structure(self.source.sole(lo).ln_content)
+		if sys in self.executions:
+			exe = self.executions[sys]
+			sys = exe.identity
+		else:
+			exe = None
+
+		return (sys, exe, path)
+
+	def location_path(self):
+		"""
+		# Get the current location path.
+		"""
+
+		sys, exe, path = self.system_context()
+		path = exe.fs_root + path
+
+		for li in self.source.select(1, self.source.ln_count()):
+			path @= li.ln_content
+
+		return exe, path
+
+	def isolate_rl_path(self, ln, *, separator='/', relative=None):
+		"""
+		# Structure the path components of &line relative to &rpath.
+		# If &line begins with a root directory, it is interpreted absolutely.
+		"""
+
+		s = separator
+		lc = ln.ln_content
+		if not lc:
+			return ()
+
+		sys, exe, path = self.system_context()
+
+		if ln.ln_offset == 0:
+			sysparts, path = self.structure_locator(ln.ln_content)
+			ctxfields = list(sysparts)
+
+			sys, path = System.structure(ln.ln_content)
+			if path is not None:
+				ctxfields.append(('filesystem-root', '/'))
+				if path:
+					ctxfields.extend(self.typed_path_fields(exe.fs_root, path, separator=s))
+
+			return ctxfields
+
+		if relative or not lc.startswith(s):
+			# pathref defaults to pwd, but is overwritten to fetch initial
+			# line of the location's resource.
+			return self.typed_path_fields(exe.fs_root + path, lc.split(s), separator=s)
+		else:
+			return self.typed_path_fields(exe.fs_root, lc.split(s), separator=s)
+
 	def update_field_sets(self):
 		self._field_sets['system-delimiter'] = {'://', '/', '@', ':', '[', ']'}
 		self._field_sets['system-title'] = {''}
@@ -2059,9 +2184,7 @@ class Syntax(object):
 
 		return False
 
-	def structure_locator(self, string):
-		parts = ri.parse(string)
-
+	def system_locator_fields(self, parts):
 		for typ, v in ri.tokens(parts):
 			stype = self._type_map[typ]
 
@@ -2069,6 +2192,11 @@ class Syntax(object):
 				yield (stype, v)
 			else:
 				yield ('system-invalid-field', v)
+
+	def structure_locator(self, string):
+		parts = ri.parse(string)
+		paths = parts.pop('path', None)
+		return self.system_locator_fields(parts), paths
 
 	skip_types = {
 		'literal-space',
@@ -2159,7 +2287,26 @@ class Syntax(object):
 		"""
 
 		if ln.ln_offset == 0:
-			yield from self.structure_locator(ln.ln_content)
+			self.system_context()
+			sysfields, syspath = self.structure_locator(ln.ln_content)
+			yield from sysfields
+
+			sys, path = System.structure(ln.ln_content)
+			try:
+				sysroot = self.executions[sys].fs_root + path
+			except (AttributeError, KeyError):
+				if path is not None:
+					for p in path:
+						yield ('delimiter', '/')
+						yield ('system-path', p)
+			else:
+				if path is not None:
+					if path:
+						yield ('system-path', '/')
+						yield from self.typed_path_fields(sysroot, syspath)
+					else:
+						yield ('system-path', '/')
+
 			return
 
 		fi = iter(self.iv_isolate(self.ivectors, ln))
