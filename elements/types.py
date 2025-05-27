@@ -2287,17 +2287,16 @@ class Syntax(object):
 		"""
 
 		if ln.ln_offset == 0:
-			self.system_context()
 			sysfields, syspath = self.structure_locator(ln.ln_content)
 			yield from sysfields
 
 			sys, path = System.structure(ln.ln_content)
 			try:
-				sysroot = self.executions[sys].fs_root + path
-			except (AttributeError, KeyError):
+				sysroot = self.executions[sys].fs_root
+			except (AttributeError, KeyError, TypeError):
 				if path is not None:
 					for p in path:
-						yield ('delimiter', '/')
+						yield ('system-path', '/')
 						yield ('system-path', p)
 			else:
 				if path is not None:
