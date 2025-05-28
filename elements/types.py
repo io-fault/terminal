@@ -1909,6 +1909,54 @@ class Reformulations(object):
 		yield ('delimiter', '/')
 		yield ('syntax-character-encoding', self.lf_encoding)
 
+@tools.struct(weakref_slot=True)
+class Cursor(object):
+	"""
+	# &Position pair with motion callbacks.
+	"""
+
+	lines: Position
+	codepoints: Position
+
+	@classmethod
+	def allocate(Class, lo, cstart, co, cstop):
+		i = Class(Position(), Position())
+		i.lines.restore((lo, lo, lo+1))
+		i.codepoints.restore((cstart, co, cstop))
+		return i
+
+	def coordinates(self) -> tuple[int,int]:
+		"""
+		# Construct the line offset, codepoint offset pairs.
+		"""
+
+		return (self.lines.get(), self.codepoints.get())
+
+	def line_delta(self, ln_offset, deleted, inserted):
+		"""
+		# Update the line cursor and view area.
+		"""
+
+		cursor = self.lines
+
+		if deleted:
+			self.lines.delete(ln_offset, deleted)
+		if inserted:
+			self.lines.insert(ln_offset, inserted)
+
+	def codepoint_delta(self, ln_offset, cp_offset, deleted, inserted):
+		"""
+		# Update the codepoint cursor.
+		"""
+
+		lo = self.lines.get()
+		if lo == ln_offset:
+			cp_offset -= (4) # Constant offset for internal header.
+			if deleted:
+				self.codepoints.delete(cp_offset, deleted)
+			if inserted:
+				self.codepoints.insert(cp_offset, inserted)
+
 @dataclass()
 class Syntax(object):
 	"""
@@ -2101,7 +2149,14 @@ class Syntax(object):
 		# The &System, &.system.WorkContext, and the context's path as a sequence.
 		"""
 
-		sys, path = System.structure(self.source.sole(lo).ln_content)
+		try:
+			li = self.source.sole(lo)
+			sri = li.ln_content
+		except IndexError:
+			sri = ''
+
+		sys, path = System.structure(sri)
+
 		if sys in self.executions:
 			exe = self.executions[sys]
 			sys = exe.identity
@@ -2147,6 +2202,9 @@ class Syntax(object):
 					ctxfields.extend(self.typed_path_fields(exe.fs_root, path, separator=s))
 
 			return ctxfields
+
+		if exe is None:
+			return [('error-condition', lc)]
 
 		if relative or not lc.startswith(s):
 			# pathref defaults to pwd, but is overwritten to fetch initial

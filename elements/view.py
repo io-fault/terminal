@@ -1966,8 +1966,27 @@ class Refraction(Core):
 
 		self.keyboard.revert()
 
+	@comethod('cursor', 'annotate/directory')
+	def c_annotate_directory(self, session, prompt, location, content):
+		"""
+		# Annotate the cursor with a Directory scan.
+		"""
+
+		exe = session.systems[self.source.origin.ref_system]
+		if self is content:
+			sysctx = (lambda: (exe.identity, exe, exe.pwd()))
+		else:
+			sysctx = self.forms.lf_fields.separation.system_context
+
+		self.annotation = annotations.Directory('fs', sysctx,
+			*self.focus
+		)
+
+		self.annotation.configure(self.source)
+		self.keyboard.revert()
+
 	@comethod('cursor', 'annotation/query')
-	def c_directory_annotation_request(session, frame, rf, event):
+	def c_directory_annotation_request(self, session, frame, rf, event):
 		"""
 		# Construct and display the default directory annotation
 		# for the Refraction's syntax type or &.types.Annotation.rotate
@@ -2677,14 +2696,13 @@ class Frame(Core):
 		"""
 
 		vi = self.paths[dpath]
-		location_rf, content, prompt = self.views[vi]
+		rl, cv, pg = self.views[vi]
 
-		self.rl_place_cursor(location_rf)
+		self.rl_place_cursor(rl)
 
-		self.focus = location_rf
+		self.focus = rl
 		self.focus.annotation = annotations.Directory('open',
-			self.focus.forms,
-			self.focus.source,
+			self.focus.forms.lf_fields.separation.system_context,
 			*self.focus.focus
 		)
 
@@ -2695,14 +2713,13 @@ class Frame(Core):
 		"""
 
 		vi = self.paths[dpath]
-		location_rf, content, prompt = self.views[vi]
+		rl, cv, pg = self.views[vi]
 
-		self.rl_place_cursor(location_rf)
+		self.rl_place_cursor(rl)
 
-		self.focus = location_rf
+		self.focus = rl
 		self.focus.annotation = annotations.Directory('save',
-			self.focus.forms,
-			self.focus.source,
+			self.focus.forms.lf_fields.separation.system_context,
 			*self.focus.focus
 		)
 
@@ -2778,6 +2795,14 @@ class Frame(Core):
 	@comethod('frame', 'prompt/host')
 	def f_prompt_host(self, prompt, host, dpath):
 		self.pg_open(dpath, host.identity, str(host.pwd()))
+
+		if prompt.annotation is None:
+			prompt.annotate(annotations.Directory('fs',
+				prompt.forms.lf_fields.separation.system_context,
+				*prompt.focus
+			))
+			prompt.annotation.configure(prompt.source)
+
 		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/process')

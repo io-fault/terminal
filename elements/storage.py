@@ -54,6 +54,7 @@ class Resource(types.Core):
 		self.snapshot = self.modifications.snapshot()
 		self.status = None
 		self.views = weakref.WeakSet()
+		self.cursors = weakref.WeakSet()
 
 	def ln_count(self) -> int:
 		"""
@@ -189,9 +190,11 @@ class Resource(types.Core):
 
 		for dsrc in deltas:
 			dsrc.apply(srclines)
+			if self.cursors:
+				for c in self.cursors:
+					dsrc.track(c)
 
 			for rf in views:
-				img = rf.image
 				dsrc.track(rf)
 				df = list(rf.v_update(dsrc))
 				if rf.frame_visible:

@@ -257,6 +257,7 @@ if 'annotations':
 	a(('s'), 'cursor/annotate/status')
 	a(('u'), 'cursor/annotate/integer/select/glyph')
 	a(('x'), 'cursor/annotate/integer/select/hexadecimal')
+	a(('p'), 'cursor/annotate/directory')
 
 if 'inserts':
 	mode = insert

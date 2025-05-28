@@ -321,27 +321,29 @@ class Directory(object):
 		return self.matches
 
 	rotate = rotate
-	def __init__(self, title, lf, source, vertical, horizontal):
+	def __init__(self, title, system_context, vertical, horizontal):
 		self.title = title
-		self.forms = lf
-		self.source = source
+		self.system = system_context
 		self.vertical = vertical
 		self.horizontal = horizontal
 
+		self.cursor = None
 		self.context = None
 		self.location = None
+		self.status = ""
 		self.index = 0
-		self.status = None
 		self.snapshot = []
 		self.matches = []
 
 	def close(self):
+		self.cursor = None
+		self.context = None
+		self.location = None
+		self.status = ""
+		self.index = 0
+
 		del self.snapshot[:]
 		del self.matches[:]
-		self.location = None
-		self.context = None
-		self.index = None
-		self.status = None
 
 	@staticmethod
 	def fs_name_priority(string):
@@ -353,6 +355,82 @@ class Directory(object):
 			return (1, string)
 		else:
 			return (0, string)
+
+	@staticmethod
+	def prompt_field_boundary(lc, co):
+		length = len(lc)
+		sof = lc.rfind(' ', 0, co)
+		if sof == -1:
+			sof = 0
+		else:
+			sof += 1
+
+		if sof < length:
+			eof = lc.find(' ', co)
+			if eof == -1:
+				eof = length
+
+			if lc[sof] == '-':
+				# Presume option argument.
+
+				if lc[sof:sof+2] == '--':
+					sof = lc.find('=', sof, eof)
+					if sof == -1:
+						sof = co
+						eof = co
+					else:
+						sof += 1
+				else:
+					sof += 2
+		else:
+			eof = length
+
+		return slice(sof, eof)
+
+	def identify_location_context(self, lo, lc, co):
+		sys, exe, path = self.system()
+		length = len(lc)
+
+		if lo == 0:
+			return exe.fs_root, slice(lc.find('/', lc.find('://')+3), length)
+		if lc.startswith('/'):
+			return exe.fs_root, slice(0, length)
+
+		return exe.fs_root + path, slice(0, length)
+
+	identify_context = identify_location_context
+
+	def identify_prompt_context(self, lo, lc, co):
+		sys, exe, path = self.system()
+		length = len(lc)
+
+		if lo == 0:
+			return exe.fs_root, slice(lc.find('/', lc.find('://')+3), length)
+
+		s = self.prompt_field_boundary(lc, co)
+		if lc[s.start:s.start+1] == '/':
+			return exe.fs_root, s
+		else:
+			return exe.fs_root + path, s
+
+	def configure(self, src):
+		"""
+		# Check the new line for a path context.
+		"""
+
+		# Reset state.
+		self.close()
+
+		if src.origin.ref_type == 'ivectors':
+			self.identify_context = self.identify_prompt_context
+		elif src.origin.ref_type == 'location':
+			self.identify_context = self.identify_location_context
+		else:
+			lo = self.vertical.get()
+			co = self.horizontal.get()
+
+			self.cursor = types.Cursor.allocate(lo, *self.horizontal.snapshot())
+			src.cursors.add(self.cursor)
 
 	def chdir(self, context, location):
 		"""
@@ -419,48 +497,49 @@ class Directory(object):
 		# Only displaying the match's filename.
 		return types.Syntax.typed_path_fields(self.location, match.split('/'), separator='/')
 
-	def identify_path_context(self, li):
-		sys, exe, path = self.forms.lf_fields.separation.system_context()
-		lc = li.ln_content
+	def path_context_switched(self, cr, lo, co):
+		if lo != self.cursor.lines.get():
+			# Line changed. Attempt to update path boundaries.
+			return True
 
-		if li.ln_offset == 0:
-			return exe.fs_root, lc.find('/', lc.find('://')+3)
-		if lc.startswith('/'):
-			return exe.fs_root, 0
+		if co < cr.start or co > cr.stop:
+			# Field changed. Attempt to update path bounardies.
+			return True
 
-		return exe.fs_root + path, 0
+		# Still editing the same path.
+		return False
 
 	def update(self, li, structure):
 		# Presumes resource location editing.
-		rpath, offset = self.identify_path_context(li)
-		pattern = li.ln_content[offset:]
+		co = self.horizontal.get()
 
-		# Identify field.
-		current = self.horizontal.get() - offset
-		prefix = pattern.rfind('/', 0, current)
-		if prefix == -1:
-			# No slash before cursor.
-			prefix = 0
-			self.start = offset
-		else:
-			# Position after slash.
-			self.start = offset + prefix + 1
+		try:
+			if self.cursor is None:
+				rpath, cr = self.identify_context(li.ln_offset, li.ln_content, co)
+			else:
+				if li.ln_offset != self.cursor.lines.get():
+					# Keep directory if it's not in the source area.
+					return
+				sys, exe, path = self.system()
+				rpath = exe.fs_root + path
+				cr = self.cursor.codepoints.slice()
+		except AttributeError:
+			# Currently trapped for Process missing fs_root.
+			return
 
-		self.stop = pattern.find('/', max(current, self.start - offset))
-		if self.stop == -1:
-			self.stop = li.ln_length
+		current = co - cr.start
+		pattern = li.ln_content[cr]
+		prefix = max(0, pattern.rfind('/', 0, current))
+		segment = min(cr.stop, pattern.find('/', current))
 
 		# Update location.
 		pathstr = pattern[:prefix]
 		if pathstr:
-			if pathstr.startswith('/'):
-				path = rpath@pathstr
-			else:
-				path = rpath@(pathstr.strip('/'))
+			path = +(rpath@pathstr)
 		else:
 			path = rpath
 
-		status = li.ln_content[self.start:self.stop]
+		status = pattern[prefix:(None if segment == -1 else segment+1)].strip('/')
 
 		# Check for leading path changes.
 		if self.location != path:
