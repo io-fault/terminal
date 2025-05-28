@@ -327,34 +327,63 @@ class Directory(object):
 		self.vertical = vertical
 		self.horizontal = horizontal
 
-		self.cursor = None
-		self.context = None
-		self.location = None
-		self.status = ""
-		self.index = 0
-		self.snapshot = []
-		self.matches = []
+		self.close()
 
 	def close(self):
 		self.cursor = None
 		self.context = None
 		self.location = None
+
 		self.status = ""
 		self.index = 0
 
-		del self.snapshot[:]
-		del self.matches[:]
+		self.snapshot = []
+		self.matches = []
 
 	@staticmethod
 	def fs_name_priority(string):
 		"""
-		# Sort key for ordering some operator charcters after.
+		# Sort key for the limited sample.
 		"""
 
-		if string[:1] in {'.', '_', '-', '~'}:
+		c = string[:1]
+		if not c:
+			return (3, string)
+
+		if c in {'.', '_', '-', '~'}:
 			return (1, string)
-		else:
+
+		if ord(c) < 0x21:
+			return (2, string)
+
+		return (0, string)
+
+	@staticmethod
+	def fs_snapshot_key(path):
+		string = path.identifier
+		c = string[:1]
+		if not c:
+			return (3, string)
+		i = ord(c)
+
+		if i > 0x7F:
 			return (0, string)
+
+		if i < 0x21:
+			# Control characters including space.
+			return (2, string)
+
+		if i < 0x41:
+			# Puncuations and decimals, Before "A".
+			return (1, string)
+
+		if i > 0x5A and i < 0x61:
+			return (1, string)
+
+		if i > 0x7A and i <= 0x7F:
+			return (1, string)
+
+		return (0, string)
 
 	@staticmethod
 	def prompt_field_boundary(lc, co):
@@ -440,6 +469,7 @@ class Directory(object):
 		self.context = context
 		self.location = location
 		self.snapshot = list(self.location.fs_iterfiles())
+		self.snapshot.sort(key=self.fs_snapshot_key)
 
 	def select(self, query):
 		self.matches = [
@@ -457,7 +487,15 @@ class Directory(object):
 
 		ms = set()
 		offset = len(self.status)
+
+		lead = limit // 2
 		for m in self.matches:
+			if len(ms) > lead:
+				break
+			ms.add(m[offset:offset+1])
+
+		# Snapshot sorting moves dot-files and operators to the back.
+		for m in reversed(self.matches):
 			if len(ms) > limit:
 				break
 			ms.add(m[offset:offset+1])
