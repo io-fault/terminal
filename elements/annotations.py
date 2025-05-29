@@ -327,6 +327,9 @@ class Directory(object):
 		self.vertical = vertical
 		self.horizontal = horizontal
 
+		# Escape handling; only set with ivectors syntax.
+		self._decode = self._encode = (lambda x: x)
+
 		self.close()
 
 	def close(self):
@@ -452,6 +455,8 @@ class Directory(object):
 
 		if src.origin.ref_type == 'ivectors':
 			self.identify_context = self.identify_prompt_context
+			self._encode = types.Syntax._encode_escapes
+			self._decode = types.Syntax._decode_escapes
 		elif src.origin.ref_type == 'location':
 			self.identify_context = self.identify_location_context
 		else:
@@ -472,6 +477,7 @@ class Directory(object):
 		self.snapshot.sort(key=self.fs_snapshot_key)
 
 	def select(self, query):
+		query = self._decode(query)
 		self.matches = [
 			y.identifier if y.fs_type() != 'directory' else y.identifier + '/'
 			for y in self.snapshot
@@ -527,7 +533,7 @@ class Directory(object):
 
 	def insertion(self):
 		if self.index < len(self.matches):
-			return self.matches[self.index][len(self.status):]
+			return self._encode(self.matches[self.index][len(self.status):])
 		else:
 			return ""
 
@@ -571,7 +577,7 @@ class Directory(object):
 		segment = min(cr.stop, pattern.find('/', current))
 
 		# Update location.
-		pathstr = pattern[:prefix]
+		pathstr = self._decode(pattern[:prefix])
 		if pathstr:
 			path = +(rpath@pathstr)
 		else:
