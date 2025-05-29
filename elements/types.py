@@ -1999,6 +1999,7 @@ class Syntax(object):
 		'scheme': 'system-method',
 		'address': 'system-title',
 		'port': 'system-invalid-field',
+		'fragment': 'system-invalid-field',
 
 		'delimiter': 'system-delimiter',
 		'type': 'system-delimiter',
