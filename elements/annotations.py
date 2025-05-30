@@ -391,17 +391,34 @@ class Directory(object):
 	@staticmethod
 	def prompt_field_boundary(lc, co):
 		length = len(lc)
-		sof = lc.rfind(' ', 0, co)
+
+		# Terminator or field separator closest to the cursor.
+		eof = length
+		for c in ' |&':
+			r = lc.find(c, co)
+			if r > -1:
+				eof = min(r, eof)
+
+		sof = -1
+		for c in ' |&':
+			sof = max(lc.rfind(c, 0, co), sof)
+
 		if sof == -1:
 			sof = 0
 		else:
 			sof += 1
 
-		if sof < length:
-			eof = lc.find(' ', co)
-			if eof == -1:
-				eof = length
+			# Check for redirect boundary.
+			rop = lc.find('>', sof, co)
+			if rop == -1:
+				rop = lc.find('<', sof, co)
+			if rop > -1:
+				# Redirect found, scan until operator is cleared.
+				sof = rop
+				while lc[sof:sof+1] in '<>=-' and sof < eof:
+					sof += 1
 
+		if sof < length:
 			if lc[sof] == '-':
 				# Presume option argument.
 
