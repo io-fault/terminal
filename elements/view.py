@@ -14,6 +14,7 @@ from . import storage
 from .types import Core, Annotation, Position, Status, Model, System
 from .types import Reference, Reformulations, Line, Prompting
 from .types import Area, Image, Phrase, Words, Glyph, LineStyle
+from .types import Work, Procedure, Composition, Instruction
 
 class Refraction(Core):
 	"""
@@ -34,8 +35,6 @@ class Refraction(Core):
 		# The display context of the &image.
 	# /version/
 		# The version of &source that is currently being represented.
-	# /system_execution_status/
-		# Status of system processes executed by commands targeting the instance.
 	# /image/
 		# The &Phrase sequence of the current display.
 	"""
@@ -155,7 +154,6 @@ class Refraction(Core):
 		self.system = resource.origin.ref_system # Default execution context.
 		self.forms = resource.forms
 		self.annotation = None
-		self.system_execution_status = {}
 
 		self.focus = (Position(), Position())
 		self.query = {} # Query state; last search, seek, etc.
@@ -2092,6 +2090,91 @@ class Refraction(Core):
 		# Reconstruct the key using the frame status.
 		session.dispatch(device.key(statusmodifiers))
 
+	# Used by WorkContext redirects to truncate targets
+	# when called for and identify insertion positions.
+
+	def origin_selection_snapshot(self):
+		# Empty span.
+		return []
+
+	def character_selection_snapshot(self):
+		lo = self.focus[0].get()
+		return [Line(lo, 0, self.horizontal_selection_text())]
+
+	def relative_line_selection_snapshot(self):
+		il = self.source.sole(self.focus[0].slice().start).ln_level
+		return [li.relevel(li.ln_level - il) for li in self.vertical_selection_text()]
+
+	def line_selection_snapshot(self):
+		return list(self.vertical_selection_text())
+
+	def document_snapshot(self):
+		# Expensive, but allows for rewrites.
+		return list(self.source.select(0, self.source.ln_count()))
+
+	def replace_origin_selection(self):
+		# Always empty selection.
+		return (0, 0)
+
+	def replace_character_selection(self):
+		lo = self.focus[0].get()
+		s = self.focus[1].slice()
+		self.source.delete_codepoints(lo, s.start, s.stop)
+		self.source.commit()
+
+		return (lo, s.start)
+
+	def replace_line_selection(self):
+		start, lo, stop = self.focus[0].snapshot()
+		removed = self.source.delete_lines(start, stop)
+		nlines = self.source.ln_count() - removed
+		if start >= nlines:
+			self.source.insert_lines(start, [Line(0, 0, "")])
+		self.source.commit()
+
+		return (start, 0)
+
+	def replace_line_selection_relative(self):
+		src = self.source
+		start, lo, stop = self.focus[0].snapshot()
+		fl = src.sole(start)
+		removed = src.delete_lines(start, stop)
+		src.insert_lines(start, [Line(0, fl.ln_level, "")])
+		src.commit()
+
+		return (start, 0, fl.ln_level)
+
+	def replace_document(self):
+		removed = self.source.truncate()
+		self.source.insert_lines(0, [Line(0, 0, "")])
+		self.source.commit()
+
+		return (0, 0)
+
+	def extend_character_selection(self):
+		lo = self.focus[0].get()
+		co = self.focus[1].slice().stop
+
+		return (lo, co)
+
+	def extend_line_selection(self):
+		start, lo, stop = self.focus[0].snapshot()
+
+		return (stop, 0)
+
+	def extend_line_selection_relative(self):
+		src = self.source
+		lo, co = self.extend_line_selection()
+		fl = src.sole(lo - 1)
+		il = fl.ln_level
+		src.insert_lines(lo, [Line(0, il, "")])
+		src.commit()
+
+		return (lo, co, il)
+
+	def extend_document(self):
+		return (self.source.ln_count(), 0)
+
 class Frame(Core):
 	"""
 	# Frame implementation for laying out and interacting with a set of refactions.
@@ -2620,32 +2703,56 @@ class Frame(Core):
 		self.focus = prompt
 		return prompt
 
+	@staticmethod
+	def pg_compile(forms, lines):
+		"""
+		# Compile a prompt's procedure for dispatch.
+		"""
+
+		lff = forms.lf_fields.separation
+		flines = [list(lff.iv_isolate(lff.ivectors, li)) for li in lines]
+		icommands = Procedure.join_lines(flines)
+		pi = iter(itertools.chain(*map(Procedure.terminate, icommands)))
+		return Procedure.structure(pi)
+
 	def pg_execute(self, dpath, session):
 		"""
 		# Execute the command present on the prompt of the &dpath division.
+
+		# [ Returns ]
+		# The dispatched &Work or a count of instructions executed.
 		"""
 
-		l, target, p = self.select(dpath)
-		src = p.source
-		ctx = src.sole(0).ln_content
-		commands = '\n'.join(x.ln_content for x in src.select(1, src.ln_count()))
-
-		sys, path = System.structure(ctx)
+		rl, target, pg = self.select(dpath)
+		src = pg.source
+		lines = list(src.select(0, src.ln_count()))
+		sys, path = System.structure(lines[0].ln_content)
 
 		# System command.
 		if sys not in session.systems:
-			return False
+			return None
 		exectx = session.systems[sys]
 
-		# Prompt control instruction.
-		if commands.startswith('cd ') or commands == 'cd':
-			try:
-				new = commands.split(maxsplit=1)[1]
-			except IndexError:
-				new = ''
-			return self.pg_change_context_path(src, ctx, exectx, path, new)
+		# Compile the procedure.
+		proc = self.pg_compile(pg.forms, lines[1:])
 
-		return exectx.execute(session, target, path, commands)
+		# Handle prompt local cd case.
+		ixn = proc.sole(Instruction)
+		if ixn is not None and ixn.invokes('cd'):
+			for rpath in ixn.fields[1:]:
+				self.pg_change_context_path(src, lines[0].ln_content, exectx, path, rpath)
+			return None
+
+		if not exectx.dispatching:
+			return exectx.evaluate(None, 0, path, proc)
+
+		work = Work.allocate(target, lines)
+		work.spawn(exectx, path, proc)
+
+		# Track work status with an annotation while Work continues.
+		wa = annotations.ExecutionStatus(work, 'prompt-dispatch', proc.title())
+		target.annotate(wa)
+		return work
 
 	@comethod('prompt', 'close')
 	def pg_close(self, dpath) -> int:
@@ -2671,23 +2778,27 @@ class Frame(Core):
 
 	@comethod('prompt', 'execute/close')
 	def pg_execute_close(self, dpath, session, prompt):
-		if self.pg_execute(dpath, session):
+		r = self.pg_execute(dpath, session)
+		if r:
 			self.pg_clear_command(prompt)
 			self.pg_close(dpath)
 			session.keyboard.set('control')
 			return True
+		elif r is None:
+			self.pg_clear_command(prompt)
 		return False
 
 	@comethod('prompt', 'execute/reset')
 	def pg_execute_reset(self, dpath, session, prompt):
-		if self.pg_execute(dpath, session):
+		r = self.pg_execute(dpath, session)
+		if r or r is None:
 			self.pg_clear_command(prompt)
 			return True
 		return False
 
 	@comethod('prompt', 'execute/repeat')
 	def pg_execute_repeat(self, dpath, session):
-		return self.pg_execute(dpath, session)
+		return bool(self.pg_execute(dpath, session))
 
 	def relocate(self, dpath):
 		"""

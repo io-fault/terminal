@@ -412,10 +412,12 @@ class Directory(object):
 			rop = lc.find('>', sof, co)
 			if rop == -1:
 				rop = lc.find('<', sof, co)
+				if rop == -1:
+					rop = lc.find('^', sof, co)
 			if rop > -1:
 				# Redirect found, scan until operator is cleared.
 				sof = rop
-				while lc[sof:sof+1] in '<>=-' and sof < eof:
+				while lc[sof:sof+1] in '^<>' and sof < eof:
 					sof += 1
 
 		if sof < length:
@@ -472,8 +474,11 @@ class Directory(object):
 
 		if src.origin.ref_type == 'ivectors':
 			self.identify_context = self.identify_prompt_context
-			self._encode = types.Syntax._encode_escapes
-			self._decode = types.Syntax._decode_escapes
+
+			# Ideally, Directory would not be aware of this, but
+			# insertion interfaces have no concern for field types.
+			self._encode = types.Expression._encode_escapes
+			self._decode = types.Expression._decode_escapes
 		elif src.origin.ref_type == 'location':
 			self.identify_context = self.identify_location_context
 		else:
@@ -616,24 +621,13 @@ class ExecutionStatus(object):
 	# Process execution status.
 	"""
 
-	from os import kill
-
-	def __init__(self, operation, title, pid, status):
-		self.operation = operation
+	def __init__(self, work, title, operation):
+		self.work = work
 		self.title = title
-		self.xs_process_id = pid
-		self.xs_data = status
+		self.operation = operation
 
 	def close(self):
-		if self.xs_data[self.xs_process_id] is None:
-			# SIGINT and other signals are not currently accessible.
-			try:
-				self.kill(self.xs_process_id, 9)
-			except ProcessLookupError:
-				pass
-		else:
-			# Exit code already present no clean up necessary.
-			del self.xs_data[self.xs_process_id]
+		self.work.interrupt()
 
 	def update(self, li, structure):
 		# No response to insertions or deletions.
@@ -642,8 +636,11 @@ class ExecutionStatus(object):
 	def image(self):
 		yield ('inclusion-keyword', self.operation)
 		yield ('field-annotation-separator', '[')
-		yield ('literal-words', f"{self.xs_process_id}")
+		yield ('literal-words', self.insertion())
 		yield ('field-annotation-separator', ']')
 
 	def insertion(self):
-		return str(self.xs_process_pid)
+		for pid, code in self.work.status.items():
+			if code is not None and not isinstance(code, int):
+				return str(pid)
+		return "-"

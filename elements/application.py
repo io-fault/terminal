@@ -23,7 +23,7 @@ from . import retention
 from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax
 from .storage import Resource, Directory, delta
 from .view import Refraction, Frame
-from .system import WorkContext, Host, Process, IOManager
+from .system import Context as SystemContext, Host, Process, IOManager
 
 # Disable signal exits for multiple interpreter cases.
 process.__signal_exit__ = (lambda x: None)
@@ -90,7 +90,7 @@ class Session(Core):
 	host: System
 	executable: files.Path
 	resources: Mapping[files.Path, Resource]
-	systems: Mapping[System, WorkContext]
+	systems: Mapping[System, SystemContext]
 
 	placement: tuple[tuple[int, int], tuple[int, int]]
 	types: Mapping[files.Path, tuple[object, object]]
@@ -211,6 +211,7 @@ class Session(Core):
 				self.host.identity.sys_identity,
 				self.title,
 			),
+			self,
 		)
 
 		self.types = self.integrate_types(self.configuration.types, self.theme)

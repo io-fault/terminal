@@ -3,6 +3,7 @@
 """
 import itertools
 import collections
+import weakref
 
 from dataclasses import dataclass
 from fault.context import comethod
@@ -1957,6 +1958,664 @@ class Cursor(object):
 			if inserted:
 				self.codepoints.insert(cp_offset, inserted)
 
+@tools.struct()
+class Expression(object):
+	"""
+	# Common base class for ivectors elements.
+
+	# Holds common parsing functions for transforming syntax fields
+	# into &Redirection, &Instruction, &Procedure, and &Composition.
+	"""
+
+	_ec_chars = ' \n\r"#\\|&><^*'
+	_ec_interpret = str.maketrans(
+		''.join(chr(0x10fa00 + x) for x in range(1, len(_ec_chars)+1)),
+		_ec_chars,
+	)
+	_ec_protect = str.maketrans(
+		_ec_chars,
+		''.join(chr(0x10fa00 + x) for x in range(1, len(_ec_chars)+1)),
+	)
+	_decode_escapes = (lambda x: x.translate(Expression._ec_interpret))
+	_encode_escapes = (lambda x: x.translate(Expression._ec_protect))
+
+	@classmethod
+	def join_field(Class, parts):
+		"""
+		# Compose the parts into a formatted string.
+
+		# Translate escapes and combine literals.
+		"""
+
+		field = ''
+
+		i = 0
+		redirect = port = None
+		for ft, fv in parts[:2]:
+			if ft == 'inclusion-operation' and fv[:1] != '-':
+				# All operations are redirects, except those with a leading dash.
+				i += 1
+				redirect = fv
+				break
+			elif ft != 'inclusion-words':
+				# Optional leading file descriptor number.
+				port = fv
+			i += 1
+		else:
+			# Not a redirect.
+			i = 0
+
+		lit = None
+		for ft, fs in parts[i:]:
+			if ft.startswith('inclusion-'):
+				field += Class._decode_escapes(fs)
+			elif lit is not None:
+				if ft == 'literal-stop':
+					lit += fs[:-1]
+					field += lit
+					lit = None
+				elif ft != 'literal-start':
+					lit += fs
+				else:
+					lit += fs
+			elif ft == 'literal-start':
+				lit = fs[1:]
+			else:
+				# Exclusion
+				pass
+		else:
+			if lit:
+				# Open literal.
+				field += lit
+
+		if redirect is not None:
+			out = (redirect, port, field)
+		else:
+			out = field
+		return out
+
+	@classmethod
+	def identify_edges(Class, syntax):
+		"""
+		# Find the first and last non-space and non-exclusion fields.
+
+		# Groups syntax fields for instruction field formatting.
+		"""
+
+		i = -1
+		typ = 'inclusion-space'
+		fv = ''
+
+		while typ == 'inclusion-space' or typ.startswith('exclusion-'):
+			i += 1
+			try:
+				typ, fv = syntax[i]
+			except IndexError:
+				return None
+		start = i
+
+		i = 0
+		typ = 'inclusion-space'
+		fv = ''
+		while typ == 'inclusion-space' or typ.startswith('exclusion-'):
+			i -= 1
+			typ, fv = syntax[i]
+
+		stop = len(syntax) + i + 1
+		return slice(start, stop)
+
+	@classmethod
+	def join_lines(Class, lines):
+		"""
+		# Process the fields in &lines to recognize the procedure boundaries.
+		"""
+
+		ilines = iter(lines)
+		last = next(ilines)
+
+		# Find the first non-empty line.
+		ledge = Class.identify_edges(last)
+		while ledge is None:
+			ledge = Class.identify_edges(last)
+
+		cwp = last[ledge]
+
+		for current in ilines:
+			cedge = Class.identify_edges(current)
+			if cedge is None:
+				# Nothing to add.
+				continue
+
+			if current[cedge.start][0] == 'inclusion-terminator':
+				cwp.extend(current[cedge])
+			elif last[ledge.stop-1][0] == 'inclusion-terminator':
+				cwp.extend(current[cedge])
+			else:
+				yield cwp
+				cwp = current[cedge]
+
+			ledge = cedge
+			last = current
+
+		if cwp:
+			yield cwp
+
+	@classmethod
+	def terminate(Class, syntax):
+		"""
+		# Scan the syntax fields for instruction vector terminators and
+		# isolate the joined vector fields by associating them with their
+		# following terminator.
+		"""
+
+		parts = []
+		fields = []
+		termination = None
+
+		for fp in syntax:
+			ft, fv = fp
+
+			if ft == 'inclusion-space':
+				assert set(fv) == {' '}
+				# End of field.
+				pass
+			elif ft == 'inclusion-terminator':
+				termination = fv
+			else:
+				# Add for subsequent interpretation.
+				parts.append(fp)
+				continue
+
+			if parts:
+				fields.append(Class.join_field(parts))
+				parts = []
+
+			if termination is not None:
+				if termination == '\\':
+					# Carry fields.
+					continue
+
+				yield (termination, fields)
+				termination = None
+				fields = []
+		else:
+			if parts:
+				fields.append(Class.join_field(parts))
+			if fields:
+				yield ('', fields)
+
+@tools.struct()
+class Redirection(Expression):
+	"""
+	# A redirect operator of an instruction.
+
+	# The structure defining the parts of a redirection.
+	"""
+
+	operator: str
+	port: int|None
+	operand: str
+
+	def suffix(self, string):
+		"""
+		# Reconstruct with &string suffixed on &operand.
+		"""
+
+		return self.__class__(self.operator, self.port, self.operand+string)
+
+	def default_port(self) -> int:
+		"""
+		# Identify the default port from the &operator.
+		"""
+
+		if '<<' in self.operator:
+			# Source.
+			return 3
+		elif self.operator == '.<':
+			raise ValueError("working directory change")
+		elif '<' in self.operator:
+			return 0
+		elif '>' in self.operator:
+			return 1
+		elif '^' in self.operator:
+			# Normally special cased with split.
+			return -1
+
+	def split(self, iport=0, oport=1):
+		"""
+		# Deconstruct the combination, `^`, into a pair of input and output
+		# &Redirection instances to eliminate the need for processing
+		# combinations further downstream.
+		"""
+
+		assert self.operator[:1] == '^'
+
+		if self.operator[:2] == '^>':
+			suffix = self.operator[2:]
+			out = '>>'
+		else:
+			suffix = self.operator[1:]
+			out = '>'
+
+		return (
+			Redirection('<'+suffix, iport, self.operand),
+			Redirection(out+suffix, oport, self.operand),
+		)
+
+@tools.struct()
+class Instruction(Expression):
+	"""
+	# Expression structure for application instructions and system commands.
+	"""
+
+	fields: Sequence[str]
+	redirects: Sequence[Redirection]
+
+	def sole(self, *types):
+		return None
+
+	def title(self) -> str:
+		"""
+		# The first field of the instruction.
+		"""
+
+		if self.fields:
+			return self.fields[0]
+		else:
+			return "[-]"
+
+	def empty(self) -> bool:
+		"""
+		# Whether the instruction is specified, `len(.fields) == 0`.
+		"""
+
+		return not self.fields
+
+	def invokes(self, name:str) -> bool:
+		"""
+		# Whether &name is consistent with the first field of the instruction.
+		"""
+
+		return self.fields[0] == name if self.fields else False
+
+	@classmethod
+	def isolate(Class, fields):
+		"""
+		# Construct an instance isolating the fields into their respective level.
+		# Sorts redirects from instruction vector fields.
+		"""
+
+		fs = []
+		rs = []
+		exts = {}
+
+		for f in fields:
+			if f.__class__ is str:
+				fs.append(f)
+			else:
+				p = None if f[1] is None else int(f[1]) # Redirect port.
+				r = Redirection(f[0], p, f[-1])
+				if f[0] == '<<':
+					# Other redirects overwrite the port.
+					# Text extends previous text redirects.
+					if p in exts:
+						ri = exts[p]
+						rs[ri] = rs[ri].suffix(f[-1])
+					else:
+						exts[p] = len(rs)
+						rs.append(r)
+				else:
+					rs.append(r)
+
+		return Class(fs, rs)
+
+	def split_redirects(self):
+		"""
+		# Isolate standard input and output redirections and reconstruct
+		# the &Instruction with the remainder.
+
+		# Needed for integrating redirects into &Composition's.
+
+		# [ Returns ]
+		# Triple containing the reconstructed &Instruction, the sequence
+		# of &Redirection to be integrated into the beginning of the
+		# composition, and the sequence to be integrated into the end of
+		# the composition.
+		"""
+
+		head = []
+		tail = []
+		remains = []
+		for r in self.redirects:
+			p = r.port
+			if p is None:
+				p = r.default_port()
+
+			if r.operator[:1] == '^':
+				# Handle combination cases by splitting them.
+				assert p is None
+				ri, ro = r.split()
+				head.append(ri)
+				tail.append(ro)
+			if p == 0 and r.operator[:1] == '<':
+				# Standard input redirection.
+				head.append(r)
+			elif p == 1 and r.operator[:1] == '>':
+				# Standard output redirection.
+				tail.append(r)
+			else:
+				remains.append(r)
+
+		return self.__class__(self.fields, remains), head, tail
+
+	def redirect(self, work, system, path):
+		"""
+		# Allocate the file descriptor mappings for an invocation.
+		"""
+
+		for r in self.redirects:
+			if r.operator[:1] == '^':
+				rin, rout = r.split()
+				yield (system.redirect(work, rin, path), rin.port)
+				yield (system.redirect(work, rout, path), rout.port)
+			else:
+				p = r.port
+				if p is None:
+					p = r.default_port()
+				yield (system.redirect(work, r, path), p)
+
+@tools.struct()
+class Composite(Expression):
+	"""
+	# Superclass of all expressions consisting of multiple instructions.
+	"""
+
+	@classmethod
+	def compose(Class, integration, tail, exclusion=False):
+		# Reduce as much as possible.
+		while ii := integration.sole(Composite, Instruction):
+			integration = ii
+		while ii := tail.sole(Composite, Instruction):
+			tail = ii
+
+		if isinstance(tail, Composition):
+			c = tail
+			if exclusion:
+				del c.parts[0:1]
+			c.parts.insert(0, integration)
+		else:
+			if isinstance(tail, Procedure) and isinstance(tail.steps[0], Composition):
+				if exclusion:
+					del tail.steps[0].parts[0:1]
+
+				# Not sole and opens with a composition.
+				if isinstance(integration, Procedure):
+					tail.steps[0].parts.insert(0, integration)
+					return tail
+				else:
+					if tail.conditions[0] == 'always':
+						rc = tail.steps[0]
+						integration.parts.extend(rc.parts)
+						del tail.steps[0:1]
+				tails = [tail]
+			elif exclusion:
+				# tail is not a composition or procedure
+				tails = []
+			else:
+				tails = [tail]
+			c = Composition([integration] + tails)
+
+		return Procedure([c], ['always'])
+
+	@classmethod
+	def structure(Class, iterminated):
+		ctypes = {
+			'': 'always',
+			'&': 'always',
+			'&*': 'always',
+			'&+': 'completed',
+			'&-': 'failed',
+			'&#': 'never',
+		}
+		group = []
+		conditions = []
+		continued = []
+
+		for t, ifields in iterminated:
+			i = Instruction.isolate(ifields)
+
+			if t not in {'|', '||', '|#', '||#'}:
+				# Regular instruction step.
+				conditions.append(ctypes[t])
+				group.append(i)
+			else:
+				# Procedure leading a composition.
+				if t in {'||', '||#'}:
+					# Handle precedence switch.
+					group.append(i)
+					conditions.append('always')
+					lead = Procedure(group, conditions)
+					group = []
+					conditions = []
+					tail = Class.structure(iterminated)
+					return Class.compose(lead, tail, exclusion=(t=='||#'))
+
+				# Redirect only instruction.
+				if isinstance(i, Instruction) and i.empty() and i.redirects:
+					i, fhead, ftail = i.split_redirects()
+					c = []
+				else:
+					c = [i]
+					i = None
+					fhead = ftail = []
+
+				skip = (t == '|#')
+				for ct, ci in iterminated:
+					if skip:
+						skip = False
+					else:
+						c.append(Instruction.isolate(ci))
+
+					if ct != '|':
+						if ct in {'||', '||#'}:
+							# Handle precedence switch.
+							exclusion = (ct == '||#')
+							tail = Class.structure(iterminated)
+
+							if tailc := tail.sole(Composition):
+								if exclusion:
+									del tailc.parts[0:1]
+								c.extend(tailc.parts)
+							elif taili := tail.sole(Instruction):
+								if not exclusion:
+									c.append(taili)
+							elif itail := tail.sole(Procedure):
+								if itail.sole(Composition):
+									if exclusion:
+										del itail.steps[0].parts[0:1]
+									c.extend(itail.steps[0])
+								elif not exclusion:
+									c.append(tail.steps[0])
+							else:
+								# Procedure.
+								if not exclusion:
+									c.append(tail)
+						elif ct == '|#':
+							skip = True
+						else:
+							conditions.append(ctypes[ct])
+							break
+				else:
+					# End of instructions during composition.
+					# Unnatural as the empty type is usually the final terminator.
+					conditions.append('always')
+
+				# Distribute the split redirects from a leading empty instruction.
+				if fhead:
+					c[0].redirects.extend(fhead)
+				if ftail:
+					c[-1].redirects.extend(ftail)
+
+				if len(c) < 2:
+					# Redirect only instructions filtered.
+					i = c[0]
+				else:
+					i = Composition(c)
+				group.append(i)
+
+		p = Procedure(group, conditions)
+		if sub := p.sole(Procedure):
+			return sub
+		return p
+
+@tools.struct()
+class Composition(Composite):
+	"""
+	# A series of instructions providing the input for the following.
+	"""
+
+	parts: Sequence[Instruction|Composite]
+
+	def sole(self, *types):
+		if len(self.parts) > 1:
+			return None
+		if isinstance(self.parts[0], types):
+			return self.parts[0]
+		return None
+
+	def title(self) -> str:
+		"""
+		# The first and last title.
+		"""
+
+		return '->'.join((self.parts[0].title(), self.parts[-1].title()))
+
+@tools.struct()
+class Procedure(Composite):
+	"""
+	# A series of instructions to be executed sequentially.
+
+	# [ Elements ]
+	# /steps/
+		# The sequence of instructions, compositions, or procedures.
+	# /conditions/
+		# The conditions under which a corresponding commands may be executed.
+	"""
+
+	steps: Sequence[Instruction|Composite]
+	conditions: Sequence[str|None]
+
+	def title(self) -> str:
+		"""
+		# The titles of each instruction.
+		"""
+
+		return '+'.join(x.title() for x in self.steps)
+
+	def empty(self):
+		return len(self.steps) == 0
+
+	def sole(self, *types):
+		if len(self.steps) > 1:
+			return None
+		if isinstance(self.steps[0], types):
+			return self.steps[0]
+		return None
+
+	def iterate(self):
+		return zip(self.steps, map(self.checks.__getitem__, self.conditions))
+
+	checks = {
+		'never': (lambda x: True),
+		'always': (lambda x: False),
+		'completed': (0).__ne__,
+		'failed': (0).__eq__,
+	}
+
+@tools.struct(weakref_slot=True)
+class Work(object):
+	"""
+	# Procedure dispatch context tracking process status.
+	"""
+
+	target: object
+	source: Sequence[Line]
+	procedures: Sequence[Procedure]
+	cursors: Sequence[object]
+	status: Mapping[object, dict]
+
+	@classmethod
+	def allocate(Class, relation, lines):
+		return Class(weakref.proxy(relation), lines, [], [], {})
+
+	@property
+	def system(self):
+		"""
+		# System expressed in the first line of &source.
+		"""
+
+		return System.structure(self.source[0].ln_content)
+
+	def spawn(self, system, path, proc, fdmap=()) -> int:
+		"""
+		# Add &proc to the sequence of procedures, allocate
+		# a cursor, and dispatch its first step.
+
+		# [ Returns ]
+		# The index of the procedure.
+		"""
+
+		# The copy must be made here as the pipe will close
+		# the local file descriptors soon after.
+		copy = system.replicate(fdmap)
+
+		index = len(self.cursors)
+		cursor = system.evaluate(weakref.proxy(self), index, path, proc, copy)
+		self.procedures.append(proc)
+		self.cursors.append(cursor)
+		self.proceed(index, None, None)
+
+		return index
+
+	def prepare(self, system, path, proc):
+		"""
+		# Extend the set of dispatched procedures.
+		"""
+
+		return tools.partial(self.spawn, system, path, proc), path, ()
+
+	def proceed(self, index, pid, code):
+		"""
+		# Proceed to the next step and configure the next callback.
+		"""
+
+		try:
+			if pid in self.status or pid is None:
+				self.status[pid] = code
+				xl = self.cursors[index].send(code)
+				self.status[xl.event.source] = xl
+		except StopIteration:
+			# End of procedure.
+			self.cursors[index] = None
+			if self.cursors.count(None) == len(self.cursors):
+				self.target.annotate(None)
+
+	from os import kill
+	def interrupt(self):
+		# File descriptors can be held by the cursors,
+		# so force close the generators here.
+		for c in self.cursors:
+			if c is not None:
+				c.close()
+
+		# Let the later completions finish the status and zero cursors.
+		for pid, link in self.status.items():
+			if link is not None and not isinstance(link, int):
+				try:
+					self.kill(pid, 9)
+				except ProcessLookupError:
+					pass
+
 @dataclass()
 class Syntax(object):
 	"""
@@ -1978,17 +2637,6 @@ class Syntax(object):
 	executions: object = None
 	ivectors: object = None
 	iv_isolate: object = None
-
-	_ec_interpret = str.maketrans(
-		''.join(chr(0x10fa00 + x) for x in range(1, 5)),
-		' \n\r"',
-	)
-	_ec_protect = str.maketrans(
-		' \n\r"',
-		''.join(chr(0x10fa00 + x) for x in range(1, 5)),
-	)
-	_decode_escapes = (lambda x: x.translate(Syntax._ec_interpret))
-	_encode_escapes = (lambda x: x.translate(Syntax._ec_protect))
 
 	_field_sets = {}
 	_type_map = {
@@ -2029,7 +2677,7 @@ class Syntax(object):
 
 		for ft, fs in parts:
 			if ft.startswith('inclusion-'):
-				out += Class._decode_escapes(fs)
+				out += Expression._decode_escapes(fs)
 			elif lit is not None:
 				if ft == 'literal-stop':
 					lit += fs[:-1]
@@ -2076,7 +2724,7 @@ class Syntax(object):
 			try:
 				if (pwd @ command).fs_status().executable:
 					return exe.command_type
-			except OSError:
+			except (OSError, ValueError):
 				pass
 
 		return invalid
