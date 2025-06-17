@@ -789,8 +789,9 @@ class Resource(types.Core):
 		self.redo(quantity)
 
 	@comethod('resource', 'save')
-	def r_write_resource(self, session):
-		session.store_resource(self)
+	def r_save(self, rl_syntax, session, content):
+		system, fspath = rl_syntax.location_path()
+		return system.store_resource(session.log, content.source, content)
 
 	@comethod('resource', 'copy')
 	def r_copy_resource(self, log, text, system, files):

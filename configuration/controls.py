@@ -215,7 +215,7 @@ if 'controls':
 
 	a(('s'), 'cursor/select/field/series')
 	a(('s', km_shift), 'cursor/select/line/characters')
-	a(('s', km_control), 'frame/save/resource')
+	a(('s', km_control), 'frame/prompt/save')
 
 	a(('v'), 'cursor/transition/annotation/select')
 	a(('v', km_shift), 'cursor/annotation/rotate')
@@ -261,6 +261,7 @@ if 'annotations':
 
 if 'inserts':
 	mode = insert
+
 	a((k_return, km_writing), 'cursor/line/break/follow')
 	a((k_space, km_shift), 'cursor/insert/escaped-space')
 

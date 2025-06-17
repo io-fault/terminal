@@ -2378,27 +2378,22 @@ class Frame(Core):
 
 	@comethod('location', 'execute/operation')
 	def rl_execute(self, location, dpath, rl_syntax, session, content):
-		if location.annotation.title == 'open':
-			rl_operation = self.rl_open
-		elif location.annotation.title == 'save':
-			rl_operation = self.rl_save
-		else:
-			return
-
-		return rl_operation(dpath, rl_syntax, session, content)
+		# Save operations were once invoked through this.
+		# While more advanced prompt capabilities made this undesirable,
+		# maintain the layer of indirection in case some other use case comes.
+		return self.rl_open(dpath, rl_syntax, session, content)
 
 	@comethod('location', 'open/resource')
 	def rl_open(self, dpath, rl_syntax, session, content):
 		# Construct reference and load dependencies.
 		system, fspath = rl_syntax.location_path()
 
-		typref = session.lookup_type(fspath)
-		syntype = session.load_type(typref)
-
 		try:
 			src = session.sources.select_resource(fspath)
 			load = False
 		except KeyError:
+			typref = session.lookup_type(fspath)
+			syntype = session.load_type(typref)
 			src = session.sources.create_resource(system.identity, typref, syntype, fspath)
 			load = True
 
@@ -2411,12 +2406,6 @@ class Frame(Core):
 
 		if load:
 			system.load_resource(src, new)
-
-	@comethod('location', 'save/resource')
-	def rl_save(self, dpath, rl_syntax, session, content):
-		system, fspath = rl_syntax.location_path()
-		system.store_resource(session.log, content.source, content)
-		self.refocus()
 
 	def fill(self, views):
 		"""
@@ -2800,7 +2789,7 @@ class Frame(Core):
 	def pg_execute_repeat(self, dpath, session):
 		return bool(self.pg_execute(dpath, session))
 
-	def relocate(self, dpath):
+	def relocate(self, dpath, *, title='open'):
 		"""
 		# Shift the focus to the location view of the division identified by
 		# &dpath.
@@ -2812,24 +2801,7 @@ class Frame(Core):
 		self.rl_place_cursor(rl)
 
 		self.focus = rl
-		self.focus.annotation = annotations.Directory('open',
-			self.focus.forms.lf_fields.separation.system_context,
-			*self.focus.focus
-		)
-
-	def rewrite(self, dpath):
-		"""
-		# Adjust the location of the division identified by &dpath and
-		# write the subject's elements to the location upon activation.
-		"""
-
-		vi = self.paths[dpath]
-		rl, cv, pg = self.views[vi]
-
-		self.rl_place_cursor(rl)
-
-		self.focus = rl
-		self.focus.annotation = annotations.Directory('save',
+		self.focus.annotation = annotations.Directory(title,
 			self.focus.forms.lf_fields.separation.system_context,
 			*self.focus.focus
 		)
@@ -2838,10 +2810,6 @@ class Frame(Core):
 	@comethod('resource', 'select')
 	def f_switch_resource(self):
 		self.relocate((self.vertical, self.division))
-
-	@comethod('frame', 'save/resource')
-	def f_update_resource(self):
-		self.rewrite((self.vertical, self.division))
 
 	def target(self, top, left):
 		"""
@@ -2902,6 +2870,33 @@ class Frame(Core):
 	@comethod('frame', 'switch/view/return')
 	def f_switch_view_return(self, dpath):
 		self.returnview(dpath)
+
+	@comethod('frame', 'prompt/save')
+	def f_prompt_save_resource(self, resource, system, prompt, dpath):
+		# Ideally, the full path is present in the executed command.
+		# However, the command length with the qualified tool path
+		# is nearing excess, so trim the length by using a PWD relative
+		# path. Maybe fix this when functions are finally implemented
+		# with a "save" shorthand.
+		ref = resource.origin
+		pwd = ref.ref_context
+		pwdstr = pwd.fs_path_string()
+
+		# Use tool in case PATH has been adjusted.
+		command = [
+			system.tool("tee").fs_path_string(),
+			">/dev/null", "<*",
+			ref.ref_path.fs_path_string()[len(pwdstr)+1:],
+		]
+		self.pg_open(dpath, system.identity, pwdstr, command)
+
+		prompt.annotate(annotations.Directory('fs',
+			prompt.forms.lf_fields.separation.system_context,
+			*prompt.focus
+		))
+		prompt.annotation.configure(prompt.source)
+
+		prompt.keyboard.set('control')
 
 	@comethod('frame', 'prompt/host')
 	def f_prompt_host(self, prompt, host, dpath):
