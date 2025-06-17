@@ -1233,8 +1233,12 @@ device_define(PyObject *self, PyObject *args)
 		v = PyUnicode_ReadChar(ux, 0);
 	else
 	{
-		const char *uxstr = PyUnicode_AsUTF8(ux);
-		v = Device_Define(devob->dev_terminal, uxstr);
+		PyObject *estr = PyUnicode_AsEncodedString(ux, "utf-8", "replace");
+		if (estr == NULL)
+			return(NULL);
+
+		v = Device_Define(devob->dev_terminal, PyBytes_AS_STRING(estr));
+		Py_DECREF(estr);
 	}
 
 	return(PyLong_FromLong(v));
