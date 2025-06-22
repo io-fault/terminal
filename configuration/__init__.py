@@ -4,7 +4,7 @@
 import importlib
 from .. import syntax
 
-def load_syntax(typname, default='lambda'):
+def load_syntax(typname, theme, default='lambda'):
 	"""
 	# Retrieve the field isolation method and configuration
 	# from &implementations.
@@ -14,6 +14,8 @@ def load_syntax(typname, default='lambda'):
 	# [ Parameters ]
 	# /typname/
 		# The name of the syntax.
+	# /theme/
+		# Mapping of colors and types to Glyph templates.
 	# /default/
 		# Syntax type to use when &typname has no record.
 
@@ -31,8 +33,14 @@ def load_syntax(typname, default='lambda'):
 	if typname not in types.implementations:
 		try:
 			typmod = importlib.import_module(syntax.__name__ + '.' + typname)
-			types.implementations[typname] = ('keywords', typmod.profile)
+			di = getattr(typmod, 'format', None)
+			if di is not None:
+				config = (typmod.context(theme), di)
+				types.implementations[typname] = ('formatted', config)
+			else:
+				types.implementations[typname] = ('keywords', typmod.profile)
 		except ImportError:
+			raise
 			typname = default
 
 	yield from types.implementations[typname]

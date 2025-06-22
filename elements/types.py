@@ -1803,6 +1803,7 @@ class Reformulations(object):
 			Unit=Unit,
 			isinstance=isinstance,
 			constants={
+				0x09: Redirect((2, '  ', Glyph(codepoint=ord(' ')), "\x09")),
 				0x1f: Redirect((1, '\u2038',
 					Glyph(codepoint=ord('-'), textcolor=0x444444),
 					"\x1f"
@@ -1821,7 +1822,7 @@ class Reformulations(object):
 		"""
 
 		for i in phrasewords:
-			if len(i.text) == 1:
+			if len(i.text) == 1 and not isinstance(i, Redirect):
 				o = ord(i.text)
 
 				if o in constants:
@@ -1836,14 +1837,15 @@ class Reformulations(object):
 					continue
 			yield i
 
-	def segment(self, fields):
+	def segment_fields(self, fields):
 		"""
-		# Construct a segmented phrase from the given fields.
+		# Construct a subphrase from the given fields using &lf_theme and &lf_units.
 		"""
 
 		tg = self.lf_theme.get
+		lfu = self.lf_units
 		return Phrase.segment(
-			(tg(ft, ft), self.lf_units(fc))
+			(tg(ft, ft), lfu(fc))
 			for ft, fc in fields
 		)
 
@@ -1853,17 +1855,13 @@ class Reformulations(object):
 		# for display with a cursor.
 		"""
 
-		tg = self.lf_theme.get # Returns the requested key for already resolved Cells.
-
 		if line.ln_content:
 			itype = 'indentation'
 		else:
 			itype = 'indentation-only'
 
-		content = Phrase.segment(
-			(tg(ft, ft), self.lf_units(fc))
-			for ft, fc in fields
-		)
+		tg = self.lf_theme.get
+		content = Phrase.redirect(self.lf_units, ((tg(ft, ft), fc) for ft, fc in fields))
 
 		yield from self.redirect_indentation(itype, line.ln_level)
 		yield from self.redirect_exceptions(content)
@@ -1874,25 +1872,21 @@ class Reformulations(object):
 		# Construct a Phrase instance representing the structured line.
 		"""
 
-		tg = self.lf_theme.get # Returns the requested key for already resolved Cells.
-
 		if line.ln_content:
 			itype = 'indentation'
 		else:
 			itype = 'indentation-only'
 
-		sfields = list(fields)
-		if sfields:
-			# Strip trailing whitespace.
-			sfields[-1] = (
-				sfields[-1][0],
-				sfields[-1][1].rstrip()
+		fields = list(fields)
+		if fields:
+			# Strip trailing whitespace for &redirect_trail.
+			fields[-1] = (
+				fields[-1][0],
+				fields[-1][1].rstrip()
 			)
 
-		content = Phrase.segment(
-			(tg(ft, ft), self.lf_units(fc))
-			for ft, fc in sfields
-		)
+		tg = self.lf_theme.get
+		content = Phrase.redirect(self.lf_units, ((tg(ft, ft), fc) for ft, fc in fields))
 
 		yield from self.redirect_indentation(itype, line.ln_level)
 		yield from self.redirect_exceptions(content)

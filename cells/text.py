@@ -406,6 +406,61 @@ class Phrase(tuple):
 			for cf, wordi in qwords
 		)
 
+	@staticmethod
+	def redirect(segment, qwords) -> Iterable[Words]:
+		"""
+		# Construct the phrase words for a series of fields with optional redirects.
+
+		# A variant of &Phrase.segment, but processes an iterable of glyph template
+		# field pairs that can be configured to construct Redirects.
+
+		# [ Codepoint Types ]
+
+		# The &Glyph's in &qwords determine how the field is presented
+		# using the `codepoint` attribute.
+
+		# /`=-2`/
+			# Normal field processing. The field will be split
+			# into &Unit or &Words as needed.
+		# /`=-1`/
+			# Empty redirect. The field should be hidden when printed.
+		# /`>=0`/
+			# The field will be represented by the character identified
+			# by the codepoint.
+
+		# [ Parameters ]
+		# /segment/
+			# The Character Unit segmentation method. Used to form
+			# Unit and Word instances for non-redirect cases and
+			# to calculate the cells needed for Redirect instances.
+		# /qwords/
+			# The glyph template and field pairs that will be
+			# transformed into Phrase elements based on the template's
+			# configuration. &[Codepoint Types].
+
+		# [ Returns ]
+		# Iterable of &Words that can be used to form all or part of a &Phrase.
+		"""
+
+		for ftype, field in qwords:
+			cptype = ftype.codepoint
+			if cptype == -2:
+				for cells, text in segment(field):
+					if cells < 0:
+						# Negative cell counts are the indicator used by &..system.words
+						# to isolate Character Units. It's applied here using &Unit.
+						yield Unit((-cells, text, ftype))
+					else:
+						yield Words((cells, text, ftype))
+			else:
+				if cptype == -1:
+					ccount = 0
+					yield Redirect((0, '', ftype, field))
+				else:
+					display = chr(cptype)
+					ccount = sum(abs(x[0]) for x in segment(display))
+					yield Redirect((ccount, display, ftype, field))
+
 	m_unit = (
 		Words.unitcount,
 		Words.unitoffset,

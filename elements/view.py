@@ -501,17 +501,21 @@ class Refraction(Core):
 		q = abs(quantity)
 		for fi in range(i+step, end, step):
 			f = ef[fi]
+
+			# str(ft) here to work around Glyph types (.tty)
+			ftyp = str(f[0])
+
 			if f[1].isspace():
-				if f[0] in {'indentation', 'termination'}:
+				if ftyp in {'indentation', 'termination'}:
 					# Restrict boundary.
 					fi += -(step)
 					break
 				continue
 
-			if f[0] in {'literal-delimit', 'literal-start', 'literal-stop'}:
+			if ftyp in {'literal-delimit', 'literal-start', 'literal-stop'}:
 				continue
 
-			k = f[0].rsplit('-')[-1]
+			k = ftyp.rsplit('-')[-1]
 			if k in {'terminator', 'router', 'operation', 'separator', 'enclosure'}:
 				# Don't count spaces or punctuation.
 				continue
@@ -999,7 +1003,6 @@ class Refraction(Core):
 			lfields = list(lfields)
 			fai.update(li, lfields)
 			caf = phc(Line(ln, 0, ""), delimit(fai))
-			phrase = phc(li, lfields)
 			phrase = Phrase(itertools.chain(phc(li, lfields), caf))
 		else:
 			phrase = Phrase(phc(li, lfields))
@@ -1035,15 +1038,33 @@ class Refraction(Core):
 		else:
 			ccell = theme[self.cursor_cell(hs)]
 
+		cursor_source = cells[cursor_start:cursor_stop]
+		if not cursor_source:
+			# Redirects may hide text so that inline controls may format lines.
+			# This is not commonly leveraged with syntax of interest, but when it
+			# happens allow hidden characters to be seen when the cursor is over them.
+			r = cursor_word.text
+			cursor_source = list(Phrase(self.forms.redirect_exceptions([
+				Phrase.frame_word(cursor_word.style, c, t)
+				for c, t in self.forms.lf_units(r)
+			])).render(Define=self.define))
+
+			# Move and expand range as needed.
+			if cursor_start < rstart:
+				rstart += len(cursor_source)
+				rstop += len(cursor_source)
+			elif cursor_start < rstop:
+				rstop += len(cursor_source)
+
 		if mode == 'insert':
 			cells[cursor_start:cursor_stop] = [
 				c.update(underline=LineStyle.solid, linecolor=ccell.cellcolor)
-				for c in cells[cursor_start:cursor_stop]
+				for c in cursor_source
 			]
 		else:
 			cells[cursor_start:cursor_stop] = [
 				c.update(textcolor=c.cellcolor, cellcolor=ccell.cellcolor)
-				for c in cells[cursor_start:cursor_stop]
+				for c in cursor_source
 			]
 
 			# Range underline; disabled when inserting.
@@ -1247,7 +1268,9 @@ class Refraction(Core):
 			# Scan for series and exit when successive non-router
 			for fi in r:
 				ft, fc = fields[fi]
-				if ftype in ft:
+
+				# str(ft) here to work around Glyph types (.tty)
+				if ftype in str(ft):
 					# Continue series.
 					rs = 1
 					last = fi

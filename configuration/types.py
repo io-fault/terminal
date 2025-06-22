@@ -46,6 +46,7 @@ filename_extensions = {
 
 	"transcript": 'transcript',
 	"iv": 'ivectors',
+	"tty": 'teletype',
 }
 
 Default = ''
@@ -73,7 +74,7 @@ implementations = {
 		"literals": [
 			'""',
 		]
-	})
+	}),
 }
 
 # Per-type table of encodings, line termination, and line indentation.

@@ -98,7 +98,8 @@ class Session(Core):
 
 	@staticmethod
 	def integrate_theme(colors):
-		cell = Glyph(codepoint=-1,
+		# -2 codepoint is significant: &terminal.cells.text.Phrase.redirect
+		cell = Glyph(codepoint=-2,
 			cellcolor=colors.palette[colors.cell['default']],
 			textcolor=colors.palette[colors.text['default']],
 		)
@@ -107,6 +108,10 @@ class Session(Core):
 			k : cell.update(textcolor=colors.palette[v])
 			for k, v in colors.text.items()
 		}
+		theme.update({
+			k : cell.update(textcolor=colors.palette[k])
+			for k in colors.palette
+		})
 
 		for k, v in colors.cell.items():
 			theme[k] = theme.get(k, cell).update(cellcolor=colors.palette[v])
@@ -136,16 +141,18 @@ class Session(Core):
 	def integrate_types(cfgtypes, theme, cachesize=256):
 		ce, ltc, lic, isize = cfgtypes.formats[cfgtypes.Default]
 
-		# segmentation
+		from fault.syntax import format
 		from fault.system.text import cells as syscellcount
 		from ..cells.text import graphemes, words
+
+		# Character Unit Segmentation
 		cus = tools.cachedcalls(cachesize)(
 			tools.compose(list, words,
 				tools.partial(graphemes, syscellcount, ctlsize=4, tabsize=4)
 			)
 		)
 
-		from fault.syntax import format
+		# Default type.
 		ltype = Reformulations(
 			"", theme,
 			format.Characters.from_codec(ce, 'surrogateescape'),
@@ -155,8 +162,10 @@ class Session(Core):
 		)
 
 		return {
+			# Default type that loaded types inherit from.
 			"": ltype,
-			# Location does not have a syntax factor.
+
+			# No location syntax, so inherit defaults here.
 			'location': ltype,
 		}
 
@@ -216,6 +225,7 @@ class Session(Core):
 
 		self.types = self.integrate_types(self.configuration.types, self.theme)
 		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
+		self.types['transcript'] = self.load_type('teletype')
 
 		exepath = self.executable/'transcript'
 		editor_log = Reference(
@@ -223,7 +233,7 @@ class Session(Core):
 			str(exepath), self.executable,
 			exepath
 		)
-		self.transcript = Resource(editor_log, self.load_type('lambda'))
+		self.transcript = Resource(editor_log, self.load_type('teletype'))
 		self.transcript.ln_initialize()
 		self.transcript.commit()
 
@@ -276,7 +286,7 @@ class Session(Core):
 		if sti in self.types:
 			return self.types[sti]
 
-		syntax_record = self.configuration.load_syntax(sti)
+		syntax_record = self.configuration.load_syntax(sti, self.theme)
 		fimethod, ficonfig, ce, eol, ic, ils = syntax_record
 
 		from fault.syntax import format, keywords
@@ -289,6 +299,8 @@ class Session(Core):
 			fiprofile = keywords.Profile.from_keywords_v1(**ficonfig)
 			fiparser = keywords.Parser.from_profile(fiprofile)
 			fields = format.Fields(fiparser, kwf_isolate)
+		elif fimethod == 'formatted':
+			fields = format.Fields(*ficonfig)
 		else:
 			raise LookupError("unknown field isolation interface")
 
