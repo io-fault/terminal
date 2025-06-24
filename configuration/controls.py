@@ -224,8 +224,8 @@ if 'controls':
 	a(('v', km_meta), 'cursor/paste/after')
 	a(('v', km_meta, km_shift), 'cursor/paste/before')
 
-	a(('u'), 'resource/undo')
-	a(('u', km_shift), 'resource/redo')
+	a(('u'), 'deltas/undo')
+	a(('u', km_shift), 'deltas/redo')
 
 	a(('x'), 'cursor/delete/character/next')
 	a(('x', km_void, km_d), 'cursor/delete/selected/characters')

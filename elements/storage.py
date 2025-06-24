@@ -56,6 +56,18 @@ class Resource(types.Core):
 		self.views = weakref.WeakSet()
 		self.cursors = weakref.WeakSet()
 
+	def usage(self):
+		try:
+			eusage = self.elements.usage
+		except AttributeError:
+			# Presume list.
+			yield self.elements
+			yield from self.elements
+		else:
+			yield from eusage()
+
+		yield from self.modifications.usage()
+
 	def ln_count(self) -> int:
 		"""
 		# The current number of lines present in the document.
@@ -780,13 +792,24 @@ class Resource(types.Core):
 
 		return None
 
-	@comethod('resource', 'undo')
-	def r_log_undo(self, quantity=1):
+	@comethod('deltas', 'undo')
+	def d_undo(self, quantity=1):
 		self.undo(quantity)
 
-	@comethod('resource', 'redo')
-	def r_log_redo(self, quantity=1):
+	@comethod('deltas', 'redo')
+	def d_redo(self, quantity=1):
 		self.redo(quantity)
+
+	@comethod('deltas', 'truncate')
+	def d_truncate(self, quantity=None):
+		self.modifications.truncate(quantity)
+		rv = self.modifications.snapshot()
+		for rf in self.views:
+			rf.version = rv
+
+	@comethod('resource', 'repartition')
+	def r_repartition(self):
+		self.elements.partition()
 
 	@comethod('resource', 'save')
 	def r_save(self, rl_syntax, session, content):

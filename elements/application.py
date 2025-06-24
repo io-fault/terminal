@@ -1166,6 +1166,59 @@ class Session(Core):
 		v = focus['view']
 		return f.status_modifiers((f.vertical, f.division), v)
 
+	@comethod('session', 'maintenance')
+	def s_maintenance(self):
+		import sys
+		def countshared(counted, ob, *, id=id, getsizeof=sys.getsizeof):
+			# Track using the id so that unhashable objects may be tracked,
+			# and so that equality doesn't conflate distinct objects.
+			i = id(ob)
+			if i in counted:
+				return 0
+			else:
+				counted.add(i)
+				return getsizeof(ob)
+
+		for path, src in self.sources.list_resources():
+			count = tools.partial(countshared, set())
+			before = sum(map(count, src.usage()))
+
+			# Keep eight deltas and reformat resource's storage.
+			src.d_truncate(-8)
+			src.r_repartition()
+
+			count = tools.partial(countshared, set())
+			after = sum(map(count, src.usage()))
+
+			delta = (after - before) / 1000
+			self.log(f"{delta:+9.1f}KB: {src.origin.ref_path}")
+
+		# Prompts and locations use anonymous resources.
+		rl_before = rl_after = 0
+		pg_before = pg_after = 0
+		for frame in self.frames:
+			for rl, co, pg in frame.views:
+				rl_count = tools.partial(countshared, set())
+				pg_count = tools.partial(countshared, set())
+				rl_before += sum(map(rl_count, rl.source.usage()))
+				pg_before += sum(map(pg_count, pg.source.usage()))
+
+				# Keep eight deltas and reformat resource's storage.
+				rl.source.d_truncate(-4)
+				rl.source.r_repartition()
+				pg.source.d_truncate(-4)
+				pg.source.r_repartition()
+
+				rl_count = tools.partial(countshared, set())
+				pg_count = tools.partial(countshared, set())
+				rl_after += sum(map(rl_count, rl.source.usage()))
+				pg_after += sum(map(pg_count, pg.source.usage()))
+
+		rl_delta = (rl_after - rl_before) / 1000
+		pg_delta = (pg_after - pg_before) / 1000
+		self.log(f"{rl_delta:+9.1f}KB: Locations")
+		self.log(f"{pg_delta:+9.1f}KB: Prompts")
+
 	@comethod('session', 'trace/instructions')
 	def s_toggle_trace(self):
 		if self.trace is self.discard:
