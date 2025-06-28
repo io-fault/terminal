@@ -2065,12 +2065,17 @@ class Expression(object):
 		"""
 
 		ilines = iter(lines)
-		last = next(ilines)
+		try:
+			last = next(ilines)
 
-		# Find the first non-empty line.
-		ledge = Class.identify_edges(last)
-		while ledge is None:
+			# Find the first non-empty line.
 			ledge = Class.identify_edges(last)
+			while ledge is None:
+				last = next(ilines)
+				ledge = Class.identify_edges(last)
+		except StopIteration:
+			# Empty lines.
+			return
 
 		cwp = last[ledge]
 
@@ -2458,8 +2463,9 @@ class Composite(Expression):
 				group.append(i)
 
 		p = Procedure(group, conditions)
-		if sub := p.sole(Procedure):
-			return sub
+		if p.steps:
+			if sub := p.sole(Procedure):
+				return sub
 		return p
 
 @tools.struct()

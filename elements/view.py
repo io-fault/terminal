@@ -2747,6 +2747,8 @@ class Frame(Core):
 
 		# Compile the procedure.
 		proc = self.pg_compile(pg.forms, lines[1:])
+		if not proc.steps:
+			return None
 
 		# Handle prompt local cd case.
 		ixn = proc.sole(Instruction)
