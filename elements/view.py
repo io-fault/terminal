@@ -1590,7 +1590,7 @@ class Refraction(Core):
 		current_line = self.focus[0].get()
 
 		if current_line >= nlines:
-			return self.c_open_newline_behind(key, quantity=quantity)
+			return self.c_open_newline_behind(quantity=quantity)
 
 		lo = max(0, min(nlines, current_line))
 
