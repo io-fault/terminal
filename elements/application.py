@@ -541,6 +541,7 @@ class Session(Core):
 		"""
 
 		self.logfile.write('\n'.join(lines)+'\n')
+		self.logfile.flush()
 
 	def extend_transcript(self, lines):
 		"""
