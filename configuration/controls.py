@@ -97,13 +97,28 @@ relay = Mode(('view', 'dispatch/device/status', ()))
 # Dispatch; return control.
 for mode in (control, insert):
 	# Set of combinations need to be trapped so they can be forwarded.
-	a((k_return, *km_all), 'focus/activate')
-	for i in range(0, len(km_all)):
-		for mods in combinations(km_all, i):
-			a((k_return, *mods), 'focus/activate')
+	for forward in [k_return, '[', ']']:
+		a((forward, *km_all), 'focus/activate')
+		for i in range(0, len(km_all)):
+			for mods in combinations(km_all, i):
+				a((forward, *mods), 'focus/activate')
 
 	a((k_return, km_meta), 'cursor/substitute/selected/command')
 	a((k_return, km_location), 'location/execute/operation')
+
+	# Prompt history. Switching is performed remotely when content is focused.
+	a(('[', km_writing, km_control), 'prompt/switch/revision/previous')
+	a((']', km_writing, km_control), 'prompt/switch/revision/next')
+	a(('[', km_executing, km_control), 'prompt/switch/revision/previous')
+	a(('[', km_executing, km_retain, km_control), 'prompt/switch/revision/previous')
+	a(('[', km_executing, km_conceal, km_control), 'prompt/switch/revision/previous')
+	a((']', km_executing, km_control), 'prompt/switch/revision/next')
+	a((']', km_executing, km_conceal, km_control), 'prompt/switch/revision/next')
+	a((']', km_executing, km_retain, km_control), 'prompt/switch/revision/next')
+
+	# When relocating, override prompt history switching.
+	a(('[', km_location, km_control), 'resource/switch/revision/previous')
+	a((']', km_location, km_control), 'resource/switch/revision/next')
 
 	a((k_return, km_executing, km_retain), 'prompt/execute/reset')
 	a((k_return, km_executing, km_retain, km_control), 'prompt/execute/repeat')

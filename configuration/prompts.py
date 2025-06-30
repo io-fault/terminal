@@ -2,6 +2,9 @@
 # Prompt dimensions and behaviors.
 
 # [ Elements ]
+# /history_limit/
+	# Number of prompt local commands to maintain in memory across
+	# maintenance operations.
 # /syntax_type/
 	# The default syntax type of the prompt itself.
 # /line_allocation/
@@ -13,6 +16,7 @@
 	# the prompt and focus the prompt when switched to.
 """
 
+history_limit = 20
 syntax_type = 'prompt'
 line_allocation = 1
 execution_types = {

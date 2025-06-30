@@ -515,9 +515,22 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 	AddSeparator(rm);
 	AddMenuItem(rm, "Copy Location", @selector(copyLocation:), "C");
 	{
-		NSMenuItem *rmi = AddMenuItem(rm, "Relocate", @selector(relayInstruction:), "l");
+		NSMenuItem *rmi;
+		rmi = AddMenuItem(rm, "Relocate", @selector(relayInstruction:), "l");
 		rmi.toolTip = @"Change the frame's focus resource.";
 		rmi.tag = ai_resource_select;
+
+		rmi = AddMenuItem(rm, "Switch Previous", @selector(relayInstruction:), "[");
+		rmi.toolTip = @"Switch to the previous location in the access list.";
+		rmi.tag = ai_location_switch_previous;
+
+		rmi = AddMenuItem(rm, "Switch Next", @selector(relayInstruction:), "]");
+		rmi.toolTip = @"Switch to the next location in the access list.";
+		rmi.tag = ai_location_switch_next;
+
+		rmi = AddMenuItem(rm, "Switch Last", @selector(relayInstruction:), "H");
+		rmi.toolTip = @"Switch to the last location in the access list.";
+		rmi.tag = ai_location_switch_last;
 	}
 
 	/* Edit Menu */

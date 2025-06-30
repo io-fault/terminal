@@ -220,6 +220,9 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE(resource, close) \
 	AI_DEFINE(resource, select) \
 	AI_DEFINE(resource, switch) \
+	AI_DEFINE_2(location, switch, previous) \
+	AI_DEFINE_2(location, switch, next) \
+	AI_DEFINE_2(location, switch, last) \
 	AI_DEFINE(resource, save) \
 	AI_DEFINE(resource, reload) \
 	AI_DEFINE(elements, status) \

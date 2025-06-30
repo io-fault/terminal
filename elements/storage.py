@@ -34,6 +34,13 @@ class Resource(types.Core):
 		# The sequence of lines being modified.
 	# /modifications/
 		# The log of changes applied to &elements.
+	# /revisions/
+		# The sequence of past versions; &elements and &modifications pairs
+		# including the current pair in use on the resource.
+		# Primarily used to implement histories for locations and prompts, but
+		# also allows for major checkpoints
+	# /active/
+		# The &revisions pair currently in use.
 	"""
 
 	origin: types.Reference
@@ -42,31 +49,225 @@ class Resource(types.Core):
 	elements: Sequence[str]
 	modifications: delta.Log
 
+	revisions: Sequence[tuple[Sequence[str], delta.Log]]
+	active: int
+
 	status: object
 	views: object
 
+	@property
+	def latest(self) -> int:
+		"""
+		# Latest revision available.
+		"""
+
+		return len(self.revisions) - 1
+
 	def __init__(self, origin, forms):
 		self.origin = origin
+		self.status = None
 		self.forms = forms
 
-		self.elements = sequence.Segments([])
-		self.modifications = delta.Log()
-		self.snapshot = self.modifications.snapshot()
-		self.status = None
 		self.views = weakref.WeakSet()
 		self.cursors = weakref.WeakSet()
 
-	def usage(self):
-		try:
-			eusage = self.elements.usage
-		except AttributeError:
-			# Presume list.
-			yield self.elements
-			yield from self.elements
-		else:
-			yield from eusage()
+		self.revisions = []
+		self.active = self.revise()
+		self.switch_revision(0)
 
-		yield from self.modifications.usage()
+	def revise(self, lines=()) -> int:
+		"""
+		# Create a revision at the end of the list initializing the
+		# elements with the contents of &lines.
+
+		# [ Returns ]
+		# The index of the new revision.
+		"""
+
+		self.revisions.append((sequence.Segments(lines), delta.Log()))
+		return len(self.revisions) - 1
+
+	def switch_revision(self, revision):
+		"""
+		# Update &elements and &modifications to those associated with &revision.
+
+		# Associated view are not updated.
+		"""
+
+		last = self.active
+		if revision < 0:
+			# Map relative end to absolute.
+			revision = len(self.revisions) + revision
+			if revision < 0:
+				# Force absolute; avoid supporting cycles here.
+				raise IndexError("list index out of range")
+
+		self.elements, self.modifications = self.revisions[revision]
+		self.active = revision
+
+		return last
+
+	def forget_revisions(self, start, stop) -> int:
+		"""
+		# Remove the slice of revisions from the resource.
+		"""
+
+		start = max(0, start)
+		stop = min(len(self.revisions), stop)
+
+		del self.revisions[start:stop]
+
+		if self.active < start:
+			# No change needed.
+			return self.active
+		if self.active >= stop:
+			# No change needed.
+			self.active -= (stop - start)
+			return self.active
+
+		# Active revision was in deleted range.
+		self.active = start - 1
+		return self.r_switch_revision(self.latest)
+
+	def limit_revisions(self, count):
+		"""
+		# Forget the revisions before the &latest minus &count.
+
+		# [ Returns ]
+		# The number of revisions removed.
+		"""
+
+		c = len(self.revisions)
+		n = c - count
+		if n > 0:
+			self.forget_revisions(0, n)
+			return n
+		return 0
+
+	@comethod('resource', 'discard/revision')
+	def r_discard_revision(self, quantity:int=1, *, offset:int=None) -> int:
+		"""
+		# Remove the revision from the resource.
+
+		# [ Parameters ]
+		# /offset/
+			# The revision index to discard.
+			# The current revision is selected if &None.
+		# /quantity/
+			# The number of revisions to discard after &offset.
+
+		# [ Returns ]
+		# Index, new or same, of the active revision.
+		"""
+
+		if offset is None:
+			offset = self.active
+
+		if len(self.revisions) == 1:
+			# TODO: Cascade destruction to resource and associated views.
+			raise Exception("cannot discard last revision")
+
+		del self.revisions[offset]
+
+		if offset == self.active:
+			# Change to last revision.
+			self.r_switch_revision(len(self.revisions)-1)
+		elif offset < self.active:
+			# Adjust index, no switch occurred.
+			self.active -= 1
+
+		return self.active
+
+	@comethod('resource', 'switch/revision')
+	def r_switch_revision(self, offset:int) -> int:
+		"""
+		# Change the active revision of the resource.
+
+		# [ Parameters ]
+		# /offset/
+			# The index in &revisions to select.
+
+		# [ Returns ]
+		# Index of the previously active revision.
+		"""
+
+		last = self.switch_revision(offset)
+
+		rv = self.modifications.snapshot()
+		for rf in self.views:
+			rf.version = rv
+			rf.deltas.extend(rf.refresh(rf.image.line_offset))
+
+		return last
+
+	@comethod('resource', 'switch/revision/previous')
+	def r_switch_revision_previous(self, quantity=1):
+		"""
+		# Switch the revision to the one following the current &active.
+		"""
+
+		ri = max(0, self.active - quantity)
+		return self.r_switch_revision(ri) - ri
+
+	@comethod('resource', 'switch/revision/next')
+	def r_switch_revision_next(self, quantity=1):
+		"""
+		# Switch the revision to the one preceding the current &active.
+		"""
+
+		ri = min(len(self.revisions) - 1, self.active + quantity)
+		return self.r_switch_revision(ri) - ri
+
+	@comethod('resource', 'switch/revision/first')
+	def r_switch_revision_first(self):
+		"""
+		# Switch to the first revision in the list.
+		"""
+
+		return self.r_switch_revision(0)
+
+	@comethod('resource', 'switch/revision/last')
+	def r_switch_revision_last(self):
+		"""
+		# Switch to the last revision in the list.
+		"""
+
+		ri = self.latest
+		return self.r_switch_revision(ri) - ri
+
+	@comethod('resource', 'fork/revision')
+	def r_fork_revision(self) -> int:
+		"""
+		# Create a revision from the current image and switch to it.
+
+		# [ Returns ]
+		# Index of the previously active revision.
+		"""
+
+		ri = self.revise(self.elements)
+		last = self.active
+
+		self.elements, self.modifications = self.revisions[ri]
+		rv = self.modifications.snapshot()
+		for rf in self.views:
+			rf.version = rv
+			# Identical, so no refresh is necessary.
+		self.active = ri
+
+		return last
+
+	def usage(self):
+		for re, rm in self.revisions:
+			try:
+				eusage = re.usage
+			except AttributeError:
+				# Presume list.
+				yield re
+				yield from re
+			else:
+				yield from eusage()
+
+			yield from rm.usage()
 
 	def ln_count(self) -> int:
 		"""

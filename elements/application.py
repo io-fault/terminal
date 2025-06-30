@@ -170,11 +170,13 @@ class Session(Core):
 		}
 
 	@staticmethod
-	def integrate_prompts(cfgprompts) -> types.Prompting:
+	def integrate_prompts(cfgprompts, process_id:str) -> types.Prompting:
 		return types.Prompting(
+			process_id,
 			max(cfgprompts.line_allocation, 1) + 1,
 			cfgprompts.syntax_type,
 			cfgprompts.execution_types,
+			cfgprompts.history_limit,
 		)
 
 	def select_path(self, path:list[str|int]):
@@ -201,7 +203,6 @@ class Session(Core):
 		self.configuration = cfg
 		self.theme = self.integrate_theme(cfg.colors)
 		self.keyboard = self.integrate_controls(cfg.controls)
-		self.prompting = self.integrate_prompts(cfg.prompts)
 		self.local_modifiers = ''
 		self.host = system
 		self.logfile = None
@@ -222,6 +223,7 @@ class Session(Core):
 			),
 			self,
 		)
+		self.prompting = self.integrate_prompts(cfg.prompts, self.process.identity)
 
 		self.types = self.integrate_types(self.configuration.types, self.theme)
 		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
@@ -254,6 +256,9 @@ class Session(Core):
 
 		self.process.identity = procid._replace(sys_title=title)
 		self.systems[self.process.identity] = self.process
+		self.prompting = self.prompting._replace(pg_process_identity=self.process.identity)
+		for frame in self.frames:
+			frame.prompting = self.prompting
 
 	def configure_logfile(self, logfile):
 		"""
@@ -872,8 +877,11 @@ class Session(Core):
 		'view': (lambda s, f, k: f['view']),
 		'frame': (lambda s, f, k: f['frame']),
 		'dpath': (lambda s, f, k: f['frame'].focus_path),
-		'resource': (lambda s, f, k: f['resource']),
 		'quantity': (lambda s, f, k: f.get('quantity', s.device.quantity())),
+
+		'resource': (lambda s, f, k: f['resource']),
+		'revision': (lambda s, f, k: f['resource'].active),
+		'origin': (lambda s, f, k: f['content'].source.origin),
 
 		# Compare with view to determine which has focus.
 		'content': (lambda s, f, k: f['content']),
@@ -1205,8 +1213,10 @@ class Session(Core):
 				pg_before += sum(map(pg_count, pg.source.usage()))
 
 				# Keep eight deltas and reformat resource's storage.
+				rl.source.limit_revisions(self.prompting.pg_limit)
 				rl.source.d_truncate(-4)
 				rl.source.r_repartition()
+				pg.source.limit_revisions(self.prompting.pg_limit)
 				pg.source.d_truncate(-4)
 				pg.source.r_repartition()
 
