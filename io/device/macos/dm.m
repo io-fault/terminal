@@ -503,8 +503,8 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 	AddMenuItem(rm, "Open", @selector(openResources:), "o");
 
 	AddSeparator(rm);
-	AddMenuItem(rm, "Close", @selector(relayInstruction:), "w")
-		.tag = ai_resource_close;
+	AddMenuItem(rm, "Close View", @selector(relayInstruction:), "w")
+		.tag = ai_frame_close_view;
 	AddMenuItem(rm, "Save", @selector(relayInstruction:), "s")
 		.tag = ai_resource_save;
 	AddMenuItem(rm, "Duplicate", @selector(copyResource:), "S")

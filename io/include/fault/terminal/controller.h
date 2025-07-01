@@ -214,6 +214,7 @@ KeyName(enum KeyIdentifier ki)
 	AI_DEFINE_2(screen, close, frame) \
 	AI_DEFINE(frame, status) \
 	AI_DEFINE(frame, refresh) \
+	AI_DEFINE_2(frame, close, view) \
 	AI_DEFINE(resource, status) \
 	AI_DEFINE(resource, copy) \
 	AI_DEFINE(resource, create) \

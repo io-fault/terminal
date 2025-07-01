@@ -22,7 +22,7 @@ from . import retention
 
 from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax
 from .storage import Resource, Directory, delta
-from .view import Refraction, Frame
+from .view import Refraction, Frame, Structure as View
 from .system import Context as SystemContext, Host, Process, IOManager
 
 # Disable signal exits for multiple interpreter cases.
@@ -516,9 +516,9 @@ class Session(Core):
 
 		rf = Refraction(source)
 		rf.keyboard = self.keyboard
-		rf.focus[0].set(-1)
 
 		if load:
+			rf.focus[0].set(-1)
 			system.load_resource(source, rf)
 
 		if addressing is not None:
@@ -530,7 +530,7 @@ class Session(Core):
 		if rf.reporting(self.prompting):
 			pg.control_mode = 'insert'
 
-		return (rl, rf, pg)
+		return View(rl, rf, pg)
 
 	def log(self, *lines):
 		"""
@@ -589,7 +589,7 @@ class Session(Core):
 				f = self.focus = self.frames[self.frame]
 
 		self.keyboard.set(f.focus.control_mode)
-		f.switch((f.vertical, f.division))
+		f.switch_division((f.vertical, f.division))
 
 	def reframe(self, index):
 		"""
@@ -606,10 +606,8 @@ class Session(Core):
 
 		last = self.frame
 
-		for (l, rf, p) in self.frames[last].views:
-			l.frame_visible = False
-			p.frame_visible = False
-			rf.frame_visible = False
+		for vs in self.frames[last].views:
+			vs.hidden()
 
 		self.frame = index
 		self.refocus()
@@ -617,10 +615,8 @@ class Session(Core):
 		# Anything in the new focus frame is stale.
 		del self.focus.deltas[:]
 
-		for (l, rf, p) in self.focus.views:
-			l.frame_visible = True
-			p.frame_visible = True
-			rf.frame_visible = True
+		for vs in self.focus.views:
+			vs.shown()
 
 		self.dispatch_delta(self.focus.render())
 		self.device.update_frame_status(self.frame, last)
@@ -666,7 +662,7 @@ class Session(Core):
 
 		f.remodel(area, layout)
 		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(divcount)]))
-		f.refresh()
+		f.f_refresh()
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 		return f.index
 
@@ -722,13 +718,9 @@ class Session(Core):
 			f.vertical = vi
 			f.division = di
 			f.fill(self.refract(r, a) for r, a in resources)
-			f.returns[:divcount] = (rf for (l, rf, p) in (self.refract(r, a) for r, a in returns))
-			for rf in f.returns:
-				if rf is not None:
-					rf.frame_visible = False
 
 			# Populate View images.
-			f.refresh()
+			f.f_refresh()
 
 		if 0:
 			self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
@@ -745,14 +737,10 @@ class Session(Core):
 			di = f.division
 			resources = [
 				(rf.source.origin.ref_path, rf.snapshot())
-				for (l, rf, p) in f.views
-			]
-			returns = [
-				(rf.source.origin.ref_path, rf.snapshot())
-				for rf in f.returns if rf is not None
+				for (l, rf, p) in (vs.refractions() for vs in f.views)
 			]
 
-			yield (frame_id, vi, di, f.structure.layout, resources, returns)
+			yield (frame_id, vi, di, f.structure.layout, resources, [])
 
 	def load(self):
 		with open(self.fs_snapshot) as f:
@@ -787,8 +775,7 @@ class Session(Core):
 
 	def chresource(self, frame, path):
 		dpath = (frame.vertical, frame.division)
-		rf = self.refract(path)[1]
-		src = rf.source
+		rf = self.refract(path).content
 		frame.attach(dpath, rf)
 		return rf
 
@@ -877,6 +864,8 @@ class Session(Core):
 		'view': (lambda s, f, k: f['view']),
 		'frame': (lambda s, f, k: f['frame']),
 		'dpath': (lambda s, f, k: f['frame'].focus_path),
+		'division': (lambda s, f, k: f['frame'].focus_division),
+		'level': (lambda s, f, k: f['frame'].focus_level),
 		'quantity': (lambda s, f, k: f.get('quantity', s.device.quantity())),
 
 		'resource': (lambda s, f, k: f['resource']),
@@ -962,14 +951,16 @@ class Session(Core):
 		screen = device.screen
 
 		if (self._focus['frame'], self._focus['view']) != (frame, view):
-			lcp = frame.views[frame.paths[(frame.vertical, frame.division)]]
+			vi = frame.paths[(frame.vertical, frame.division)]
+			lcp = frame.views[vi]
 			self._focus = {
 				'frame': frame,
+				'division': vi,
 				'view': view,
 				'resource': view.source,
-				'location': lcp[0],
-				'content': lcp[1],
-				'prompt': lcp[2],
+				'location': lcp.location,
+				'content': lcp.content,
+				'prompt': lcp.prompt,
 			}
 			cl = tools.partial(self.lookup, [view.source, view, frame, self])
 			self._oc = tools.cachedcalls(16)(cl)
@@ -1018,7 +1009,7 @@ class Session(Core):
 		"""
 
 		self.host.io.service() # Dispatch event loop for I/O integration.
-		self._focus = {'frame': None, 'view': None, 'cursor': None}
+		self._focus = {'frame': None, 'view': None, 'cursor': None, 'division': 0}
 
 		# Expects initial synchronize instruction to draw first cursor.
 		try:
@@ -1122,7 +1113,7 @@ class Session(Core):
 
 	@comethod('screen', 'refresh')
 	def refresh(self, frame):
-		frame.refresh()
+		frame.f_refresh()
 
 	@comethod('screen', 'create/frame')
 	def s_frame_create(self):
@@ -1133,7 +1124,7 @@ class Session(Core):
 		frame = self.focus
 		fi = self.allocate()
 		self.frames[fi].fill(frame.views)
-		self.frames[fi].refresh()
+		self.frames[fi].f_refresh()
 		self.reframe(fi)
 
 	@comethod('screen', 'close/frame')
@@ -1206,7 +1197,9 @@ class Session(Core):
 		rl_before = rl_after = 0
 		pg_before = pg_after = 0
 		for frame in self.frames:
-			for rl, co, pg in frame.views:
+			for vs in frame.views:
+				rl, co, pg = vs.refractions()
+
 				rl_count = tools.partial(countshared, set())
 				pg_count = tools.partial(countshared, set())
 				rl_before += sum(map(rl_count, rl.source.usage()))

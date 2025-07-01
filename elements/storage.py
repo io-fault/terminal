@@ -196,7 +196,8 @@ class Resource(types.Core):
 		rv = self.modifications.snapshot()
 		for rf in self.views:
 			rf.version = rv
-			rf.deltas.extend(rf.refresh(rf.image.line_offset))
+			if rf.frame_visible:
+				rf.deltas.extend(rf.refresh(rf.image.line_offset))
 
 		return last
 

@@ -105,6 +105,7 @@ for mode in (control, insert):
 
 	a((k_return, km_meta), 'cursor/substitute/selected/command')
 	a((k_return, km_location), 'location/execute/operation')
+	a((k_return, km_location, km_shift), 'location/open/level')
 
 	# Prompt history. Switching is performed remotely when content is focused.
 	a(('[', km_writing, km_control), 'prompt/switch/revision/previous')
@@ -142,8 +143,12 @@ for mode in (control, insert):
 
 	a((0x21E5), 'cursor/insert/indentation')
 	a((0x21E5, km_shift), 'cursor/delete/indentation')
+
+	# Division levels and location histories.
 	a((0x21E5, km_meta), 'frame/switch/view/next')
 	a((0x21E5, km_shift, km_meta), 'frame/switch/view/previous')
+	a(('k', km_meta), 'frame/switch/view/above')
+	a(('j', km_meta), 'frame/switch/view/below')
 
 	a((0x21E5, km_void, km_d), 'cursor/insert/indentation/selected')
 	a((0x21E5, km_shift, km_d), 'cursor/delete/indentation/selected')
@@ -151,7 +156,6 @@ for mode in (control, insert):
 if 'controls':
 	mode = control
 
-	a((k_return, km_writing, km_control), 'frame/switch/view/return')
 	a((k_return, km_writing, km_shift), 'cursor/seek/void/line/previous')
 	a((k_return, km_writing), 'cursor/seek/void/line/next')
 	a(('c', km_location, km_control), 'location/reset')
@@ -192,12 +196,10 @@ if 'controls':
 	a(('j'), 'cursor/seek/line/next')
 	a(('j', km_shift), 'cursor/seek/selected/line/last')
 	a(('j', km_control), 'cursor/seek/void/line/next')
-	a(('j', km_meta), 'frame/switch/view/next')
 
 	a(('k'), 'cursor/seek/line/previous')
 	a(('k', km_shift), 'cursor/seek/selected/line/first')
 	a(('k', km_control), 'cursor/seek/void/line/previous')
-	a(('k', km_meta), 'frame/switch/view/previous')
 
 	a(('l'), 'cursor/select/indentation')
 	a(('l', km_shift), 'cursor/select/indentation/level')
