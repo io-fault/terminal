@@ -1536,6 +1536,18 @@ class Line(object):
 			self.ln_extension,
 		)
 
+	def replace(self, string):
+		"""
+		# Reconstruct the line with the given &string as the content.
+		"""
+
+		return self.__class__(
+			self.ln_offset,
+			self.ln_level,
+			string,
+			self.ln_extension,
+		)
+
 	def relevel(self, ilevel):
 		"""
 		# Reconstruct the line with the given indentation level.

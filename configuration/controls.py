@@ -174,8 +174,10 @@ if 'controls':
 	a(('a'), 'cursor/transition/insert/end-of-field')
 	a(('a', km_shift), 'cursor/transition/insert/end-of-line')
 
-	a(('b'), 'cursor/line/break')
-	a(('b', km_shift), 'cursor/line/join')
+	a(('b'), 'cursor/break/line')
+	a(('b', km_control), 'cursor/break/line/partial')
+	a(('b', km_shift), 'cursor/join/line')
+	a(('b', km_shift, km_control), 'cursor/join/line/partial')
 
 	a(('c'), 'cursor/substitute/selected/characters')
 	a(('c', km_shift), 'cursor/substitute/again')
@@ -284,7 +286,7 @@ if 'annotations':
 if 'inserts':
 	mode = insert
 
-	a((k_return, km_writing), 'cursor/line/break/follow')
+	a((k_return, km_writing), 'cursor/break/line/follow')
 	a((k_space, km_shift), 'cursor/insert/escaped-space')
 
 	a(('a', km_control), 'cursor/seek/character/first')

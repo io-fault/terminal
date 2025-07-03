@@ -1948,17 +1948,17 @@ class Refraction(Core):
 
 		self.focus[1].restore((start, start, start + len(last)))
 
-	@comethod('cursor', 'line/break/follow')
-	def c_split_line_at_cursor(self, quantity):
+	@comethod('cursor', 'break/line/follow')
+	def c_break_line_follow(self, quantity):
 		lo = self.focus[0].get()
-		r = self.c_split_line_at_cursor(quantity)
+		r = self.c_break_line(quantity)
 
 		self.focus[0].set(lo + quantity)
 		self.focus[1].set(0)
 		return r
 
-	@comethod('cursor', 'line/break')
-	def c_split_line_at_cursor(self, quantity):
+	@comethod('cursor', 'break/line')
+	def c_break_line(self, quantity):
 		for i in range(quantity):
 			lo = self.focus[0].get()
 			src = self.source
@@ -1967,13 +1967,48 @@ class Refraction(Core):
 			d = src.split(lo, offset)
 		src.commit()
 
-	@comethod('cursor', 'line/join')
-	def c_join_line_with_following(self, quantity):
+	@comethod('cursor', 'join/line')
+	def c_join_line(self, quantity):
 		lo = self.focus[0].get()
 		co = self.focus[1].get()
 		src = self.source
 
 		d = src.join(lo, quantity)
+		src.commit()
+
+	@comethod('cursor', 'break/line/partial')
+	def c_break_line_partial(self, resource, cursor, quantity=1):
+		src = resource
+		iline = cursor[0] + 1
+
+		dline = cursor[0]
+		try:
+			fslice, (last_type, last_text) = list(zip(*self.fields(dline)))[-1]
+		except IndexError:
+			src.delete_lines(dline, dline+1)
+		else:
+			src.delete_codepoints(dline, fslice.start, fslice.stop)
+
+			if iline >= src.ln_count():
+				li = src.sole(dline)
+				src.insert_lines(iline, [li.replace(last_text)])
+			else:
+				src.insert_codepoints(iline, 0, last_text)
+		src.commit()
+
+	@comethod('cursor', 'join/line/partial')
+	def c_join_line_partial(self, resource, cursor, quantity=1):
+		src = resource
+		iline = cursor[0]
+		li = src.sole(iline)
+		dline = cursor[0] + 1
+		try:
+			fslice, (first_type, first_text) = list(zip(*self.fields(dline)))[0]
+		except IndexError:
+			src.delete_lines(dline, dline+1)
+		else:
+			src.delete_codepoints(dline, fslice.start, fslice.stop)
+			src.insert_codepoints(iline, li.ln_length, first_text)
 		src.commit()
 
 	# Modes
