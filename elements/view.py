@@ -1426,6 +1426,25 @@ class Refraction(Core):
 	def v_seek_line_last(self):
 		self.scroll(lambda x: self.source.ln_count())
 
+	@comethod('view', 'seek/cell/previous/few')
+	def v_seek_cell_previous_few(self, quantity=1):
+		q = ((self.area.span // 6) or 1) * quantity
+		self.v_seek_cell_relative(-q)
+
+	@comethod('view', 'seek/cell/next/few')
+	def v_seek_cell_next_few(self, quantity=1):
+		q = ((self.area.span // 6) or 1) * quantity
+		self.v_seek_cell_relative(q)
+
+	@comethod('view', 'seek/cell/first')
+	def v_seek_cell_first(self):
+		self.v_seek_cell_absolute(0)
+
+	@comethod('view', 'seek/cell/last')
+	def v_seek_cell_last(self):
+		last = max(ph.cellcount() for ph in self.image.phrase)
+		return self.v_seek_cell_absolute(last - self.area.span)
+
 	# Redirections to content.
 
 	@comethod('content', 'view/seek/line/previous/few')
@@ -1443,6 +1462,22 @@ class Refraction(Core):
 	@comethod('content', 'view/seek/line/last')
 	def co_seek_line_last(self, content):
 		return content.v_seek_line_last()
+
+	@comethod('content', 'view/seek/cell/previous/few')
+	def co_seek_cell_previous_few(self, content, quantity=1):
+		return content.v_seek_cell_previous_few(quantity)
+
+	@comethod('content', 'view/seek/cell/next/few')
+	def co_seek_cell_next_few(self, content, quantity=1):
+		return content.v_seek_cell_next_few(quantity)
+
+	@comethod('content', 'view/seek/cell/first')
+	def co_seek_cell_next_few(self, content):
+		return content.v_seek_cell_first()
+
+	@comethod('content', 'view/seek/cell/last')
+	def co_seek_cell_last(self, content):
+		return content.v_seek_cell_last()
 
 	@comethod('view', 'seek/cell/absolute')
 	def v_seek_cell_absolute(self, quantity=1):

@@ -141,6 +141,11 @@ for mode in (control, insert):
 	a((0x21F1), 'content/view/seek/line/first')
 	a((0x21F2), 'content/view/seek/line/last')
 
+	a((0x21DF, km_control), 'content/view/seek/cell/next/few')
+	a((0x21DE, km_control), 'content/view/seek/cell/previous/few')
+	a((0x21F1, km_control), 'content/view/seek/cell/first')
+	a((0x21F2, km_control), 'content/view/seek/cell/last')
+
 	a((0x21E5), 'cursor/insert/indentation')
 	a((0x21E5, km_shift), 'cursor/delete/indentation')
 
