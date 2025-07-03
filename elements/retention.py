@@ -71,10 +71,9 @@ def structure_frames(frames):
 
 	for frame_id, lines in frames:
 		layout = []
-		fstatus = lines[0]
-		vi, di, flstr = fstatus.strip().split(' ', maxsplit=2)
+		lstatus = lines[0]
 
-		for i, s in enumerate(flstr.split()):
+		for i, s in enumerate(lstatus.split()):
 			if '*' in s:
 				x, width = map(int, s.split('*'))
 			else:
@@ -84,13 +83,37 @@ def structure_frames(frames):
 			layout.append((x, width))
 
 		divcount = sum(x[0] for x in layout)
-		files = [structure_selection(x) for x in lines[1:] if selection_test(x)]
-		resources = files[0:divcount]
-		returns = files[divcount:None]
+		stacks = [[]]
 
-		vi = int(vi)
-		di = int(di)
-		yield (frame_id.strip() or None, vi, di, divcount, layout, resources, returns)
+		# Last two lines are focus status of the frame.
+		try:
+			end = -2
+			while lines[end] != '-':
+				end -= 1
+		except IndexError:
+			# Presume missing focus status.
+			vi = di = 0
+			slv = []
+		else:
+			try:
+				vi, di, *slv = map(int, lines[end+1].split(' '))
+			except ValueError:
+				vi = di = 0
+				slv = []
+
+		for x in lines[1:-2]:
+			if x == '-':
+				stacks.append([])
+				continue
+			elif selection_test(x):
+				stacks[-1].append(structure_selection(x))
+
+		# Compensate for missing levels.
+		dlevels = len(stacks) - len(slv)
+		if dlevels > 0:
+			slv.extend([0] * dlevels)
+
+		yield (frame_id.strip() or None, vi, di, divcount, layout, stacks, slv)
 
 def frame_layout_string(layout):
 	"""
@@ -108,6 +131,14 @@ def frame_layout_string(layout):
 			yield str(divcount)
 		prefix = ' '
 
+def sequence_stacks(vertical, division, levels, stacks):
+	for resources, level in zip(stacks, levels):
+		for s in resources:
+			yield sequence_selection(s)
+		# Focus status.
+		yield '-'
+	yield str(vertical) + ' ' + str(division) + ' ' + ' '.join(map(str, levels))
+
 def sequence_frames(session):
 	"""
 	# Construct the lfht image representing the frames.
@@ -115,10 +146,8 @@ def sequence_frames(session):
 
 	yield from (
 		(frame_id or '', [
-				' '.join(map(str, (vi, di))) + \
-				' ' + \
 				''.join(frame_layout_string(layout))
-			] + list(sequence_selection(r) for r in resources + returns)
+			] + list(sequence_stacks(vi, di, levels, stacks))
 		)
-		for (frame_id, vi, di, layout, resources, returns) in session
+		for (frame_id, vi, di, layout, stacks, levels) in session
 	)

@@ -85,8 +85,11 @@ class Session(Core):
 		# Session name overriding the filename.
 	# /local_modifiers/
 		# Key modifiers insertions.
+	# /frames_restored/
+		# Single use truth designating that the session's frame were fully restored.
 	"""
 
+	frames_restore: bool
 	host: System
 	executable: files.Path
 	resources: Mapping[files.Path, Resource]
@@ -199,6 +202,7 @@ class Session(Core):
 		self.focus = None
 		self.frame = -1 # Necessary for first reframe(0)
 		self.frames = []
+		self.frames_restored = False
 
 		self.configuration = cfg
 		self.theme = self.integrate_theme(cfg.colors)
@@ -621,7 +625,7 @@ class Session(Core):
 		self.dispatch_delta(self.focus.render())
 		self.device.update_frame_status(self.frame, last)
 
-	def allocate(self, layout=None, area=None, title=None):
+	def allocate_frame(self, layout=None, area=None, title=None):
 		"""
 		# Allocate a new frame.
 
@@ -633,8 +637,8 @@ class Session(Core):
 
 		if area is None and layout is None:
 			if self.focus is not None:
-				area = self.focus.structure.configuration[0]
-				layout = self.focus.structure.fm_layout
+				area = self._focus['frame'].structure.configuration[0]
+				layout = self._focus['frame'].structure.fm_layout
 			else:
 				area = screen.area
 		else:
@@ -661,12 +665,10 @@ class Session(Core):
 		self.frames.append(f)
 
 		f.remodel(area, layout)
-		f.fill(map(self.refract, [files.root@'/dev/null' for x in range(divcount)]))
-		f.f_refresh()
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 		return f.index
 
-	def resequence(self):
+	def resequence_frames(self):
 		"""
 		# Update the indexes of the frames to reflect their positions in &frames.
 		"""
@@ -674,11 +676,11 @@ class Session(Core):
 		for i, f in enumerate(self.frames):
 			f.index = i
 
-	def release(self, frame:int):
+	def release_frame(self, frame:int):
 		"""
 		# Destroy the &frame in the session.
 
-		# Performs &resequence after deleting &frame from &frames.
+		# Performs &resequence_frames after deleting &frame from &frames.
 		"""
 
 		if frame == self.frame and len(self.frames) > 1:
@@ -687,43 +689,26 @@ class Session(Core):
 			self.frame = None
 
 		del self.frames[frame]
-		self.resequence()
+		self.resequence_frames()
 
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 
-	@staticmethod
-	def limit_resources(limit, rlist, null=files.root@'/dev/null'):
-		"""
-		# Truncate and compensate the given &rlist by &limit using &null.
-		"""
-
-		del rlist[limit:]
-		n = len(rlist)
-		if n < limit:
-			rlist.extend((null, None) for x in range(limit - n))
-
-	def restore(self, frames):
+	def restore(self, frames, *, null=files.root@'/dev/null', smap=itertools.starmap):
 		"""
 		# Allocate and fill the &frames in order to restore a session.
 		"""
 
-		for frame_id, vi, di, divcount, layout, resources, returns in frames:
+		for frame_id, vi, di, divcount, layout, stacks, levels in frames:
 			# Align the resources and returns with the layout.
-			self.limit_resources(divcount, resources)
-			self.limit_resources(divcount, returns)
 
 			# Allocate a new frame and attach refractions.
-			fi = self.allocate(layout, title=frame_id or None)
+			fi = self.allocate_frame(layout, title=frame_id or None)
 			f = self.frames[fi]
-			f.vertical = vi
-			f.division = di
-			f.fill(self.refract(r, a) for r, a in resources)
-
-			# Populate View images.
+			f.align_stacks(stacks, divcount, null)
+			f.stack_views(vi, di, levels, (smap(self.refract, stack) for stack in stacks))
 			f.f_refresh()
 
-		if 0:
-			self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
+		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 
 	def snapshot(self):
 		"""
@@ -735,18 +720,37 @@ class Session(Core):
 			frame_id = f.title
 			vi = f.vertical
 			di = f.division
-			resources = [
-				(rf.source.origin.ref_path, rf.snapshot())
-				for (l, rf, p) in (vs.refractions() for vs in f.views)
+			stacks = [
+				[
+					(vs.content.source.origin.ref_path, vs.content.snapshot())
+					for vs in stack
+				]
+				for stack in f.stacks
+			]
+			levels = [
+				stack.index(vs)
+				for vs, stack in zip(f.views, f.stacks)
 			]
 
-			yield (frame_id, vi, di, f.structure.layout, resources, [])
+			yield (frame_id, vi, di, f.structure.layout, stacks, levels)
+
+	def sequence(self):
+		# Leading descriptor validating frame count and designating selection.
+		nframes = len(self.frames)
+		cframe = min(max(0, self.frame), nframes-1)
+
+		frame_synopsis = [str(cframe) + ' ' + str(nframes)]
+		yield retention.sequence([(self.title, frame_synopsis)])
+
+		# Frame details.
+		sf = retention.sequence_frames(self.snapshot())
+		yield retention.sequence(sf)
 
 	def load(self):
 		with open(self.fs_snapshot) as f:
 			ri = retention.structure(f.read())
 			stitle, slines = next(ri)
-			fspecs = retention.structure_frames(ri)
+			fspecs = list(retention.structure_frames(ri))
 
 		self.title = stitle
 		fi, fcount = map(int, slines[0].split())
@@ -754,6 +758,7 @@ class Session(Core):
 		if self.frames:
 			self.frames = []
 		self.restore(fspecs)
+		self.frames_restored = True
 
 		if len(self.frames) != fcount:
 			self.log("WARNING: frame count inconsistent with frame records.")
@@ -761,17 +766,10 @@ class Session(Core):
 		self.reframe(fi)
 
 	def store(self):
+		session_str = ''.join(self.sequence())
+		# Open after fully materializing the session in case of errors.
 		with open(self.fs_snapshot, 'w') as f:
-			# Leading descriptor validating frame count and designating selection.
-			nframes = len(self.frames)
-			cframe = min(max(0, self.frame), nframes-1)
-
-			frame_synopsis = [str(cframe) + ' ' + str(nframes)]
-			f.write(retention.sequence([(self.title, frame_synopsis)]))
-
-			# Frame details.
-			sf = retention.sequence_frames(self.snapshot())
-			f.write(retention.sequence(sf))
+			f.write(session_str)
 
 	def chresource(self, frame, path):
 		dpath = (frame.vertical, frame.division)
@@ -1032,7 +1030,11 @@ class Session(Core):
 
 				self.indicate(next_view, nv_status)
 		finally:
-			self.store()
+			if self.frames_restored:
+				# Restoration failures are not fatal, so
+				# make sure that restoration was not interrupted
+				# and a partial or corrupt snapshot is not being written.
+				self.store()
 
 	@comethod('session', 'synchronize')
 	def integrate(self):
@@ -1116,23 +1118,39 @@ class Session(Core):
 		frame.f_refresh()
 
 	@comethod('screen', 'create/frame')
-	def s_frame_create(self):
-		self.reframe(self.allocate())
+	def s_create_frame(self):
+		null = self.host.fs_pwd()@'/dev/null'
+		fi = self.allocate_frame()
+		f = self.frames[fi]
+
+		c = len(f.areas)
+		stacks = [[self.refract(null)] for i in range(c)]
+		f.stack_views(0, 0, [0] * c, stacks)
+
+		f.f_refresh()
+		self.reframe(fi)
 
 	@comethod('screen', 'copy/frame')
-	def s_frame_copy(self):
-		frame = self.focus
-		fi = self.allocate()
-		self.frames[fi].fill(frame.views)
-		self.frames[fi].f_refresh()
+	def s_copy_frame(self, frame):
+		fi = self.allocate_frame()
+		f = self.frames[fi]
+
+		c = len(frame.stacks)
+		stack_replicas = [
+			[self.refract(vs.content.source.origin.ref_path) for vs in stack]
+			for stack in frame.stacks
+		]
+		f.stack_views(frame.vertical, frame.division, [0] * c, stack_replicas)
+
+		f.f_refresh()
 		self.reframe(fi)
 
 	@comethod('screen', 'close/frame')
-	def s_frame_close(self):
-		self.release(self.frame)
+	def s_close_frame(self):
+		self.release_frame(self.frame)
 
 	@comethod('screen', 'switch/frame')
-	def s_frame_switch(self, quantity):
+	def s_switch_frame(self, quantity):
 		self.reframe(quantity - 1)
 
 	@comethod('screen', 'previous/frame')
@@ -1281,7 +1299,7 @@ def configure_frame(directory, executable, options):
 
 	vd = options['vertical-divisions']
 	if vd:
-		model = list(zip(map(int, vd), [1]*len(vd)))
+		model = list(zip(vd, [1]*len(vd)))
 	else:
 		model = [(1, 1), (1, 1), (2, 1)]
 
@@ -1406,12 +1424,19 @@ def main(inv:process.Invocation) -> process.Exit:
 		editor.load()
 	except Exception as restore_error:
 		editor.error("Session restoration", restore_error)
+		editor.log("Session must be explicitly saved to retain state.")
+		# Currently, some exceptions leave the session in an unusable state.
+		# Delete any partially loaded frames so that the default set may be loaded.
+		del editor.frames[:]
 
 	if not editor.frames:
-		# The session exits when no frames are present.
 		layout, rfq = configure_frame(wd, path, config)
-		fi = editor.allocate(layout = layout)
-		editor.frames[fi].fill(map(editor.refract, rfq))
+		fi = editor.allocate_frame(layout = layout)
+		f = editor.frames[fi]
+		stacks = [[editor.refract(x)] for x in rfq]
+		levels = [0] * len(stacks)
+		f.stack_views(0, 0, levels, stacks)
+		f.f_refresh()
 		editor.reframe(fi)
 
 	editor.log("Host: " + str(editor.host))

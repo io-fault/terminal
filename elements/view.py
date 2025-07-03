@@ -880,8 +880,14 @@ class Refraction(Core):
 		# Compensate. Orientation independent.
 		tail = img.line_offset + img.count()
 		stop = img.line_offset + v_lines
-		s = img.suffix(self.iterphrases(tail, stop))
-		yield from self.v_render(s)
+
+		if tail < stop:
+			# Protect updates from an edge case likely caused by a bug.
+			# During session initialization, tail was exceeding stop causing
+			# islice to error. With this workaround in place, the image
+			# after a load will sometimes be corrupt requiring a refresh.
+			s = img.suffix(self.iterphrases(tail, stop))
+			yield from self.v_render(s)
 
 	def vi_compensate(self):
 		"""
@@ -2560,28 +2566,40 @@ class Frame(Core):
 		if location.source.r_switch_revision_last():
 			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
 
-	def fill(self, views):
+	@staticmethod
+	def align_stacks(stacks, limit, default):
 		"""
-		# Fill the divisions with the given &views overwriting any.
+		# Constrain &stacks to &limit length or pad &stacks with &default.
 		"""
 
-		self.views[:] = views
-		self.stacks[:] = [[vs] for vs in self.views]
+		del stacks[limit:]
+		n = len(stacks)
+		if n < limit:
+			for x in range(limit - n):
+				stacks.append([(default, None)])
 
-		self.focus = self.views[0].content
-		self.vertical = self.division = 0
+	def stack_views(self, vertical, division, levels, stacks:Sequence[Sequence[Structure]]):
+		"""
+		# Initialize the stacks of the frame.
+		"""
 
-		for av, vv in zip(self.areas, self.views):
-			for a, v in zip(av, vv.refractions()):
-				v.configure(self.deltas, self.define, a)
+		self.vertical = vertical
+		self.division = division
+		path = (vertical, division)
 
-		for dpath, index in self.paths.items():
-			rl, rf, pg = self.views[index].refractions()
+		for division, stack in enumerate(stacks):
+			vstack = self.stacks[division]
+			la, ca, pa = self.areas[division]
 
-			# Reveal the prompt for reporting types. (transcripts)
-			if rf.reporting(self.prompting):
-				self.pg_configure_command(pg, rf.system, rf.source.origin.ref_context, [])
-				self.pg_open(dpath)
+			for vs in stack:
+				vs.location.configure(self.deltas, self.define, la)
+				vs.content.configure(self.deltas, self.define, ca)
+				vs.prompt.configure(self.deltas, self.define, pa)
+				vs.hidden()
+				vstack.append(vs)
+
+		self.views[:] = [x[d] for x, d in zip(self.stacks, levels)]
+		self.focus = self.views[self.paths[path]].content
 
 	def remodel(self, area=None, divisions=None):
 		"""
@@ -2606,6 +2624,7 @@ class Frame(Core):
 			itertools.starmap(Area, self.structure.itercontexts(area)), # content
 			itertools.starmap(Area, self.structure.itercontexts(area, section=3)), # prompt
 		))
+		self.stacks = [list() for x in range(len(self.areas))]
 
 	@comethod('frame', 'refresh/view/images')
 	def f_refresh_views(self):
@@ -3249,8 +3268,8 @@ class Frame(Core):
 		self.refocus()
 
 	@comethod('frame', 'push/refraction')
-	def f_push_refraction(self, session, division, system, path):
-		vs = session.refract(path)
+	def f_push_refraction(self, session, division, system, path, *, addressing=None):
+		vs = session.refract(path, addressing=addressing)
 		vstack = self.stacks[division]
 
 		la, ca, pa = self.areas[division]
