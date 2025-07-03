@@ -2,5 +2,5 @@ i-http://fault.io/system/machines.python/runtime
 i-http://fault.io/system/machines.python/include
 i-http://fault.io/system/machines.python/c-interfaces
 http://fault.io/integration/machines/include
-http://fault.io/terminal/io/include
-http://fault.io/terminal/io/device
+http://fault.io/terminal/device/include
+http://fault.io/terminal/device/macos-cocoa
