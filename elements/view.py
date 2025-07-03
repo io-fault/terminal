@@ -1398,23 +1398,51 @@ class Refraction(Core):
 		if self.frame_visible:
 			self.deltas.extend(self.refresh(img.line_offset))
 
+	@comethod('view', 'seek/line/previous')
+	def v_seek_line_previous(self, quantity=1):
+		self.scroll((-quantity).__add__)
+
 	@comethod('view', 'seek/line/next')
 	def v_seek_line_next(self, quantity=1):
 		self.scroll(quantity.__add__)
 
-	@comethod('view', 'seek/line/previous')
-	def v_seek_line_previous(self, quantity=1):
-		self.scroll((-quantity).__add__)
+	# Indirectly bound as these scroll requests will normally apply to content views.
+
+	@comethod('view', 'seek/line/previous/few')
+	def v_seek_line_previous_few(self, quantity=1):
+		q = ((self.area.lines // 3) or 1) * quantity
+		self.scroll((-q).__add__)
 
 	@comethod('view', 'seek/line/next/few')
 	def v_seek_line_next_few(self, quantity=1):
 		q = ((self.area.lines // 3) or 1) * quantity
 		self.scroll(q.__add__)
 
-	@comethod('view', 'seek/line/previous/few')
-	def v_seek_line_previous_few(self, quantity=1):
-		q = ((self.area.lines // 3) or 1) * quantity
-		self.scroll((-q).__add__)
+	@comethod('view', 'seek/line/first')
+	def v_seek_line_first(self):
+		self.scroll((0).__mul__)
+
+	@comethod('view', 'seek/line/last')
+	def v_seek_line_last(self):
+		self.scroll(lambda x: self.source.ln_count())
+
+	# Redirections to content.
+
+	@comethod('content', 'view/seek/line/previous/few')
+	def co_seek_line_previous_few(self, content, quantity=1):
+		return content.v_seek_line_previous_few(quantity)
+
+	@comethod('content', 'view/seek/line/next/few')
+	def co_seek_line_next_few(self, content, quantity=1):
+		return content.v_seek_line_next_few(quantity)
+
+	@comethod('content', 'view/seek/line/first')
+	def co_seek_line_first(self, content):
+		return content.v_seek_line_first()
+
+	@comethod('content', 'view/seek/line/last')
+	def co_seek_line_last(self, content):
+		return content.v_seek_line_last()
 
 	@comethod('view', 'seek/cell/absolute')
 	def v_seek_cell_absolute(self, quantity=1):
@@ -1446,14 +1474,6 @@ class Refraction(Core):
 	@comethod('view', 'seek/cell/previous')
 	def v_seek_cell_previous(self, quantity=3):
 		self.v_seek_cell_relative(-quantity)
-
-	@comethod('view', 'seek/line/first')
-	def v_seek_line_first(self):
-		self.scroll((0).__mul__)
-
-	@comethod('view', 'seek/line/last')
-	def v_seek_line_last(self):
-		self.scroll(lambda x: self.source.ln_count())
 
 	@comethod('view', 'seek/line/absolute')
 	def v_seek_line_absolute(self, quantity=1):
