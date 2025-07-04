@@ -1,13 +1,16 @@
 /**
 	// Terminal application launcher.
-	// Executes the &terminal.io.device library's application manager with
-	// &terminal.syntax.edit as the target module for the coprocess.
+	// Executes the &terminal.device library's application manager with
+	// &terminal.elements.application as the target module for the coprocess.
 */
 #include <fault/libc.h>
 #include <fault/python/environ.h>
 #include <unistd.h>
 #include <signal.h>
 #include <locale.h>
+
+#define TERMINAL_APPLICATION "elements.application"
+#define TERMINAL_PATH FACTOR_CONTEXT(".", TERMINAL_APPLICATION)
 
 /**
 	// The application module is currently unused as &.types.Device
@@ -55,7 +58,7 @@ python_environment_setup()
 const char **system_argv = NULL;
 int system_argc = -1;
 
-/* &.io.device */
+/* &.device. */
 int device_manage_terminal(const char *, void *);
 static int coprocess_invocation(void *);
 int
@@ -72,11 +75,11 @@ main(int argc, const char *argv[])
 	system_argc = argc;
 	system_argv = argv;
 
-	return(device_manage_terminal(FACTOR_CONTEXT(".", "syntax.edit"), coprocess_invocation));
+	return(device_manage_terminal(TERMINAL_PATH, coprocess_invocation));
 }
 
 #include <fault/python/bind.h>
-#define TARGET_MODULE FACTOR_CONTEXT(".", "elements.application")
+#define TARGET_MODULE TERMINAL_PATH
 #define SYSTEM_ENTRY_POINT _coprocess_rewrite
 #define FAULT_PYTHON_CONTROL_IMPORTS
 #include <fault/python/execute.h>
@@ -110,11 +113,11 @@ coprocess_invocation(void *ctx)
 	if (r != 0)
 		goto exit;
 
-	r = fault_python_import_controls(FACTOR_CONTEXT(".", "elements.application"), "main");
+	r = fault_python_import_controls(TERMINAL_PATH, "main");
 	if (r != 0)
 		goto exit;
 
-	ob = fault_python_execute(FACTOR_CONTEXT(".", "elements.application"), "main");
+	ob = fault_python_execute(TERMINAL_PATH, "main");
 	r = fault_python_exit_status(ob);
 
 	exit:
