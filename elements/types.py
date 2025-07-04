@@ -1428,6 +1428,13 @@ class Reference(object):
 	ref_context: object
 	ref_path: object
 
+	def key(self) -> tuple[System, object]:
+		"""
+		# &ref_system and &ref_path pair uniquely identifying the reference's resource.
+		"""
+
+		return (self.ref_system, self.ref_path)
+
 	def i_format(self):
 		"""
 		# Type qualified fields used to construct a string representing the reference.
@@ -2842,6 +2849,10 @@ class Syntax(object):
 			path @= li.ln_content
 
 		return exe, path
+
+	def reference(self, type=None):
+		system, path = self.location_path()
+		return system.reference(path, type=type)
 
 	def isolate_rl_path(self, ln, *, separator='/', relative=None):
 		"""

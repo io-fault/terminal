@@ -2301,12 +2301,32 @@ class Refraction(Core):
 @dataclasses.dataclass()
 class Structure(object):
 	"""
-	# View structure used by &Frame for divisions.
+	# View structure used by &Frame for managing divisions.
+
+	# [ Properties ]
+	# /location/
+		# The syntactic representation of the reference used to access the resource
+		# displayed by &content, and the interface used to compose that reference.
+	# /content/
+		# The primary subject of a division displaying the contents of the resource
+		# identified by an activated &location.
+	# /prompt/
+		# The command prompt associated with &content and &location for performing
+		# system commands with respect to the selected resource.
+	# /content_location_revision/
+		# The revision index of &location.source that reflects &content.source.origin.
+
+		# When location is focused, the revision may be switched without &content
+		# being updated. In order to recall which location revision is selected,
+		# this field is updated when location history is used to switch the content.
+		# When location-content inconsistencies occur, this field is referenced to
+		# restore the &location.source's corresponding revision.
 	"""
 
 	location: Refraction
 	content: Refraction
 	prompt: Refraction
+	content_location_revision: int = 0
 
 	def refractions(self):
 		return (self.location, self.content, self.prompt)
@@ -2571,14 +2591,36 @@ class Frame(Core):
 
 	@comethod('location', 'open/level')
 	def rl_open_level(self, location, division, rl_syntax, session, content):
+		# Get the system and path to open.
 		rl_selection = rl_syntax.location_path()
 
-		# Restore location before creating stack level.
+		# Unconditionally restore location before creating stack level.
 		src = location.source
 		src.modifications.commit()
 		src.modifications.revert(src.elements)
 		src.modifications.truncate()
 		src.elements.partition()
+
+		vs = self.views[division]
+		if vs.content_location_revision != location.source.active:
+			# Location was activated while the active revision was
+			# not the location of the content. Prior to pushing
+			# the division level, attempt to restore the location
+			# revision of the content.
+
+			try:
+				location.source.switch_revision(vs.content_location_revision)
+			except IndexError:
+				# If location history is truncated without proper updates,
+				# this case becomes possible. Reset to latest forcing
+				# the user to find this place in history again.
+				#
+				# This is unique to rl_open_level as rl_execute is
+				# always adding a revision or staying on the same one.
+				# Here, the old level's location would preferably match
+				# the content and its corresponding location revision.
+				vs.content_location_revision = location.source.latest
+				location.source.switch_revision(vs.content_location_revision)
 
 		level = self.f_push_refraction(session, division, *rl_selection)
 		self.switch_level(division, level)
@@ -2621,6 +2663,7 @@ class Frame(Core):
 	def rl_open(self, dpath, rl_syntax, session, content):
 		# Construct reference and load dependencies.
 		system, fspath = rl_syntax.location_path()
+		vi = self.paths[dpath]
 
 		try:
 			src = session.sources.select_resource(fspath)
@@ -2636,6 +2679,8 @@ class Frame(Core):
 		new.keyboard = session.keyboard
 
 		self.attach(dpath, new)
+		self.views[vi].content_location_revision = rl_syntax.source.active
+
 		self.switch_division(dpath)
 
 		if load:

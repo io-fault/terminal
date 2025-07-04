@@ -612,6 +612,19 @@ class Context(Core):
 	def execute(self):
 		pass
 
+	def reference(self, path, type=None):
+		"""
+		# Construct a &Reference to the given &path and configured type, &type.
+		"""
+
+		return Reference(
+			self.identity,
+			type,
+			path.fs_path_string(),
+			path.context or path ** 1,
+			path,
+		)
+
 class Process(Context):
 	"""
 	# Application instruction interface and thread manager for user
@@ -844,19 +857,6 @@ class Host(Context):
 		"""
 
 		self._kill(pid, self._kimm)
-
-	def reference(self, typref, path):
-		"""
-		# Construct a &Reference to the given &path and configured type, &typref.
-		"""
-
-		return Reference(
-			self.identity,
-			typref,
-			str(path),
-			path.context or path ** 1,
-			path,
-		)
 
 	def __str__(self):
 		return ''.join(x[1] for x in self.i_status())

@@ -528,6 +528,23 @@ class Session(Core):
 
 		return rf
 
+	def refer(self, system, path, type=None):
+		"""
+		# Construct a typed reference to a system qualified location.
+		"""
+
+		try:
+			src = self.sources.select_resource(path)
+		except KeyError:
+			pass
+		else:
+			return src.origin
+
+		if type is None:
+			type = self.lookup_type(path)
+
+		return system.reference(path, type)
+
 	def refract(self, path, addressing=None):
 		"""
 		# Construct a &Refraction for the resource identified by &path.
@@ -561,7 +578,7 @@ class Session(Core):
 		if rf.reporting(self.prompting):
 			pg.control_mode = 'insert'
 
-		return View(rl, rf, pg)
+		return View(rl, rf, pg, rl.source.active)
 
 	def log(self, *lines):
 		"""
