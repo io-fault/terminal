@@ -198,25 +198,26 @@ class Session(Core):
 
 		return (self, f, *f.select_path(*path[1:]))
 
-	def __init__(self, cfg, system, executable, terminal:Device, position=(0,0), dimensions=None):
+	def __init__(self, terminal:Device, system, executable, frames, title='', position=(0,0), dimensions=None):
+		self.title = title
+		self.device = terminal
+		self.host = system
+
+		# Currently unused.
+		self.screen_position = position
+		self.screen_dimensions = dimensions
+
 		self.focus = None
 		self.frame = -1 # Necessary for first reframe(0)
 		self.frames = []
 		self.frames_restored = False
-
-		self.configuration = cfg
-		self.theme = self.integrate_theme(cfg.colors)
-		self.keyboard = self.integrate_controls(cfg.controls)
+		self.sources = Directory()
 		self.local_modifiers = ''
-		self.host = system
 		self.logfile = None
-		self.placement = (position, dimensions)
-
-		self.executable = executable.delimit()
-		self.device = terminal
 		self.cache = [] # Lines
 
-		self.title = ''
+		self.executable = executable.delimit()
+
 		self.process = Process(
 			System(
 				'process',
@@ -227,29 +228,55 @@ class Session(Core):
 			),
 			self,
 		)
-		self.prompting = self.integrate_prompts(cfg.prompts, self.process.identity)
-
-		self.types = self.integrate_types(self.configuration.types, self.theme)
-		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
-		self.types['transcript'] = self.load_type('teletype')
-
-		exepath = self.executable/'transcript'
-		editor_log = Reference(
-			self.host.identity, 'filepath',
-			str(exepath), self.executable,
-			exepath
-		)
-		self.transcript = Resource(editor_log, self.load_type('teletype'))
-		self.transcript.ln_initialize()
-		self.transcript.commit()
-
-		self.sources = Directory()
-		self.sources.insert_resource(self.transcript)
 
 		self.systems = {
 			self.host.identity: self.host,
 			self.process.identity: self.process,
 		}
+
+		self.origin = Reference(
+			self.host.identity, 'frames',
+			frames.fs_path_string(),
+			frames.container,
+			frames,
+		)
+
+		# Initialize attributes, but leave.
+		self.configuration = None
+		self.theme = None
+		self.keyboard = None
+		self.prompting = None
+		self.types = None
+		self.transcript = None
+
+	def configure(self, cfg):
+		"""
+		# Apply the configuration module, &cfg, to the session.
+		"""
+
+		self.configuration = cfg
+		self.theme = self.integrate_theme(cfg.colors)
+		self.keyboard = self.integrate_controls(cfg.controls)
+		self.prompting = self.integrate_prompts(cfg.prompts, self.process.identity)
+
+		self.types = self.integrate_types(cfg.types, self.theme)
+		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
+		self.types['transcript'] = self.load_type('teletype')
+
+		exepath = self.executable/'transcript'
+		session_log = Reference(
+			self.host.identity, 'teletype',
+			str(exepath), self.executable,
+			exepath
+		)
+		self.transcript = Resource(session_log, self.load_type('teletype'))
+		self.transcript.ln_initialize()
+		self.transcript.commit()
+
+		self.sources.insert_resource(self.transcript)
+
+		# Exclusively for the prompt.
+		self.process.rehash([Host, Process, Resource, Refraction, Frame, Session])
 
 	@comethod('session', 'retitle')
 	def retitle(self, title):
@@ -747,7 +774,7 @@ class Session(Core):
 		yield retention.sequence(sf)
 
 	def load(self):
-		with open(self.fs_snapshot) as f:
+		with open(self.origin.ref_identity) as f:
 			ri = retention.structure(f.read())
 			stitle, slines = next(ri)
 			fspecs = list(retention.structure_frames(ri))
@@ -768,7 +795,7 @@ class Session(Core):
 	def store(self):
 		session_str = ''.join(self.sequence())
 		# Open after fully materializing the session in case of errors.
-		with open(self.fs_snapshot, 'w') as f:
+		with open(self.origin.ref_identity, 'w') as f:
 			f.write(session_str)
 
 	def chresource(self, frame, path):
@@ -1406,43 +1433,41 @@ def main(inv:process.Invocation) -> process.Exit:
 	host.rehash()
 	host.retool()
 
-	editor = Session(configuration, host, path, device)
-	editor.process.rehash([Host, Process, Resource, Refraction, Frame, Session])
-	configure_log_builtin(editor, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
-	if 'instructions' not in config['traces']:
-		editor.trace = editor.discard
-
-	fi = 0
 	if remainder:
-		session_file = (process.fs_pwd()@remainder[-1])
+		frames = (process.fs_pwd()@remainder[-1])
 	else:
-		session_file = (query.home()@'.syntax/Frames')
-	editor.fs_snapshot = session_file
-	editor.retitle(editor.fs_snapshot.identifier)
+		frames = (query.home()@'.frames')
+
+	session = Session(device, host, path, frames, title=frames.identifier)
+	session.configure(configuration)
+
+	configure_log_builtin(session, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
+	if 'instructions' not in config['traces']:
+		session.trace = session.discard
 
 	try:
-		editor.load()
+		session.load()
 	except Exception as restore_error:
-		editor.error("Session restoration", restore_error)
-		editor.log("Session must be explicitly saved to retain state.")
+		session.error("Session restoration", restore_error)
+		session.log("Session must be explicitly saved to retain state.")
 		# Currently, some exceptions leave the session in an unusable state.
 		# Delete any partially loaded frames so that the default set may be loaded.
-		del editor.frames[:]
+		del session.frames[:]
 
-	if not editor.frames:
+	if not session.frames:
 		layout, rfq = configure_frame(wd, path, config)
-		fi = editor.allocate_frame(layout = layout)
-		f = editor.frames[fi]
-		stacks = [[editor.refract(x)] for x in rfq]
+		fi = session.allocate_frame(layout = layout)
+		f = session.frames[fi]
+		stacks = [[session.refract(x)] for x in rfq]
 		levels = [0] * len(stacks)
 		f.stack_views(0, 0, levels, stacks)
 		f.f_refresh()
-		editor.reframe(fi)
+		session.reframe(fi)
 
-	editor.log("Host: " + str(editor.host))
-	editor.log("Factor: " + __name__)
-	editor.log("Device: " + (config.get('interface-device') or "manager default"))
-	editor.log("Environment:", *('\t'+k+'='+v for k,v in host.environment.items()))
+	session.log("Host: " + str(session.host))
+	session.log("Factor: " + __name__)
+	session.log("Device: " + (config.get('interface-device') or "manager default"))
+	session.log("Environment:", *('\t'+k+'='+v for k,v in host.environment.items()))
 
 	# System I/O loop for command substitution and file I/O.
-	editor.interact()
+	session.interact()
