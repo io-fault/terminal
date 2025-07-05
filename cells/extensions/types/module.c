@@ -284,9 +284,10 @@ glyph_initialize(CellObject co, PyObj args, PyObj kw)
 		NULL
 	};
 
-	bool italic = Cell_TextTraits(co->cell)->italic;
-	bool bold = Cell_TextTraits(co->cell)->bold;
-	bool caps = Cell_TextTraits(co->cell)->caps;
+	// Argument parsing expects int for 'p' type.
+	int italic = Cell_TextTraits(co->cell)->italic;
+	int bold = Cell_TextTraits(co->cell)->bold;
+	int caps = Cell_TextTraits(co->cell)->caps;
 
 	unsigned char window = co->cell.c_window;
 	LineObject underline = NULL, strikethrough = NULL;

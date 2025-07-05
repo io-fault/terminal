@@ -158,6 +158,29 @@ def test_Glyph_instances(test):
 	test/module.Glyph(bold=True).bold == True
 	test/module.Glyph(caps=True).caps == True
 
+	gt_all = module.Glyph(bold=True, italic=True, caps=True)
+	test/gt_all.italic == True
+	test/gt_all.bold == True
+	test/gt_all.caps == True
+
+def test_Glyph_trait_combinations(test):
+	for i in range(0, 0b1000):
+		caps = bool(i & 0b001)
+		bold = bool(i & 0b010)
+		italic = bool(i & 0b100)
+
+		g = module.Glyph(caps = caps, bold = bold, italic = italic,)
+		test/g.caps == caps
+		test/g.bold == bold
+		test/g.italic == italic
+
+		t = g.update(caps = True, bold = True, italic = True)
+		f = g.update(caps = False, bold = False, italic = False)
+		for b, ug in zip([True, False], [t, f]):
+			test/ug.caps == b
+			test/ug.bold == b
+			test/ug.italic == b
+
 def test_Glyph_negative_codepoints(test):
 	c = module.Glyph(codepoint=-1000)
 	test/c.codepoint == -1000

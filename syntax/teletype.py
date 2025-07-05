@@ -219,10 +219,10 @@ def integrate(index, snapshot, traits, *colors):
 		cellcolor = cc,
 		linecolor = lc,
 		underline = underline,
+		bold = ('bold' in traits),
+		italic = ('italic' in traits),
 	)
 
-	c = c.update(bold = ('bold' in traits))
-	c = c.update(italic = ('italic' in traits))
 	return c, ('inverse' in traits)
 
 def structure(index, snapshot, inverse):
