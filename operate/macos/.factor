@@ -1,3 +1,3 @@
 http://if.fault.io/factors/system.executable
-.context
-.include
+..device.context
+..device.macos-cocoa

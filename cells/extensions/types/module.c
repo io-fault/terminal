@@ -8,7 +8,7 @@
 #include <fault/python/environ.h>
 
 #include <fault/terminal/device.h>
-#include <python/terminal.h>
+#include <fault/terminal/python.h>
 
 static PyGetSetDef
 line_getset[] = {
