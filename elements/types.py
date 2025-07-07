@@ -2768,10 +2768,16 @@ class Syntax(object):
 				if f in {'.', '..'}:
 					yield ('relatives', f)
 				else:
-					for l in current.fs_follow_links():
+					# No direct method for link testing, so check if more than target.
+					links = iter(current.fs_follow_links())
+					next(links)
+
+					for l in links:
+						# Link depth > 1.
 						yield ('path-link', f)
 						break
 					else:
+						# Not a link.
 						try:
 							typ = current.fs_type()
 						except OSError:
@@ -2782,6 +2788,9 @@ class Syntax(object):
 						elif typ == 'void':
 							yield ('file-not-found', f)
 						else:
+							if typ == 'data' and current.fs_executable():
+								typ = 'executable'
+
 							yield (typ, f)
 
 			yield ('path-separator', separator)

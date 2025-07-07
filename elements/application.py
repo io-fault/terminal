@@ -216,7 +216,7 @@ class Session(Core):
 		self.logfile = None
 		self.cache = [] # Lines
 
-		self.executable = executable.delimit()
+		self.executable = executable
 
 		self.process = Process(
 			System(
@@ -263,10 +263,10 @@ class Session(Core):
 		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
 		self.types['transcript'] = self.load_type('teletype')
 
-		exepath = self.executable/'transcript'
+		exepath = self.executable/'.transcript'
 		session_log = Reference(
 			self.host.identity, 'teletype',
-			str(exepath), self.executable,
+			exepath.fs_path_string(), self.executable.context,
 			exepath
 		)
 		self.transcript = Resource(session_log, self.load_type('teletype'))
@@ -1351,7 +1351,7 @@ def configure_frame(directory, executable, options):
 
 	end = [
 		executable/x
-		for x in ('transcript',)
+		for x in ('.transcript',)
 		if x not in excluding
 	]
 	# Exclude if there's only one division.
@@ -1398,11 +1398,11 @@ def identify_executable(inv):
 			break
 		else:
 			# Unrecognized origin.
-			path = files.root@'/var/empty/sy'
+			path = files.root@'/var/empty/fault-terminal'
 	else:
 		path = files.root@exepath
 
-	return path
+	return (path.container.delimit()/path.identifier)
 
 def main(inv:process.Invocation) -> process.Exit:
 	from .. import configuration
