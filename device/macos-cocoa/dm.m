@@ -199,9 +199,9 @@ about: (id) sender
 	NSAlert *aw = [NSAlert new];
 	aw.alertStyle = NSAlertStyleInformational;
 
-	[aw setMessageText: @"Terminal Framework"];
+	[aw setMessageText: @"Fault Terminal Device"];
 	[aw setInformativeText: @(
-		"Terminal manager providing a display and event I/O for cell matrix applications."
+		"Character matrix display and control adapter for terminal applications."
 	)];
 	[aw addButtonWithTitle: @"OK"];
 	[aw setIcon: [NSApp applicationIconImage]];
@@ -780,7 +780,7 @@ device_application_manager(const char *title, TerminalApplication fp)
 
 	app = [NSApplication sharedApplication];
 	app.delegate = dm;
-	app.mainMenu = create_macos_menu("Device", "Terminal Framework", dm, fontctx);
+	app.mainMenu = create_macos_menu("Device", "Fault Terminal", dm, fontctx);
 	dm.framesMenu = [app.mainMenu itemWithTitle: @"Frames"].submenu;
 	dm.framesSnapshot = dm.framesMenu.itemArray;
 
