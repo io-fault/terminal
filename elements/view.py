@@ -1959,12 +1959,12 @@ class Refraction(Core):
 
 	@comethod('cursor', 'break/line')
 	def c_break_line(self, quantity):
+		src = self.source
 		for i in range(quantity):
 			lo = self.focus[0].get()
-			src = self.source
 			offset = self.focus[1].get()
-
 			d = src.split(lo, offset)
+
 		src.commit()
 
 	@comethod('cursor', 'join/line')
