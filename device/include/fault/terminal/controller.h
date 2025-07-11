@@ -126,8 +126,8 @@ struct ControllerStatus
 	KI_DEFINE(BrightnessIncrease, 0x1F506) \
 	KI_DEFINE(BrightnessDecrease, 0x1F505) \
 	\
-	KI_DEFINE(PreviousPage, 0x2397) \
-	KI_DEFINE(NextPage, 0x2398) \
+	KI_DEFINE(LocationPrevious, 0x2397) \
+	KI_DEFINE(LocationNext, 0x2398) \
 	KI_DEFINE(Insert, 0x2380) \
 	KI_DEFINE(Home, 0x21F1) \
 	KI_DEFINE(End, 0x21F2) \

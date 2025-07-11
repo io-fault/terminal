@@ -1286,9 +1286,9 @@ identify_event_key(NSString *unmod)
 			return(KEnd);
 
 		case NSPrevFunctionKey:
-			return(KPreviousPage);
+			return(KLocationPrevious);
 		case NSNextFunctionKey:
-			return(KNextPage);
+			return(KLocationNext);
 
 		case NSClearDisplayFunctionKey:
 			return(KClearScreen);
