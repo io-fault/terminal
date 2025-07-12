@@ -1134,7 +1134,8 @@ class Host(Context):
 		try:
 			flags = fcntl.fcntl(wfd, fcntl.F_GETFL)
 			fcntl.fcntl(wfd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-			fcntl.fcntl(wfd, fcntl.F_SETNOSIGPIPE, 1)
+			if hasattr(fcntl, 'F_SETNOSIGPIPE'):
+				fcntl.fcntl(wfd, fcntl.F_SETNOSIGPIPE, 1)
 
 			yield rfd, wfd
 		except:

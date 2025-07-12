@@ -31,7 +31,7 @@ class Prompting(object):
 	# Defaults controlling the behavior of command prompts.
 	"""
 
-	from dataclasses import _replace
+	from dataclasses import replace as _replace
 
 	pg_process_identity: object
 	pg_line_allocation: int
