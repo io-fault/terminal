@@ -105,7 +105,7 @@ def xterm_color_palette(r, g, b):
 	# build a full mapping of 24-bit color values and xterm codes.
 	"""
 
-	code = 16 + (r * 36) + (g * 6) + b
+	code = (r * 36) + (g * 6) + b
 	red_value = green_value = blue_value = 0
 
 	if r:
