@@ -51,21 +51,12 @@ struct Device
 	struct ControllerStatus *cmd_status;
 
 	void *cmd_context;
-	uint16_t (*transfer_event)(void *context);
-	void (*transfer_text)(void *context, const char **txt, uint32_t *bytelength);
 
-	int32_t (*define)(void *context, const char *txt);
-	int32_t (*integrate)(void *context, const char *ref, uint32_t len, uint16_t lc, uint16_t cs);
-
-	void (*replicate_cells)(void *context, struct CellArea dst, struct CellArea src);
-	void (*invalidate_cells)(void *context, struct CellArea ca);
-	void (*render_pixels)(void *context);
-	void (*dispatch_frame)(void *context);
-	void (*synchronize)(void *context);
-	void (*synchronize_io)(void *context);
-
-	void (*frame_list)(void *context, uint16_t, const char **);
-	void (*frame_status)(void *context, uint16_t, uint16_t);
+	/* Prototypes */
+	#define DEVICE_PROTOTYPES_DISABLED
+	#include "static.h"
+	#define METHOD(NAME, TYPE, PARAMETERS) TYPE (* NAME) PARAMETERS;
+		device_methods()
+	#undef METHOD
 };
-
 #endif /* FAULT_TERMINAL_DEVICE_H */
