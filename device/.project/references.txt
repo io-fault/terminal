@@ -81,3 +81,42 @@ not on hits.
 - &<https://stackoverflow.com/questions/33282502/any-way-to-store-struct-in-nscache>
 - &<https://stackoverflow.com/questions/38890174/use-nsvalue-to-wrap-a-c-pointer>
 - &<https://stackoverflow.com/questions/12423627/objective-c-allocating-objects-on-the-stack>
+
+[ XDG XCB ]
+
+Specifically: libxcb, cairo, and pango. Wayland is not directly supported here, but this
+device may be usable with Wayland servers given working X11 compatibility.
+
+/XCB/
+	- &<https://www.x.org/releases/current/doc/man/man3/>
+	- &<https://xcb.freedesktop.org/manual/modules.html>
+	- &<https://xcb.freedesktop.org/tutorial>
+	- &<https://xcb.freedesktop.org/PublicApi>
+/xkbcommon/
+	&<https://github.com/xkbcommon/libxkbcommon/blob/master/tools/interactive-x11.c>
+
+	The raw keyboard events read from XCB do not manage and report modifier state;
+	modifiers are just regular keys at this level. While substantial,
+	the solution provided in `interactive-x11.c` appears complete.
+/Cairo/
+	- &<https://www.cairographics.org>
+/Pango/
+	- &<https://docs.gtk.org/Pango>
+	- &<https://github.com/GNOME/pango>
+/Multibyte Characters/
+	- (system/manual)`c32rtomb`
+	- (system/manual)`mbrtoc32`
+	- &<https://man7.org/linux/man-pages/man3/mbstate_t.3type.html>
+
+	(syntax/c)`setlocale(LC_CTYPE, "C.UTF-8")` is needed to portably trigger
+	the necessary behavior.
+
+[ > Fonts ]
+
+Pango's interpretation is solely depended on. However, pango offers much more than is needed,
+and working directly with Xft might be worth the effort. This does not appear to be a well
+trodden path, but modern xterm should offer a full example.
+
+[ > Caching ]
+
+Not implemented. Pango appears to be fairly efficient even with unoptimized usage.

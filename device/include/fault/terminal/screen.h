@@ -24,6 +24,9 @@
 	#define SYSTEM_UNITS_TYPE \
 		TypeDescriptor("macos", "abstract-points", CGFloat, "double", "%g")
 	typedef CGFloat system_units_t;
+#elif defined(__XDG_XCB_TERMINAL_DEVICE__)
+	#define SYSTEM_UNITS_TYPE TypeDescriptor("xdg-xcb", "pixels", double, "double", "%g")
+	typedef double system_units_t;
 #else
 	#warning "Unknown platform; double sized system units presumed."
 	#define SYSTEM_UNITS_TYPE \
