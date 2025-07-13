@@ -58,5 +58,6 @@ struct Device
 	#define METHOD(NAME, TYPE, PARAMETERS) TYPE (* NAME) PARAMETERS;
 		device_methods()
 	#undef METHOD
+	#undef DEVICE_PROTOTYPES_DISABLED
 };
 #endif /* FAULT_TERMINAL_DEVICE_H */

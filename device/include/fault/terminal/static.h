@@ -23,7 +23,7 @@
 
 /* Prototypes */
 #ifndef DEVICE_PROTOTYPES_DISABLED
-	#define METHOD(NAME, TYPE, PARAMETERS) static TYPE NAME PARAMETERS;
+	#define METHOD(NAME, TYPE, PARAMETERS) static TYPE device_##NAME PARAMETERS;
 		device_methods()
 	#undef METHOD
 #endif
