@@ -51,10 +51,18 @@ struct Device_XDisplay
 
 	xcb_visualtype_t *vtype;
 
-	cairo_surface_t *output; // xcb surface
-	cairo_t *write;
-	cairo_surface_t *working; // image copied to output surface.
+	// temporary space for copies (scrolling)
+	xcb_pixmap_t xt;
+	cairo_surface_t *temporary;
+
+	// working buffer
+	xcb_pixmap_t xp;
+	cairo_surface_t *working;
 	cairo_t *context;
+
+	// xcb window surface
+	cairo_surface_t *output;
+	cairo_t *write;
 
 	struct GlyphInscriptionParameters glyphctl;
 	int icount;

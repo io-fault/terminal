@@ -250,7 +250,7 @@ device_replicate_cells(void *context, struct CellArea dst, struct CellArea src)
 		// Presuming xi->output is compatible with ARGB32,
 		// but it may not matter with source operator.
 	*/
-	cairo_surface_t *tmps = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+	cairo_surface_t *tmps = xi->temporary;
 	cairo_t *tmpc = cairo_create(tmps);
 
 	/* Flush invalidated cells before copying. */
@@ -269,8 +269,6 @@ device_replicate_cells(void *context, struct CellArea dst, struct CellArea src)
 		cairo_fill(xi->context);
 	}
 	cairo_restore(xi->context);
-
-	cairo_surface_destroy(tmps);
 }
 
 static void
