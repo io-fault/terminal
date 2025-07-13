@@ -105,7 +105,7 @@ def xterm_color_palette(r, g, b):
 	# build a full mapping of 24-bit color values and xterm codes.
 	"""
 
-	code = (r * 36) + (g * 6) + b
+	code = 16 + (r * 36) + (g * 6) + b
 	red_value = green_value = blue_value = 0
 
 	if r:
@@ -153,7 +153,7 @@ csi = "["
 osc = "]"
 st = "\\"
 
-def csi_read_color(piter):
+def csi_read_color(colors, piter):
 	"""
 	# Read one to four values from &piter to form a 24-bit color value.
 
@@ -179,7 +179,14 @@ def csi_read_color(piter):
 		return (r << 16 | g << 8 | b << 0)
 	elif ctype == '5':
 		try:
-			return xterm_256_colors[int(next(piter) or '0', 10)]
+			code = int(next(piter) or '0', 10)
+			if code >= 16:
+				return xterm_256_colors[code]
+			elif code >= 8:
+				tc = colors[text_colors_16[str(code-8+90)]]
+				return brighten(tc, colors['delta'])
+			else:
+				return colors[text_colors_16[str(code+30)]]
 		except StopIteration:
 			return 0
 	else:
@@ -296,19 +303,19 @@ def transition(colors, snapshot, inverse, deltas:str):
 		elif code == '38':
 			# Text color
 			try:
-				tc = csi_read_color(di)
+				tc = csi_read_color(colors, di)
 			except ValueError:
 				tc = vg.textcolor
 		elif code == '48':
 			# Cell color
 			try:
-				cc = csi_read_color(di)
+				cc = csi_read_color(colors, di)
 			except ValueError:
 				cc = vg.cellcolor
 		elif code == '58':
 			# Line color
 			try:
-				lc = csi_read_color(di)
+				lc = csi_read_color(colors, di)
 			except ValueError:
 				lc = vg.linecolor
 		elif code == '39':
