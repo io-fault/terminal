@@ -1,6 +1,7 @@
 /**
-	// CellMatrix implementation constructing the terminal device
-	// and managaing the terminal application.
+	// Terminal device implementation providing the necessary functionality for hosting
+	// terminal applications. For macos-cocoa, this is an NSView subclass for integration
+	// with cocoa applications.
 */
 #include <stdint.h>
 #include <stdbool.h>
@@ -14,21 +15,7 @@
 #include <fault/terminal/device.h>
 #include <fault/terminal/cocoa.h>
 
-/*
-	// Device API for CellMatrix views.
-*/
-static uint16_t device_transfer_event(void *);
-static int32_t device_define(void *context, const char *uexpression);
-static int32_t device_integrate(void *context, const char *ref, uint32_t l, uint16_t lines, uint16_t span);
-static void device_transfer_text(void *, const char **, uint32_t *);
-static void device_replicate_cells(void *, struct CellArea, struct CellArea);
-static void device_invalidate_cells(void *, struct CellArea);
-static void device_render_pixels(void *);
-static void device_dispatch_frame(void *);
-static void device_synchronize(void *);
-static void device_synchronize_io(void *);
-static void device_frame_status(void *context, uint16_t, uint16_t);
-static void device_frame_list(void *context, uint16_t, const char **titles);
+#include <fault/terminal/static.h>
 
 static void dispatch_application_instruction(CellMatrix *, NSString *, int32_t , enum ApplicationInstruction);
 
