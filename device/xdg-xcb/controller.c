@@ -256,7 +256,7 @@ device_wait_event(struct CellMatrix *cmd)
 			if (xe->count == 0)
 			{
 				struct Device *xd = &cmd->xd;
-				xd->dispatch_frame(cmd);
+				xd->dispatch_image(cmd);
 				xd->synchronize(cmd);
 			}
 			else

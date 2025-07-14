@@ -256,11 +256,11 @@ refreshPixelImage
 
 	/* Rewrite pixels without application I/O */
 	device_invalidate_cells(self, CellArea(0, 0, mp->y_cells, mp->x_cells));
-	device_render_pixels(self);
+	device_render_image(self);
 
 	/* Twice; it is not clear why once is insufficient here. */
-	device_dispatch_frame(self);
-	device_dispatch_frame(self);
+	device_dispatch_image(self);
+	device_dispatch_image(self);
 }
 
 - (void)
@@ -471,8 +471,8 @@ initWithFrame: (CGRect) r
 		.transfer_text = device_transfer_text,
 		.replicate_cells = device_replicate_cells,
 		.invalidate_cells = device_invalidate_cells,
-		.render_pixels = device_render_pixels,
-		.dispatch_frame = device_dispatch_frame,
+		.render_image = device_render_image,
+		.dispatch_image = device_dispatch_image,
 		.synchronize = device_synchronize,
 		.synchronize_io = device_synchronize_io,
 		.frame_list = NULL,
@@ -1576,7 +1576,7 @@ device_replicate_cells(void *context, struct CellArea target, struct CellArea so
 }
 
 static void
-device_render_pixels(void *context)
+device_render_image(void *context)
 {
 	CellMatrix *terminal = context;
 
@@ -1588,7 +1588,7 @@ device_render_pixels(void *context)
 }
 
 static void
-device_dispatch_frame(void *context)
+device_dispatch_image(void *context)
 {
 	CellMatrix *terminal = context;
 

@@ -22,8 +22,8 @@ typedef int (*TerminalApplication)(void *context);
 #define Device_Integrate(DS, REF, LEN, LC, SC) (DS->integrate)(DS->cmd_context, REF, LEN, LC, SC)
 #define Device_ReplicateCells(DS, DST, SRC) (DS->replicate_cells)(DS->cmd_context, DST, SRC)
 #define Device_InvalidateCells(DS, DST) (DS->invalidate_cells)(DS->cmd_context, DST)
-#define Device_RenderPixels(DS) (DS->render_pixels)(DS->cmd_context)
-#define Device_DispatchFrame(DS) (DS->dispatch_frame)(DS->cmd_context)
+#define Device_RenderImage(DS) (DS->render_image)(DS->cmd_context)
+#define Device_DispatchImage(DS) (DS->dispatch_image)(DS->cmd_context)
 #define Device_Synchronize(DS) (DS->synchronize)(DS->cmd_context)
 #define Device_SynchronizeIO(DS) (DS->synchronize_io)(DS->cmd_context)
 

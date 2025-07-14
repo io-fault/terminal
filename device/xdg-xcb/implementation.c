@@ -74,7 +74,7 @@ device_invalidate_cells(void *context, struct CellArea area)
 }
 
 static void
-device_render_pixels(void *context)
+device_render_image(void *context)
 {
 	struct CellMatrix *cmd = (struct CellMatrix *) context;
 	struct Device *xd = &cmd->xd;
@@ -254,7 +254,7 @@ device_replicate_cells(void *context, struct CellArea dst, struct CellArea src)
 	cairo_t *tmpc = cairo_create(tmps);
 
 	/* Flush invalidated cells before copying. */
-	device_render_pixels(context);
+	device_render_image(context);
 
 	cairo_set_source_surface(tmpc, xi->working, -xsrc, -ysrc);
 	cairo_rectangle(tmpc, 0, 0, width, height);
@@ -272,7 +272,7 @@ device_replicate_cells(void *context, struct CellArea dst, struct CellArea src)
 }
 
 static void
-device_dispatch_frame(void *context)
+device_dispatch_image(void *context)
 {
 	struct CellMatrix *cmd = (struct CellMatrix *) context;
 	struct Device *xd = &cmd->xd;

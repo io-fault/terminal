@@ -1116,19 +1116,19 @@ device_invalidate_cells(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-device_render_pixels(PyObject *self, PyObject *args)
+device_render_image(PyObject *self, PyObject *args)
 {
 	if (!PyArg_ParseTuple(args, ""))
 		return(NULL);
 
-	Device_RenderPixels(D(self));
+	Device_RenderImage(D(self));
 	Py_RETURN_NONE;
 }
 
 static PyObject *
-device_dispatch_frame(PyObject *self)
+device_dispatch_image(PyObject *self)
 {
-	Device_DispatchFrame(D(self));
+	Device_DispatchImage(D(self));
 	Py_RETURN_NONE;
 }
 
@@ -1276,8 +1276,8 @@ static PyMethodDef device_methods[] = {
 	{"integrate", (PyCFunction) device_integrate, METH_VARARGS, NULL},
 	{"replicate_cells", (PyCFunction) device_replicate_cells, METH_VARARGS, NULL},
 	{"invalidate_cells", (PyCFunction) device_invalidate_cells, METH_VARARGS, NULL},
-	{"render_pixels", (PyCFunction) device_render_pixels, METH_VARARGS, NULL},
-	{"dispatch_frame", (PyCFunction) device_dispatch_frame, METH_NOARGS, NULL},
+	{"render_image", (PyCFunction) device_render_image, METH_VARARGS, NULL},
+	{"dispatch_image", (PyCFunction) device_dispatch_image, METH_NOARGS, NULL},
 	{"synchronize", (PyCFunction) device_synchronize, METH_NOARGS, NULL},
 	{"synchronize_io", (PyCFunction) device_synchronize_io, METH_NOARGS, NULL},
 

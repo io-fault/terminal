@@ -1007,8 +1007,8 @@ class Session(Core):
 			cl = tools.partial(self.lookup, [view.source, view, frame, self])
 			self._oc = tools.cachedcalls(16)(cl)
 
-		device.render_pixels()
-		device.dispatch_frame()
+		device.render_image()
+		device.dispatch_image()
 		device.synchronize() # Wait for render queue to clear.
 
 		try:
