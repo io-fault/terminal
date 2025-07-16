@@ -79,14 +79,10 @@ device_render_image(void *context)
 	struct CellMatrix *cmd = (struct CellMatrix *) context;
 	struct Device *xd = &cmd->xd;
 	struct Device_XDisplay *xi = &cmd->xi;
-	system_units_t y_screen_offset = xd->cmd_dimensions->y_cell_units;
-	system_units_t x_screen_offset = xd->cmd_dimensions->x_cell_units;
+	struct Device_TileCache *tc = &xi->cache;
 
 	system_units_t cell_height = xd->cmd_dimensions->y_cell_units;
 	system_units_t cell_width = xd->cmd_dimensions->x_cell_units;
-
-	int attrs = 0;
-	PangoAttrList *working = pango_attr_list_new();
 
 	/**
 		// Update invalidated areas.
@@ -94,132 +90,23 @@ device_render_image(void *context)
 	for (int i = 0; i < xi->icount; ++i)
 	{
 		struct CellArea area = xi->invalids[i];
-		char t[MB_CUR_MAX+1];
 
 		mforeach((xd->cmd_view->span), (xd->cmd_image), (&area))
 		{
 			// Cell, Offset, Line implied by mforeach.
+			system_units_t xdst = Offset * cell_width, ydst = Line * cell_height;
+			struct Device_XImage *ti;
+			system_units_t xt, yt;
 
-			if (Cell->c_codepoint >= 128)
-			{
-				size_t cs = c32rtomb(t, Cell->c_codepoint, NULL);
+			ti = cache_acquire_tile(tc, Cell, &xt, &yt);
 
-				if (cs == -1)
-				{
-					t[0] = 0;
-					t[1] = 0;
-				}
-				else
-				{
-					t[cs] = 0;
-				}
-			}
-			else if (Cell->c_codepoint < 0)
-			{
-				/* TODO: Lookup string in definition index. */
-				t[0] = ' ';
-				t[1] = 0;
-			}
-			else
-			{
-				t[0] = Cell->c_codepoint;
-				t[1] = 0;
-			}
-
-			// Cell color.
-			cairo_set_source_rgba(xi->context,
-				((float) Cell->c_cell.r) / 0xFF,
-				((float) Cell->c_cell.g) / 0xFF,
-				((float) Cell->c_cell.b) / 0xFF,
-				1.0
-			);
-			// Cell windows select which part of a character to draw,
-			// so this is always single cell.
-			cairo_rectangle(xi->context,
-				Offset * cell_width,
-				Line * cell_height,
-				cell_width,
-				cell_height
-			);
+			cairo_set_source_surface(xi->context, ti->di_cairo_resource, xdst-xt, ydst-yt);
+			cairo_rectangle(xi->context, xdst, ydst, cell_width, cell_height);
+			cairo_set_operator(xi->context, CAIRO_OPERATOR_SOURCE);
 			cairo_fill(xi->context);
-
-			// Draw glyph.
-			cairo_move_to(xi->context, (Offset - Cell->c_window) * cell_width, Line * cell_height);
-
-			cairo_set_source_rgba(xi->context,
-				((float) Cell->c_switch.txt.t_glyph.r) / 0xFF,
-				((float) Cell->c_switch.txt.t_glyph.g) / 0xFF,
-				((float) Cell->c_switch.txt.t_glyph.b) / 0xFF,
-				1.0
-			);
-
-			if (Cell_TextTraits(*Cell)->bold)
-			{
-				pango_attr_list_insert(working, pango_attr_weight_new(PANGO_WEIGHT_BOLD));
-				++attrs;
-			}
-
-			if (Cell_TextTraits(*Cell)->italic)
-			{
-				pango_attr_list_insert(working, pango_attr_style_new(PANGO_STYLE_ITALIC));
-				++attrs;
-			}
-
-			if (Cell_TextTraits(*Cell)->underline != lp_void)
-			{
-				PangoUnderline uls;
-				struct Color *c = Cell_LineColor(*Cell);
-				guint16 r = (guint16) ((((double) c->r) / 0xFF) * (double) 0xFFFF);
-				guint16 g = (guint16) ((((double) c->g) / 0xFF) * (double) 0xFFFF);
-				guint16 b = (guint16) ((((double) c->b) / 0xFF) * (double) 0xFFFF);
-
-				switch (Cell_TextTraits(*Cell)->underline)
-				{
-					case lp_wavy:
-					case lp_sawtooth:
-						uls = PANGO_UNDERLINE_ERROR;
-					break;
-
-					case lp_double:
-						uls = PANGO_UNDERLINE_DOUBLE;
-					break;
-
-					case lp_dashed:
-					case lp_dotted:
-					case lp_solid:
-					default:
-						uls = PANGO_UNDERLINE_SINGLE;
-					break;
-				}
-
-				pango_attr_list_insert(working, pango_attr_underline_color_new(r, g, b));
-				pango_attr_list_insert(working, pango_attr_underline_new(uls));
-				++attrs;
-			}
-
-			if (attrs > 0)
-			{
-				pango_layout_set_attributes(xi->layout, working);
-
-				pango_layout_set_text(xi->layout, t, -1);
-				pango_cairo_show_layout(xi->context, xi->layout);
-
-				// Reset attributes.
-				pango_attr_list_unref(working);
-				working = pango_attr_list_new();
-				pango_layout_set_attributes(xi->layout, working);
-				attrs = 0;
-			}
-			else
-			{
-				pango_layout_set_text(xi->layout, t, -1);
-				pango_cairo_show_layout(xi->context, xi->layout);
-			}
 		}
 		mend(invalidate);
 	}
-
-	pango_attr_list_unref(working);
 
 	xi->invalids = realloc(xi->invalids, 0);
 	xi->icount = 0;

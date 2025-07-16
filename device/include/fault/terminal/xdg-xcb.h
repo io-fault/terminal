@@ -42,6 +42,48 @@ struct Device_XController
 };
 
 /*
+	// Device optimized frame buffer.
+*/
+struct Device_XImage
+{
+	xcb_pixmap_t di_xcb_resource;
+	cairo_surface_t *di_cairo_resource;
+	cairo_t *di_context;
+	PangoLayout *di_layout;
+};
+
+/**
+	// The (hash) indexed reference to the tile.
+*/
+struct TileRecord
+{
+	ssize_t tr_hits, tr_passes, tr_rate;
+	uint16_t tr_image, tr_line, tr_cell; // Value
+	struct Cell tr_key;
+};
+
+/**
+	// Cache index table and tile storage.
+*/
+struct Device_TileCache
+{
+	system_units_t dtc_cell_width, dtc_cell_height;
+
+	// Tile storage.
+	size_t dtc_image_confinement; // Shared storage size: images, lines, and cells.
+	size_t dtc_image_limit; // Current capacity of storage cells, volume
+	size_t dtc_image_next; // Next available cell index.
+	struct Device_XImage *dtc_image_cache;
+
+	// Index records.
+	size_t dtc_allocation_size; // Number of record slots to allocate when extending.
+	size_t dtc_distribution_size; // Number of record sets.
+	size_t *dtc_record_counts; // Number of records in corresponding set.
+	size_t *dtc_record_slots; // Allocation size of sets; slots - count are available.
+	struct TileRecord **dtc_records;
+};
+
+/*
 	// pango and cairo
 */
 struct Device_XDisplay
@@ -65,6 +107,8 @@ struct Device_XDisplay
 	cairo_t *write;
 
 	struct GlyphInscriptionParameters glyphctl;
+	struct Device_TileCache cache;
+
 	int icount;
 	struct CellArea *invalids;
 };
@@ -88,3 +132,4 @@ struct CellMatrix
 
 int device_initialize_controller(struct CellMatrix *, struct Device_XController *);
 int device_wait_key(struct CellMatrix *cmd, struct ControllerStatus *ctl);
+struct Device_XImage *cache_acquire_tile(struct Device_TileCache *, struct Cell *, system_units_t *, system_units_t *);
