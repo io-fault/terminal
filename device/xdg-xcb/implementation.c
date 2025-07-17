@@ -87,7 +87,7 @@ device_render_image(void *context)
 	/**
 		// Update invalidated areas.
 	*/
-	for (int i = 0; i < xi->icount; ++i)
+	for (int i = xi->rcount; i < xi->icount; ++i)
 	{
 		struct CellArea area = xi->invalids[i];
 
@@ -104,12 +104,13 @@ device_render_image(void *context)
 			cairo_rectangle(xi->context, xdst, ydst, cell_width, cell_height);
 			cairo_set_operator(xi->context, CAIRO_OPERATOR_SOURCE);
 			cairo_fill(xi->context);
+
+			xi->ccount += area.lines * area.span;
 		}
 		mend(invalidate);
 	}
 
-	xi->invalids = realloc(xi->invalids, 0);
-	xi->icount = 0;
+	xi->rcount = xi->icount;
 }
 
 /**
@@ -143,6 +144,14 @@ device_replicate_cells(void *context, struct CellArea dst, struct CellArea src)
 	/* Flush invalidated cells before copying. */
 	device_render_image(context);
 
+	// Update invalidated areas.
+	xi->icount += 1;
+	xi->rcount += 1;
+	xi->ccount += dst.span * dst.lines;
+
+	xi->invalids = realloc(xi->invalids, sizeof(struct CellArea) * xi->icount);
+	xi->invalids[xi->icount - 1] = dst;
+
 	cairo_set_source_surface(tmpc, xi->working, -xsrc, -ysrc);
 	cairo_rectangle(tmpc, 0, 0, width, height);
 	cairo_fill(tmpc);
@@ -168,10 +177,53 @@ device_dispatch_image(void *context)
 	system_units_t width = xd->cmd_dimensions->x_screen_units;
 	system_units_t height = xd->cmd_dimensions->y_screen_units;
 
-	cairo_set_source_surface(xi->write, xi->working, 0, 0);
-	cairo_rectangle(xi->write, 0, 0, width, height);
-	cairo_set_operator(xi->write, CAIRO_OPERATOR_SOURCE);
-	cairo_fill(xi->write);
+	// Over a third of the screen, update full.
+	if (xi->ccount > (width * height) / 3)
+	{
+		cairo_set_source_surface(xi->write, xi->working, 0, 0);
+		cairo_rectangle(xi->write, 0, 0, width, height);
+		cairo_set_operator(xi->write, CAIRO_OPERATOR_SOURCE);
+		cairo_fill(xi->write);
+	}
+	else
+	{
+		system_units_t cell_height = xd->cmd_dimensions->y_cell_units;
+		system_units_t cell_width = xd->cmd_dimensions->x_cell_units;
+
+		// Minor changes, update the spots.
+		for (int i = 0; i < xi->rcount; ++i)
+		{
+			struct CellArea area = xi->invalids[i];
+
+			system_units_t xdst = area.left_offset * cell_width;
+			system_units_t ydst = area.top_offset * cell_height;
+
+			cairo_set_source_surface(xi->write, xi->working, 0, 0);
+			cairo_rectangle(xi->write, xdst, ydst, area.span * cell_width, area.lines * cell_height);
+			cairo_set_operator(xi->write, CAIRO_OPERATOR_SOURCE);
+			cairo_fill(xi->write);
+		}
+	}
+
+	if (xi->icount == xi->rcount)
+	{
+		xi->invalids = realloc(xi->invalids, 0);
+		xi->icount = 0;
+		xi->rcount = 0;
+		xi->ccount = 0;
+	}
+	else
+	{
+		int count = xi->icount - xi->rcount;
+		struct CellArea *invalids = malloc(sizeof(struct CellArea) * count);
+
+		memcpy(invalids, xi->invalids + xi->rcount, sizeof(struct CellArea) * count);
+		free(xi->invalids);
+		xi->invalids = invalids;
+		xi->icount = count;
+		xi->rcount = 0;
+		xi->ccount = 0;
+	}
 }
 
 static void

@@ -491,6 +491,11 @@ device_initialize_display(struct CellMatrix *cmd)
 
 	xcb_void_cookie_t cookie;
 
+	xi->icount = 0;
+	xi->rcount = 0;
+	xi->ccount = 0;
+	xi->invalids = malloc(sizeof(struct CellArea));
+
 	xi->output = cairo_xcb_surface_create(cmd->xc, cmd->xw, xi->vtype, width, height);
 	xi->write = cairo_create(xi->output);
 

@@ -109,7 +109,7 @@ struct Device_XDisplay
 	struct GlyphInscriptionParameters glyphctl;
 	struct Device_TileCache cache;
 
-	int icount;
+	int icount, rcount, ccount;
 	struct CellArea *invalids;
 };
 
