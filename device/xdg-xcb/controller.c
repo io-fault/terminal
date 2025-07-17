@@ -252,18 +252,18 @@ device_wait_event(struct CellMatrix *cmd)
 		case XCB_EXPOSE:
 		{
 			xcb_expose_event_t *xe = (xcb_expose_event_t *) e;
+			struct Device_XDisplay *xi = &cmd->xi;
+
+			cairo_set_source_surface(xi->write, xi->working, 0, 0);
+			cairo_rectangle(xi->write, xe->x, xe->y, xe->width, xe->height);
+			cairo_set_operator(xi->write, CAIRO_OPERATOR_SOURCE);
+			cairo_fill(xi->write);
 
 			if (xe->count == 0)
-			{
-				struct Device *xd = &cmd->xd;
-				xd->dispatch_image(cmd);
-				xd->synchronize(cmd);
-			}
-			else
-			{
-				free(e);
-				goto again;
-			}
+				xcb_flush(cmd->xc);
+
+			free(e);
+			goto again;
 		}
 		break;
 
