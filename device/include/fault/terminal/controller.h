@@ -83,6 +83,11 @@ struct ControllerStatus
 	DeviceReceiver st_receiver;
 };
 
+#define ControllerStatus_Format() "%ld[%lu] * %ld %d text length %d x %d"
+#define ControllerStatus_Fields(ctls) \
+	ctls->st_dispatch, ctls->st_quantity, ctls->st_keys, \
+	ctls->st_text_length, (int) ctls->st_top, (int) ctls->st_left
+
 /* Function Keys */
 #define FunctionKey_Offset (-0xF00)
 #define FunctionKey_Number(X) ((-X) + FunctionKey_Offset)
@@ -192,6 +197,29 @@ KeyName(enum KeyIdentifier ki)
 
 	return("");
 }
+
+#define DeviceControls() \
+	DC_DEFINE(ineffective) \
+	DC_DEFINE(synchronize) \
+	DC_DEFINE(resize_screen) \
+	DC_DEFINE(enter_relay) \
+	DC_DEFINE(escape_relay)
+
+/**
+	// Device control keys.
+
+	// Identifiers for device configuration and notification methods.
+*/
+enum DeviceControls
+{
+	dc_void = 0,
+
+	#define DC_DEFINE(CLASS) dc_##CLASS,
+		DeviceControls()
+	#undef DC_DEFINE
+
+	dc_sentinel
+};
 
 #define ApplicationInstructions() \
 	AI_DEFINE(session, status) \

@@ -22,7 +22,7 @@ from . import retention
 
 from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax
 from .storage import Resource, Directory, delta
-from .view import Refraction, Frame, Structure as View
+from .view import Refraction, Reflection, Frame, Structure as View
 from .system import Context as SystemContext, Host, Process, IOManager
 
 # Disable signal exits for multiple interpreter cases.
@@ -130,6 +130,7 @@ class Session(Core):
 			'control': controls.control,
 			'insert': controls.insert,
 			'annotations': controls.annotations,
+			'relay': controls.relay,
 			'capture-key': types.Mode(('cursor', 'insert/captured/key', ())),
 			'capture-insert': types.Mode(('cursor', 'insert/captured', ())),
 			'capture-replace': types.Mode(('cursor', 'replace/captured', ())),
@@ -262,6 +263,7 @@ class Session(Core):
 		self.types = self.integrate_types(cfg.types, self.theme)
 		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
 		self.types['transcript'] = self.load_type('teletype')
+		self.types['reflection'] = None
 
 		exepath = self.executable/'.transcript'
 		session_log = Reference(
@@ -276,7 +278,7 @@ class Session(Core):
 		self.sources.insert_resource(self.transcript)
 
 		# Exclusively for the prompt.
-		self.process.rehash([Host, Process, Resource, Refraction, Frame, Session])
+		self.process.rehash([Host, Process, Resource, Refraction, Reflection, Frame, Session])
 
 	@comethod('session', 'retitle')
 	def retitle(self, title):
@@ -555,14 +557,19 @@ class Session(Core):
 		syntype = self.load_type(typref)
 		system = self.host
 
-		try:
-			source = self.sources.select_resource(path)
-			load = False
-		except KeyError:
+		if typref == 'reflection':
 			source = self.sources.create_resource(system.identity, typref, syntype, path)
-			load = True
+			rf = Reflection(self.device, self.theme['empty'].inscribe(ord(' ')), source)
+			load = False
+		else:
+			try:
+				source = self.sources.select_resource(path)
+				load = False
+			except KeyError:
+				source = self.sources.create_resource(system.identity, typref, syntype, path)
+				load = True
 
-		rf = Refraction(source)
+			rf = Refraction(source)
 		rf.keyboard = self.keyboard
 
 		if load:
@@ -852,7 +859,7 @@ class Session(Core):
 
 				# No invalidation necessary here as the cell replication
 				# has been performed directly on the frame buffer.
-				s.replicate(area, data.y_offset, data.x_offset)
+				s.replicate_cells(area, data)
 			else:
 				# Update the screen with the given data and signal
 				# the display to refresh the area.
@@ -978,8 +985,9 @@ class Session(Core):
 
 			return op(*(x(self, self._focus, key) for x in sels), *args) # User Event Operation
 		except Exception as operror:
+			mode = '[' + self.keyboard.mapping + ']'
 			self.keyboard.reset('control')
-			self.error('Operation Failure', operror)
+			self.error('Operation Failure' + mode + key, operror)
 			del operror
 
 	def cycle(self):
@@ -1146,16 +1154,18 @@ class Session(Core):
 		frame.refocus()
 
 	@comethod('screen', 'resize')
-	def resize(self):
+	def S_resize(self):
 		"""
 		# Device screen area changed.
 		"""
 
-		self.device.reconnect()
+		self.device.resize_screen()
+
 		new = self.device.screen.area
 		for frame in self.frames:
 			frame.resize(new)
-		self.dispatch_delta(self.focus.render())
+
+		self.focus.f_refresh()
 
 	@comethod('screen', 'refresh')
 	def refresh(self, frame):
@@ -1461,6 +1471,9 @@ def main(inv:process.Invocation) -> process.Exit:
 	configure_log_builtin(session, inv.parameters['system']['environment'].get('TERMINAL_LOG'))
 	if 'instructions' not in config['traces']:
 		session.trace = session.discard
+
+	# Assign initial screen size.
+	session.device.resize_screen()
 
 	try:
 		session.load()

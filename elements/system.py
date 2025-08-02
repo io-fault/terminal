@@ -26,7 +26,8 @@ from fault.syntax.format import Characters
 
 from .types import Core, System, Line, Reference
 from .types import Procedure, Composition, Instruction
-from .view import Refraction
+from .types import Cell, Area, Screen
+from .view import Refraction, Reflection
 
 def joinlines(decoder, linesep='\n', character=''):
 	# Used in conjunction with an incremental decoder to collapse line ends.
@@ -112,6 +113,184 @@ class IO(object):
 		return l
 
 @dataclass()
+class Display(IO):
+	"""
+	# IO state managing display signals.
+	"""
+
+	state: bytearray
+	target: Reflection
+
+	area: Area = None
+	screen_size: int = 0
+	read_size: int = 1024 * 16
+	system_operation = os.read
+	event_type = Event.io_receive
+	cell_size = Cell.size
+	area_size = Area.size
+
+	@classmethod
+	def establish(Class, work, system):
+		"""
+		# Construct an &Insertion instance for receiving text from a new pipe.
+		"""
+
+		try:
+			i = Class(bytearray(), work.target)
+
+			with system.read_pipe() as (rfd, wfd):
+				l = system.io.schedule(work, i, rfd, rfd)
+				return l, wfd
+		except:
+			# Only cleanup under an exception.
+			if i is not None:
+				i.interrupt()
+			if l is not None:
+				system.io.cancel(l)
+			raise
+
+	def interpret_cell_vector(self, transfer):
+		"""
+		# Perform the insertion into the resource.
+		"""
+
+		self.state += transfer
+		while self.state:
+			if self.area is None:
+				if len(self.state) < self.area_size:
+					# Not enough data.
+					return
+
+				self.area = Area.from_bytes(bytes(self.state[:self.area_size]))
+				del self.state[:self.area_size]
+				self.screen_size = self.cell_size * self.area.volume
+
+			if self.screen_size == 0:
+				# Zero volume used to select replication or dispatch.
+				if len(self.state) < self.area_size:
+					# Not enough data for copy or flush.
+					return
+
+				dst = self.area
+				src = Area.from_bytes(bytes(self.state[:self.area_size]))
+				del self.state[:self.area_size]
+				self.area = None
+				self.screen_size = None
+
+				if src.lines == 0:
+					if src.span == 0:
+						self.target.v_dispatch_image()
+					elif src.span == 2:
+						self.target.v_synchronize()
+				else:
+					# replicate cells
+					self.target.v_replicate_cells(dst, src)
+
+				continue
+			elif len(self.state) < self.screen_size:
+				# Wait until the cell vector is fully received.
+				return
+
+			sa = self.area
+			cells = Screen(sa, self.state[:self.screen_size])
+			self.area = None
+			del self.state[:self.screen_size]
+			self.screen_size = None
+
+			self.target.v_integrate_display_delta(sa, cells)
+
+	def final(self, error=None):
+		self.target.display_closed()
+		del self.target
+
+		if error is not None:
+			raise error
+
+	def interrupt(self):
+		# Force a zero read to cause &transition to cancel and finalize.
+		self.system_operation = (lambda fd, rs: b'')
+
+	def transition(self, scheduler, log, link):
+		kport = link.event.port
+
+		try:
+			xfer = b'\x00' # Overwritten, allows loop entrance.
+			while len(xfer) > 0:
+				xfer = self.system_operation(kport, self.read_size)
+				log.append((self.interpret_cell_vector, xfer))
+			else:
+				scheduler.cancel(link)
+				log.append((self.final, None))
+				return
+		except OSError as err:
+			if err.errno != errno.EAGAIN:
+				scheduler.cancel(link)
+				log.append((self.final, err))
+
+@dataclass()
+class Relay(IO):
+	"""
+	# IO state transmitting controller status.
+	"""
+
+	data: bytes
+	queue: list
+
+	closed = False
+	write_size = 512
+	system_operation = os.write
+	event_type = Event.io_transmit
+
+	@classmethod
+	def establish(Class, work, system, queue):
+		l = None
+		try:
+			# Avoid materializing the lines as it may be infinite.
+			i = Class(bytearray(), queue)
+
+			# Instantiate and start.
+			with system.write_pipe() as (rfd, wfd):
+				l = system.io.schedule(work, i, wfd, wfd)
+				return i, l, rfd
+		except:
+			if i is not None:
+				i.interrupt()
+			if l is not None:
+				system.io.cancel(l)
+			raise
+
+	def final(self, ignored):
+		pass
+
+	def interrupt(self):
+		del self.queue[:]
+		self.data = b''
+		self.closed = True
+
+	def transition(self, scheduler, alog, link):
+		if self.closed:
+			scheduler.cancel(link)
+			return
+
+		new = len(self.queue)
+		for d in self.queue[:new]:
+			self.data += d
+		else:
+			del self.queue[:new]
+
+		while self.data:
+			try:
+				byteswritten = self.system_operation(link.event.port, self.data[:self.write_size])
+			except BrokenPipeError:
+				byteswritten = 0
+				scheduler.cancel(link)
+				break
+			except BlockingIOError:
+				break
+
+			self.data = self.data[byteswritten:]
+
+@dataclass()
 class Insertion(IO):
 	"""
 	# IO state managing asynchronous reads into resource writes.
@@ -129,13 +308,13 @@ class Insertion(IO):
 	event_type = Event.io_receive
 
 	@classmethod
-	def establish(Class, work, system, lo, co, level=0):
+	def establish(Class, work, system, lo, co, level=0, target=None):
 		"""
 		# Construct an &Insertion instance for receiving text from a new pipe.
 		"""
 
 		i = l = None
-		rf = work.target
+		rf = target if target is not None else work.target
 		try:
 			i = Class(rf, (lo, co, ''), True, *system.codec.Decoder(), level=level)
 
@@ -601,6 +780,11 @@ class IOManager(object):
 
 		return xl
 
+	def continued(self, io, link):
+		s = self.scheduler
+		l = self.transfers
+		s.enqueue(partial(io.reference(s, l), link))
+
 class Context(Core):
 	"""
 	# The common system context for dispatching and managing jobs.
@@ -624,6 +808,22 @@ class Context(Core):
 			path.context or path ** 1,
 			path,
 		)
+
+	def reflect(self, transcript, system, work, path, proc, queue):
+		ctl_transmit, tx_link, rxp = Relay.establish(work, self, queue)
+		dis_receive, txp = Display.establish(work, self)
+
+		# Connect stderr to transcript.
+		for v in transcript.views:
+			first = v
+			l, wfd = Insertion.establish(work, system, transcript.ln_count(), 0, target=first)
+			break
+		else:
+			# Or, if no views are available, send it to stderr.
+			wfd = os.dup(2)
+
+		work.spawn(self, path, proc, fdmap=[(rxp, 0), (txp, 1), (wfd, 2)])
+		return ctl_transmit, tx_link
 
 class Process(Context):
 	"""

@@ -146,6 +146,44 @@ def test_Area_hash(test):
 	test/d[n1] == 1
 	test/d[n2] == 2
 
+def test_Area_intersect(test):
+	"""
+	# - &module.Area.intersect
+	"""
+
+	b = module.Area(100, 100, 100, 100)
+	test/b.intersect(module.Area(100, 100, 0, 0)) == module.Area(100, 100, 0, 0)
+	test/b.intersect(module.Area(101, 101, 1, 1)) == module.Area(101, 101, 1, 1)
+	test/b.intersect(module.Area(99, 99, 2, 2)) == module.Area(100, 100, 1, 1)
+
+	# Beyond
+	test/b.intersect(module.Area(150, 200, 0, 0)) == module.Area(150, 200, 0, 0)
+	test/b.intersect(module.Area(150, 200, 10, 0)) == module.Area(150, 200, 10, 0)
+	test/b.intersect(module.Area(200, 200, 0, 0)) == module.Area(200, 200, 0, 0)
+	test/b.intersect(module.Area(200, 200, 1, 1)) == module.Area(200, 200, 0, 0)
+	test/b.intersect(module.Area(175, 175, 50, 50)) == module.Area(175, 175, 25, 25)
+
+	# Before
+	test/b.intersect(module.Area(50, 50, 50, 50)) == module.Area(100, 100, 0, 0)
+	test/b.intersect(module.Area(50, 100, 50, 50)) == module.Area(100, 100, 0, 50)
+	test/b.intersect(module.Area(100, 50, 50, 50)) == module.Area(100, 100, 50, 0)
+
+	# Left of
+	test/b.intersect(module.Area(100, 90, 10, 15)) == module.Area(100, 100, 10, 5)
+	test/b.intersect(module.Area(110, 90, 10, 15)) == module.Area(110, 100, 10, 5)
+
+	# Right of
+	test/b.intersect(module.Area(100, 190, 10, 15)) == module.Area(100, 190, 10, 10)
+	test/b.intersect(module.Area(190, 190, 10, 15)) == module.Area(190, 190, 10, 10)
+
+	# Below
+	test/b.intersect(module.Area(190, 100, 15, 10)) == module.Area(190, 100, 10, 10)
+	test/b.intersect(module.Area(190, 190, 15, 20)) == module.Area(190, 190, 10, 10)
+
+	# Above
+	test/b.intersect(module.Area(90, 100, 15, 10)) == module.Area(100, 100, 5, 10)
+	test/b.intersect(module.Area(90, 190, 15, 20)) == module.Area(100, 190, 5, 10)
+
 def test_Glyph_instances(test):
 	empty = module.Glyph()
 	test/empty.codepoint == -1
@@ -297,32 +335,64 @@ def test_Screen_rewrite(test):
 	cells = s.select(module.Area(9, 0, 1, 10))
 	test/[x.codepoint for x in cells] == [c.codepoint for c in rewrites]
 
-def test_Screen_intersection(test):
+def Screen_select_tests(test, top, left, height, width):
 	"""
 	# Validate that selecting areas beyond the screen are ignored.
 	"""
 
-	sd = module.Area(0, 0, 10, 10)
-	buf = bytearray([0]) * (module.Cell.size * 10 * 10)
+	def Area(t, l, lc, s):
+		return module.Area(t+top, l+left, lc, s)
+
+	sd = module.Area(top, left, height, width)
+	buf = bytearray([0]) * (module.Cell.size * sd.lines * sd.span)
 	s = module.Screen(sd, buf)
-	test/len(s.select(module.Area(10, 0, 2, 20))) == 0
-	test/len(s.select(module.Area(9, 10, 2, 20))) == 0
+	s.rewrite(sd, [
+		module.Glyph(codepoint=i) for i in range(10*10)
+	])
+
+	# Duplicate of test_Screen_select, so adjust offsets by +50 to test.
+	test/len(s.select(Area(10, 0, 2, 20))) == 0
+	test/len(s.select(Area(9, 10, 2, 20))) == 0
 	for i in range(10):
-		test/len(s.select(module.Area(9, i, 2, 20))) == 10-i
+		test/len(s.select(Area(9, i, 2, 20))) == 10-i
 
 	# On the right edge.
-	test/len(s.select(module.Area(0, 9, 10, 20))) == 10
-	test/len(s.select(module.Area(1, 9, 10, 20))) == 9
-	test/len(s.select(module.Area(1, 9, 9, 20))) == 9 # Still 9. 10 was constrained.
-	test/len(s.select(module.Area(1, 9, 8, 20))) == 8
-	test/len(s.select(module.Area(1, 9, 7, 20))) == 7
+	test/len(s.select(Area(0, 9, 10, 20))) == 10
+	test/len(s.select(Area(1, 9, 10, 20))) == 9
+	test/len(s.select(Area(1, 9, 9, 20))) == 9 # Still 9. 10 was constrained.
+	test/len(s.select(Area(1, 9, 8, 20))) == 8
+	test/len(s.select(Area(1, 9, 7, 20))) == 7
 
-def test_Screen_replicate(test):
+	def cps(s):
+		return [x.codepoint for x in s]
+	test/cps(s.select(Area(0, 5, 1, 10))) == list(range(5, 10))
+	test/cps(s.select(Area(8, 0, 2, 5))) == list(range(80, 85)) + list(range(90, 95))
+	test/cps(s.select(Area(8, 0, 2, 15))) == list(range(80, 100))
+	test/cps(s.select(Area(8, 5, 3, 15))) == list(range(85, 90)) + list(range(95, 100))
+
+	if top * left == 0:
+		# Check intersections with sub-origin positions after this point.
+		# Area is strictly unsigned, so this is only possible with non-zero origins.
+		return
+
+	# Left of.
+	test/cps(s.select(Area(1, -1, 5, 2))) == list(range(10, 60, 10))
+
+def test_Screen_select(test):
+	"""
+	# Validate that selecting areas beyond the screen are ignored.
+	"""
+
+	Screen_select_tests(test, 0, 0, 10, 10)
+	Screen_select_tests(test, 50, 50, 10, 10)
+
+def test_Screen_replicate_cells(test):
 	"""
 	# Validate cell replication.
 	"""
 
-	sd = module.Area(0, 0, 10, 10)
+	A = module.Area
+	sd = A(0, 0, 10, 10)
 	buf = bytearray([0]) * (module.Cell.size * 10 * 10)
 	s = module.Screen(sd, buf)
 	test/s.volume == 100
@@ -330,6 +400,6 @@ def test_Screen_replicate(test):
 	s.rewrite(s.area, (module.Glyph(codepoint=i) for i in range(100)))
 	snapshot = s.select(s.area)
 
-	s.replicate(module.Area(0, 0, 5, 10), 5, 0)
-	changed = s.select(module.Area(0, 0, 5, 10))
+	s.replicate_cells(A(0, 0, 0, 0), A(5, 0, 5, 10))
+	changed = s.select(A(0, 0, 5, 10))
 	test/[x.codepoint for x in changed] == [x.codepoint for x in snapshot[50:]]

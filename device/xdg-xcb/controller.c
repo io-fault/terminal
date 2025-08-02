@@ -212,7 +212,7 @@ device_wait_event(struct CellMatrix *cmd)
 					ctl->st_dispatch = InstructionKey_Identifier(ai_session_close);
 					ctl->st_text_length = 0;
 					ctl->st_quantity = 1;
-					return(0);
+					return(1);
 				}
 
 				case XCB_CONN_ERROR:
@@ -224,7 +224,7 @@ device_wait_event(struct CellMatrix *cmd)
 					ctl->st_dispatch = InstructionKey_Identifier(ai_session_close);
 					ctl->st_text_length = 0;
 					ctl->st_quantity = 1;
-					return(0);
+					return(1);
 				}
 			}
 		}
@@ -377,7 +377,7 @@ device_wait_event(struct CellMatrix *cmd)
 	}
 
 	free(e);
-	return(0);
+	return(1);
 }
 
 #include <xkbcommon/xkbcommon-keysyms.h>

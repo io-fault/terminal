@@ -46,6 +46,7 @@ filename_extensions = {
 
 	"transcript": 'transcript',
 	"iv": 'ivectors',
+	"reflection": 'reflection',
 	"tty": 'teletype',
 }
 

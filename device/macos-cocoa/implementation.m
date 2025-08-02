@@ -17,7 +17,7 @@
 
 #include <fault/terminal/static.h>
 
-static void dispatch_application_instruction(CellMatrix *, NSString *, int32_t , enum ApplicationInstruction);
+static void dispatch_application_instruction(CellMatrix *, NSString *, int32_t, int32_t);
 
 #pragma mark CALayer SPI
 @interface CALayer ()
@@ -219,7 +219,7 @@ inscriptionParameters
 	dispatch_application_instruction(self, nil, 0, ai_session_synchronize);
 }
 
-- (void) dispatchApplicationInstruction: (enum ApplicationInstruction) ai
+- (void) dispatchApplicationInstruction: (int32_t) ai
 	withText: (NSString *) s
 	quantity: (int32_t) q
 {
@@ -302,12 +302,6 @@ isOpaque
 - (void)
 dealloc
 {
-	if (self.cellImage != NULL && self.application == nil)
-	{
-		free(self.cellImage);
-		self.cellImage = NULL;
-	}
-
 	self.pixelImageLayer.contents = nil;
 
 	if (self.pixelImage != NULL)
@@ -357,32 +351,6 @@ configureFont: (NSFont *) dfont withContext: (NSFontManager *) fontctx
 		[self configurePixelImage];
 		[self setTileCache: [[NSCache alloc] init]];
 	});
-}
-
-/**
-	// Allocate a new cell image ignoring any present.
-
-	// The application is expected to have a copy of this reference
-	// and it will need to release the memory at its convenience.
-*/
-- (void)
-configureCellImage
-{
-	struct MatrixParameters *mp = [self matrixParameters];
-
-	/*
-		// Never free cellImage here as it belongs to the terminal application.
-		// Release by a device manager should only occur when the application
-		// is set to nil as a signal that it never received the allocation.
-	*/
-	self.cellImage = malloc(sizeof(struct Cell) * mp->v_cells);
-	self.view = (struct CellArea) {
-		.top_offset = 0,
-		.left_offset = 0,
-		.lines = mp->y_cells,
-		.span = mp->x_cells,
-	};
-	_device.cmd_image = self.cellImage;
 }
 
 /**
@@ -462,7 +430,8 @@ initWithFrame: (CGRect) r
 	self.device = (struct Device) {
 		.cmd_dimensions = &_dimensions,
 		.cmd_status = &_event_status,
-		.cmd_view = &_view,
+		.cmd_view = NULL,
+		.cmd_image = NULL,
 
 		.cmd_context = (void *) self,
 		.define = device_define,
@@ -490,7 +459,6 @@ initWithFrame: (CGRect) r
 	self.codepointToString = [[NSMutableDictionary alloc] init];
 	self.stringToCodepoint = [[NSMutableDictionary alloc] init];
 
-	self.cellImage = NULL;
 	self.render_queue = dispatch_queue_create("render-queue", DISPATCH_QUEUE_SERIAL);
 	self.event_queue = dispatch_queue_create("event-queue", DISPATCH_QUEUE_SERIAL);
 
@@ -893,7 +861,9 @@ commitDisplay
 - (void)
 updateCellsAt: (struct CellArea *) ca withVector: (struct Cell *) cv
 {
-	mforeach(self.view.span, self.cellImage, ca)
+	struct Cell *ci = CellMatrix_GetCellImage(self);
+
+	mforeach(CellMatrix_GetCellArea(self)->span, ci, ca)
 	{
 		*Cell = *cv;
 		++cv;
@@ -905,9 +875,9 @@ updateCellsAt: (struct CellArea *) ca withVector: (struct Cell *) cv
 drawArea: (struct CellArea *) ca
 {
 	struct MatrixParameters *mp = [self matrixParameters];
-	struct Cell *image = self.cellImage;
+	struct Cell *image = CellMatrix_GetCellImage(self);
 
-	mforeach(self.view.span, image, ca)
+	mforeach(CellMatrix_GetCellArea(self)->span, image, ca)
 	{
 		/*
 			// Get the cell's image and target rectangle.
@@ -984,7 +954,7 @@ copyPixels: (struct CellArea) da fromSource: (struct CellArea) sa
 drawPixels: (struct CellArea) ca
 {
 	struct MatrixParameters *mp = [self matrixParameters];
-	struct Cell *image = self.cellImage;
+	struct Cell *image = CellMatrix_GetCellImage(self);
 	CGFloat sf = mp->scale_factor;
 
 	unsigned char *dst = IOSurfaceGetBaseAddress(self.pixelImage);
@@ -996,7 +966,7 @@ drawPixels: (struct CellArea) ca
 	int height = mp->y_cell_units * sf;
 	int cellpixels = bpp * width;
 
-	mforeach(self.view.span, image, (&ca))
+	mforeach(CellMatrix_GetCellArea(self)->span, image, (&ca))
 	{
 		NSBitmapImageRep *ci = [self cellBitmap: Cell];
 		CGRect ar = ptranslate(mp, Offset, Line);
@@ -1087,14 +1057,17 @@ event_context_interpret(NSEventModifierFlags evmf)
 }
 
 static void
-dispatch_application_instruction(CellMatrix *self, NSString *txt, int32_t quantity, enum ApplicationInstruction ai)
+dispatch_application_instruction(CellMatrix *self, NSString *txt, int32_t quantity, int32_t ai)
 {
 	dispatch_async(self.event_queue, ^(void) {
 		[self.event_write_lock lock];
 		{
 			struct ControllerStatus *ctl = &(self->_event_status);
 			self.event_text = txt;
-			ctl->st_dispatch = InstructionKey_Identifier(ai);
+			if (ai >= 0)
+				ctl->st_dispatch = InstructionKey_Identifier(ai);
+			else
+				ctl->st_dispatch = ai;
 			ctl->st_quantity = quantity;
 			ctl->st_text_length = 0;
 			ctl->st_keys = 0;
@@ -1552,6 +1525,8 @@ device_replicate_cells(void *context, struct CellArea target, struct CellArea so
 		const unsigned short maxy = y, maxx = x;
 		struct CellArea constrained = target;
 		struct CellArea src = source;
+		constrained.lines = src.lines;
+		constrained.span = src.span;
 
 		if (maxy + constrained.lines > mp->y_cells)
 			constrained.lines = mp->y_cells - maxy;
@@ -1656,5 +1631,5 @@ device_transfer_event(void *context)
 	*/
 	[terminal.event_read_lock lock];
 
-	return(0);
+	return(1);
 }

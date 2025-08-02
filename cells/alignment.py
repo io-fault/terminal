@@ -147,13 +147,13 @@ def scroll_backward(area, quantity):
 		area.__class__(
 			area.top_offset + 0,
 			area.left_offset + 0,
-			area.lines - quantity,
-			area.span
+			0, 0
 		),
 		area.__class__(
 			area.top_offset + quantity,
 			area.left_offset + 0,
-			0, 0
+			area.lines - quantity,
+			area.span
 		),
 	)
 
@@ -168,13 +168,13 @@ def scroll_forward(area, quantity):
 		area.__class__(
 			area.top_offset + quantity,
 			area.left_offset + 0,
-			area.lines - quantity,
-			area.span
+			0, 0
 		),
 		area.__class__(
 			area.top_offset + 0,
 			area.left_offset + 0,
-			0, 0
+			area.lines - quantity,
+			area.span
 		),
 	)
 
@@ -189,13 +189,13 @@ def start_relative_delete(area, start, stop):
 		area.__class__(
 			area.top_offset + start,
 			area.left_offset + 0,
-			area.lines - stop,
-			area.span
+			0, 0
 		),
 		area.__class__(
 			area.top_offset + stop,
 			area.left_offset + 0,
-			0, 0
+			area.lines - stop,
+			area.span
 		),
 	)
 
@@ -211,13 +211,13 @@ def start_relative_insert(area, start, stop):
 		area.__class__(
 			area.top_offset + stop,
 			area.left_offset + 0,
-			(area.lines - start) - d,
-			area.span
+			0, 0
 		),
 		area.__class__(
 			area.top_offset + start,
 			area.left_offset + 0,
-			0, 0
+			(area.lines - start) - d,
+			area.span
 		),
 	)
 
@@ -233,13 +233,13 @@ def stop_relative_insert(area, start, stop):
 		area.__class__(
 			area.top_offset + 0,
 			area.left_offset + 0,
-			start,
-			area.span
+			0, 0
 		),
 		area.__class__(
 			area.top_offset + d,
 			area.left_offset + 0,
-			0, 0
+			start,
+			area.span
 		),
 	)
 
@@ -254,12 +254,12 @@ def stop_relative_delete(area, start, stop):
 		area.__class__(
 			area.top_offset + (stop - start),
 			area.left_offset + 0,
-			start,
-			area.span
+			0, 0
 		),
 		area.__class__(
 			area.top_offset + 0,
 			area.left_offset + 0,
-			0, 0
+			start,
+			area.span
 		),
 	)

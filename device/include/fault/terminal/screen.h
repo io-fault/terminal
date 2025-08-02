@@ -16,7 +16,13 @@
 	// at some point, but keep it local for now and avoid
 	// the extra documentation.
 */
-#ifdef __APPLE__
+#if defined(__MIRROR_TERMINAL_DEVICE__)
+	#define SYSTEM_UNITS_TYPE TypeDescriptor("mirror", "pixels", double, "double", "%g")
+	typedef double system_units_t;
+#elif defined(__XDG_XCB_TERMINAL_DEVICE__)
+	#define SYSTEM_UNITS_TYPE TypeDescriptor("xdg-xcb", "pixels", double, "double", "%g")
+	typedef double system_units_t;
+#elif defined(__APPLE__)
 	/**
 		// The backing scale factor relative graphics unit.
 	*/
@@ -24,9 +30,6 @@
 	#define SYSTEM_UNITS_TYPE \
 		TypeDescriptor("macos", "abstract-points", CGFloat, "double", "%g")
 	typedef CGFloat system_units_t;
-#elif defined(__XDG_XCB_TERMINAL_DEVICE__)
-	#define SYSTEM_UNITS_TYPE TypeDescriptor("xdg-xcb", "pixels", double, "double", "%g")
-	typedef double system_units_t;
 #else
 	#warning "Unknown platform; double sized system units presumed."
 	#define SYSTEM_UNITS_TYPE \
@@ -91,20 +94,20 @@ struct CellArea
 #define _max(f, l) ((f > l) ? f : l)
 static inline
 struct CellArea
-aintersection(struct CellArea bounds, struct CellArea latter)
+aintersection(struct CellArea bounds, struct CellArea selection)
 {
 	const unsigned int ylimit = bounds.top_offset + bounds.lines;
 	const unsigned int xlimit = bounds.left_offset + bounds.span;
-	const unsigned short ymax = _max(bounds.top_offset, latter.top_offset);
-	const unsigned short xmax = _max(bounds.left_offset, latter.left_offset);
-	const unsigned short y = _min(ylimit, ymax);
-	const unsigned short x = _min(xlimit, xmax);
+	const unsigned short ymax = _max(bounds.top_offset, selection.top_offset);
+	const unsigned short xmax = _max(bounds.left_offset, selection.left_offset);
+	const unsigned short y = _max(bounds.top_offset, _min(ylimit, ymax));
+	const unsigned short x = _max(bounds.left_offset, _min(xlimit, xmax));
+	const unsigned short llimit = _min(ylimit, selection.top_offset + selection.lines);
+	const unsigned short slimit = _min(xlimit, selection.left_offset + selection.span);
+	const unsigned short lines = llimit - y;
+	const unsigned short span = slimit - x;
 
-	return (struct CellArea) {
-		y, x,
-		_min(ylimit - latter.top_offset, latter.lines),
-		_min(xlimit - latter.left_offset, latter.span),
-	};
+	return (struct CellArea) {y, x, lines, span};
 }
 #undef _min
 #undef _max

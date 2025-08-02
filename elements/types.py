@@ -16,7 +16,7 @@ from typing import Optional, Protocol, Literal, Callable
 
 from ..cells import text
 from ..cells.text import Phrase, Redirect, Words, Unit, Image
-from ..cells.types import Area, Glyph, Pixels, Device, Line as LineStyle
+from ..cells.types import Area, Cell, Glyph, Pixels, Screen, Device, Line as LineStyle
 
 class Core(comethod.object):
 	"""
@@ -2621,7 +2621,11 @@ class Work(object):
 			# End of procedure.
 			self.cursors[index] = None
 			if self.cursors.count(None) == len(self.cursors):
-				self.target.annotate(None)
+				try:
+					self.target.annotate(None)
+				except (ReferenceError, AttributeError):
+					# Nothing to do if the reference is gone or annotate is not present.
+					pass
 
 	from os import kill
 	def interrupt(self):

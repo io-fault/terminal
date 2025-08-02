@@ -126,8 +126,8 @@ device_replicate_cells(void *context, struct CellArea dst, struct CellArea src)
 	system_units_t cell_height = xd->cmd_dimensions->y_cell_units;
 	system_units_t cell_width = xd->cmd_dimensions->x_cell_units;
 
-	system_units_t width = dst.span * cell_width;
-	system_units_t height = dst.lines * cell_height;
+	system_units_t width = src.span * cell_width;
+	system_units_t height = src.lines * cell_height;
 	system_units_t xdst = dst.left_offset * cell_width;
 	system_units_t ydst = dst.top_offset * cell_height;
 	system_units_t xsrc = src.left_offset * cell_width;
@@ -143,6 +143,8 @@ device_replicate_cells(void *context, struct CellArea dst, struct CellArea src)
 
 	/* Flush invalidated cells before copying. */
 	device_render_image(context);
+	dst.lines = src.lines;
+	dst.span = src.span;
 
 	// Update invalidated areas.
 	xi->icount += 1;

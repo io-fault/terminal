@@ -241,13 +241,11 @@ minimize: (id) sender
 resizeCellImage: (id) sender
 {
 	CellMatrix *cm = self.root.contentView;
+	struct CellArea *view = CellMatrix_GetCellArea(cm);
 	struct MatrixParameters *mp = [cm matrixParameters];
 
-	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
-	{
-		[cm configureCellImage];
+	if (view->lines != mp->y_cells || view->span != mp->x_cells)
 		dispatch_application_instruction(cm, nil, 1, ai_screen_resize);
-	}
 }
 
 - (void)
@@ -328,17 +326,15 @@ saveUserFixedPitchFont: (id) sender
 revertScreen: (id) sender
 {
 	CellMatrix *cm = self.root.contentView;
+	struct CellArea *view = CellMatrix_GetCellArea(cm);
 	struct MatrixParameters *mp = [cm matrixParameters];
 
 	NSFont *font = [NSFont userFixedPitchFontOfSize: 0.0];
 	[cm configureFont: font withContext: self.fonts];
 	[self.fonts setSelectedFont: cm.font isMultiple: NO];
 
-	if (cm.view.lines != mp->y_cells || cm.view.span != mp->x_cells)
-	{
-		[cm configureCellImage];
+	if (view->lines != mp->y_cells || view->span != mp->x_cells)
 		dispatch_application_instruction(cm, nil, 1, ai_screen_resize);
-	}
 }
 
 - (void)
@@ -531,6 +527,15 @@ create_macos_menu(const char *title, const char *aboutname, DeviceManager *dm, N
 		rmi = AddMenuItem(rm, "Switch Last", @selector(relayInstruction:), "H");
 		rmi.toolTip = @"Switch to the last location in the access list.";
 		rmi.tag = ai_location_switch_last;
+	}
+
+	// Relay control.
+	AddSeparator(rm);
+	{
+		AddMenuItem(rm, "Relay", @selector(relayInstruction:), "\x0d")
+			.tag = -dc_enter_relay;
+		AddMenuItem(rm, "Escape", @selector(relayInstruction:), "\x1b")
+			.tag = -dc_escape_relay;
 	}
 
 	/* Edit Menu */
@@ -734,7 +739,7 @@ create_matrix_window(NSScreen *screen, NSFontManager *fontctx, NSFont *font)
 
 	[cm resizeMatrix: screen_size];
 	[cm centerBounds: screen_size];
-	[cm configureCellImage];
+	cm.event_text = nil;
 
 	return(root);
 }

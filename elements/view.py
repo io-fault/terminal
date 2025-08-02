@@ -6,6 +6,7 @@ import dataclasses
 from collections.abc import Sequence, Iterable
 from typing import Optional, Callable
 from fault.system import files
+from fault.context import tools
 
 from ..cells import alignment
 
@@ -14,17 +15,328 @@ from . import storage
 
 from .types import Core, Annotation, Position, Status, Model, System
 from .types import Reference, Reformulations, Line, Prompting
-from .types import Area, Image, Phrase, Words, Glyph, LineStyle
+from .types import Area, Cell, Screen, Image, Phrase, Words, Glyph, LineStyle
 from .types import Work, Procedure, Composition, Instruction
 
-class Refraction(Core):
+class CellMatrix(Core):
+	"""
+	# A two dimensional area for displaying a cell matrix.
+
+	# [ Elements ]
+	# /image/
+		# The object used to provide a cache of the displayed cells.
+	# /source/
+		# The resource that is being represented by the view.
+	# /area/
+		# The display context of the &image.
+	# /image/
+		# The matrix of cells currently being displayed.
+	# /define/
+		# The device provided means for negotiating a codepoint's identity.
+		# For most characters, this is just &ord, but when sequences are
+		# defined, a negative index is allocated and used to represent the
+		# sequence.
+	# /frame_visible/
+		# Whether the view can be seen in the frame.
+	"""
+
+	area: Area
+	image: object
+	define: Callable[[str], int]
+	deltas: Sequence
+	frame_visible: bool
+
+	def __init__(self):
+		self.deltas = []
+		self.define = ord
+		self.image = None
+		self.area = Area(0, 0, 0, 0)
+
+		self.frame_visible = False
+
+	def configure(self, deltas, define, area):
+		"""
+		# Assign the requirements for integrating a view for display and usage.
+		"""
+
+		self.deltas = deltas
+		self.define = define
+
+		a = self.area
+		self.area = area
+
+		if a.span != area.span or a.lines != area.lines:
+			self.resize()
+
+		return self
+
+	def reporting(self, configuration):
+		return False
+
+class Reflection(CellMatrix):
+	"""
+	# A view relaying device status and integrating display deltas.
+
+	# [ Elements ]
+	# /system_context/
+		# The execution context that is running the &procedure.
+	# /procedure/
+		# The command that is to receive events and expected to produce display deltas.
+	# /work/
+		# The dispatched procedure.
+	# /source/
+		# The text of the &procedure in a &Resource.
+	# /queue/
+		# Shared list of enqueued events for &.system.Relay.
+	# /local/
+		# View local display deltas.
+	"""
+
+	from struct import pack
+	pack_text_length = staticmethod(tools.partial(pack, "H"))
+	del pack
+
+	@property
+	def system(self):
+		return self.source.origin.ref_system
+
+	def __init__(self, device, empty, source):
+		super().__init__()
+
+		self.control_mode = 'relay'
+		self.procedure = None
+		self.system_context = None
+		self.work = None
+		self.queue = []
+		self.local = []
+
+		# Initialize an empty screen for the invariant; resize is expected on connect.
+		self.image = Screen(Area(0, 0, 0, 0), bytearray(b""))
+
+		self.source = source
+		self.device = device
+		self.empty = empty
+
+		self.synchronize_io_snapshot = device.controls_snapshot(-2) + b'\x00\x00'
+
+	def reporting(self, configuration):
+		if self.work is None:
+			return True
+		return False
+
+	def connect(self, transcript, system, work, path, proc):
+		self.work = work
+		self.procedure = proc
+		self.system_context = system
+
+		self.ctl_transmit, self.tx_link = system.reflect(
+			transcript, system, work, path, proc, self.queue
+		)
+
+	def transmit_events(self):
+		self.system_context.io.continued(self.ctl_transmit, self.tx_link)
+		self.system_context.io.service()
+
+	def display_closed(self):
+		# Display (receive) closed; controller transmission may still be open.
+		if self.work is not None:
+			self.close()
+
+	def close(self):
+		self.ctl_transmit.interrupt()
+		self.transmit_events()
+		del self.tx_link
+		del self.ctl_transmit
+		self.work.interrupt()
+		self.work = None
+		del self.local[:]
+
+	@staticmethod
+	def area_mapping(absolute, projection):
+		lines = min(absolute.lines, projection.lines)
+		spans = min(absolute.span, projection.span)
+		absolute = Area(
+			absolute.top_offset,
+			absolute.left_offset,
+			lines, spans
+		)
+		source = Area(
+			projection.top_offset,
+			projection.left_offset,
+			lines, spans
+		)
+		return absolute, source
+
+	def resize(self):
+		cellbytes = self.area.volume * Cell.size
+		sa = Area(0, 0, self.area.lines, self.area.span)
+		new = Screen(sa, bytearray(b"\x00") * cellbytes)
+
+		# Inherit intersection.
+		new_area, old_area = self.area_mapping(new.area, self.image.area)
+		new.rewrite(new_area, list(self.image.select(old_area)))
+		self.image = new
+		del self.local[:]
+
+		if self.work is not None:
+			resize_screen = self.device.controls_snapshot(-3)
+			mp = self.device.matrix_snapshot(sa)
+			resize_screen += self.pack_text_length(len(mp)) + mp
+			self.queue.append(resize_screen)
+			self.transmit_events()
+
+	def footer_opened(self, taken):
+		pass
+
+	def footer_closed(self, restored):
+		lc = self.image.area.lines
+		span = self.image.area.span
+		restored += 1
+
+		for ln in range(lc - restored, lc):
+			area = Area(self.area.top_offset + ln, self.area.left_offset, 1, span)
+			cells = list(self.image.select(area))
+
+			d = span - len(cells)
+			if d > 0:
+				cells.extend([self.empty] * d)
+
+			self.deltas.append((area, cells))
+
+	def v_compensate(self):
+		# Needed for Frame.resize_footer.
+		pass
+
+	def refresh(self):
+		absolute, source = self.area_mapping(self.area, self.image.area)
+		yield (absolute, list(self.image.select(source)))
+
+	def indicate(self, mode='control'):
+		pass
+
+	def annotate(self, obj):
+		pass
+
+	def v_status(self, mode):
+		"""
+		# Construct the &Status describing the cursor and window positioning.
+		"""
+
+		if mode == 'relay':
+			cl = self.area.lines // 2
+			co = self.area.span // 2
+		cl = co = -1
+
+		return Status(
+			self, self.area, mode,
+			None,
+			[],
+			0, 0,
+			cl, -1, self.area.lines,
+			co, 0, -1, self.area.span,
+		)
+
+	@comethod('view', 'dispatch/device/status')
+	def v_dispatch_device_status(self, device):
+		event_text = device.transfer_text()
+		device.controls_translate_cursor(self.area)
+		self.queue.append(device.controls_snapshot())
+
+		if event_text is not None:
+			utf8 = event_text.encode('utf-8')
+			size = self.pack_text_length(len(utf8))
+			self.queue.append(size + utf8)
+		else:
+			self.queue.append(b'\x00\x00')
+
+		self.transmit_events()
+
+	@comethod('view', 'integrate/display/delta')
+	def v_integrate_display_delta(self, area, delta):
+		# Currently, OOB writes can occur during resize as cursor restoration
+		# is enqueued prior to resize propagating
+		if area.top_offset >= self.area.lines:
+			return
+		if area.left_offset >= self.area.span:
+			return
+
+		l = list(delta.select(delta.area))
+		self.image.rewrite(area, l)
+		aarea = Area(
+			self.area.top_offset + area.top_offset,
+			self.area.left_offset + area.left_offset,
+			area.lines,
+			area.span
+		)
+		self.local.append((aarea, l))
+
+	def v_synchronize(self):
+		self.queue.append(self.synchronize_io_snapshot)
+		self.transmit_events()
+
+	def v_dispatch_image(self):
+		if not self.frame_visible:
+			return
+
+		n = len(self.local)
+		self.deltas.extend(self.local[:n])
+		del self.local[:n]
+
+	def v_replicate_cells(self, target, source):
+		dst = Area(
+			self.area.top_offset + target.top_offset,
+			self.area.left_offset + target.left_offset,
+			0, 0
+		)
+		src = Area(
+			self.area.top_offset + source.top_offset,
+			self.area.left_offset + source.left_offset,
+			source.lines,
+			source.span
+		)
+		self.local.append((dst, src))
+
+	def v_render(self, larea):
+		start = larea.start
+		stop = larea.stop if larea.stop is not None else self.area.lines
+
+		for rln in range(start, stop):
+			sa = Area(
+				self.area.top_offset + rln,
+				self.area.left_offset,
+				1, self.area.span
+			)
+			selection = Area(
+				rln,
+				0,
+				1, self.area.span
+			)
+			yield (sa, list(self.image.select(selection)))
+
+	def v_update(self, vc):
+		return ()
+
+	@comethod('reflection', 'transition/relay')
+	def r_transition_relay(self):
+		# Only one level.
+		self.keyboard.set('relay')
+
+	@comethod('reflection', 'transition/control')
+	def r_transition_control(self, device):
+		# Escape all levels.
+		self.v_dispatch_device_status(device)
+		self.keyboard.set('control')
+
+class Refraction(CellMatrix):
 	"""
 	# Where input meets output. The primary interface state for manipulating
 	# and displaying the typed syntax content of a &storage.Resource.
 
 	# [ Elements ]
-	# /source/
-		# The resource providing the lines to display and manipulate.
+	# /image/
+		# The &Phrase sequence of the current display.
+	# /version/
+		# The version of &source that is currently being represented.
 	# /annotation/
 		# Cursor annotation state.
 	# /focus/
@@ -32,23 +344,14 @@ class Refraction(Core):
 		# A path identifying the ranges and targets of each dimension.
 	# /limits/
 		# Per dimension offsets used to trigger margin scrolls.
-	# /area/
-		# The display context of the &image.
-	# /version/
-		# The version of &source that is currently being represented.
-	# /image/
-		# The &Phrase sequence of the current display.
 	"""
 
 	system: System
-	area: Area
 	source: storage.Resource
 	image: Image
 	annotation: Optional[Annotation]
 	focus: Sequence[object]
 	limits: Sequence[int]
-	cancel = None
-	define: Callable[[str], int]
 	version: object = (0, 0, None)
 
 	def snapshot(self):
@@ -145,14 +448,11 @@ class Refraction(Core):
 		return False
 
 	def __init__(self, resource):
+		super().__init__()
 		self.control_mode = 'control'
-		self.area = Area(0, 0, 0, 0)
-		self.define = ord
-		self.deltas = []
-		self.frame_visible = False
 
 		self.source = resource
-		self.system = resource.origin.ref_system # Default execution context.
+		self.system = self.source.origin.ref_system # Default execution context.
 		self.forms = resource.forms
 		self.annotation = None
 
@@ -162,6 +462,7 @@ class Refraction(Core):
 		self.limits = (0, 0)
 
 		self.image = Image()
+		resource.views.add(self)
 
 	def v_status(self, mode='control') -> Status:
 		"""
@@ -181,25 +482,36 @@ class Refraction(Core):
 			*cs, *rs
 		)
 
-	def configure(self, deltas, define, area):
-		"""
-		# Configure the refraction for a display connection at the given dimensions.
-		"""
-
-		self.deltas = deltas
-		self.source.views.add(self)
-		self.define = define
-		self.area = area
-
-		width = area.span
-		height = area.lines
-
+	def resize(self):
 		self.limits = (
-			min(12, height // 12) or -1, # Vertical, align with elements.
-			min(6, width // 20) or -1,
+			min(12, self.area.lines // 12) or -1, # Vertical, align with elements.
+			min(6, self.area.span // 20) or -1,
 		)
 
 		return self
+
+	def footer_opened(self, taken):
+		# When opening, maintain the content's last page status.
+		edge = self.image.line_offset + self.area.lines + taken + 1
+
+		if edge >= self.source.ln_count():
+			# The view is at the end, rather than covering the last
+			# few lines, make sure they are visible with the open prompt.
+			scroll = self.image.line_offset + taken + 1
+			self.scroll((lambda x: scroll))
+
+	def footer_closed(self, restored):
+		# When closing, maintain the content's last page status.
+		edge = self.image.line_offset + self.area.lines - restored - 1
+
+		if edge >= self.source.ln_count():
+			# The view is at the end, rather than covering the last
+			# few lines, make sure they are visible with the open prompt.
+			scroll = self.image.line_offset - restored - 1
+			self.deltas.extend(self.refresh(self.image.line_offset))
+			self.scroll((lambda x: scroll))
+		else:
+			self.deltas.extend(self.refresh(self.image.line_offset))
 
 	def view(self):
 		return self.source.ln_count(), self.area[1], self.image.cell_offset
@@ -889,7 +1201,7 @@ class Refraction(Core):
 			s = img.suffix(self.iterphrases(tail, stop))
 			yield from self.v_render(s)
 
-	def vi_compensate(self):
+	def v_compensate(self):
 		"""
 		# Extend the image with &Empty lines until the display is filled.
 		"""
@@ -921,6 +1233,7 @@ class Refraction(Core):
 
 		cv = []
 
+		i = 0
 		for (phrase, w) in zip(img.phrase[larea], img.whence[larea]):
 			cells = list(phrase.render(Define=self.define))
 			visible = min(limit, max(0, len(cells) - hoffset))
@@ -932,15 +1245,17 @@ class Refraction(Core):
 			else:
 				assert visible == limit
 			voffset += 1
+			i += 1
 
 		yield AType(ry + larea.start, rx, (voffset - (larea.start or 0)), limit), cv
 
-	def refresh(self, whence:int=0):
+	def refresh(self, whence:int=None):
 		"""
 		# Refresh the view image with &whence being the beginning of the new view.
 		"""
 
 		img = self.image
+		whence = whence if whence is not None else img.line_offset
 		visible = self.area.lines
 		phrases = self.iterphrases(whence, whence+visible)
 		img.truncate()
@@ -2013,6 +2328,10 @@ class Refraction(Core):
 
 	# Modes
 
+	@comethod('cursor', 'transition/control')
+	def c_transition_control(self):
+		self.keyboard.set('control')
+
 	@comethod('cursor', 'transition/distribution')
 	def c_modify_distributed(self, session):
 		session.local_modifiers += chr(0x0394)
@@ -2367,7 +2686,7 @@ class Structure(object):
 
 		for v in self.refractions():
 			if v.area.lines > 0:
-				yield from v.refresh(v.image.line_offset)
+				yield from v.refresh()
 
 class Frame(Core):
 	"""
@@ -2496,7 +2815,7 @@ class Frame(Core):
 			m = 'X'
 
 			# Conceal behavior; keep open when transcript.
-			if c.source.origin.ref_type == 'transcript':
+			if not isinstance(c, Reflection) and c.source.origin.ref_type == 'transcript':
 				m += 'Z'
 			else:
 				m += 'z'
@@ -2529,14 +2848,15 @@ class Frame(Core):
 		# Reveal the prompt for reporting types. (transcripts)
 		if rf.reporting(self.prompting):
 			# If reporting and the prompt is not visible.
-			rf.c_seek_absolute(-1)
-			rf.c_seek_character_last()
-			rf.v_seek_line_last()
+			if isinstance(rf, Refraction):
+				rf.c_seek_absolute(-1)
+				rf.c_seek_character_last()
+				rf.v_seek_line_last()
 			self.pg_configure_command(vs.prompt, rf.system, rf.source.origin.ref_context)
 			self.pg_open(dpath)
 
 		self.rl_update_path(vs.location.source, rf.source.origin)
-		self.deltas.extend(rf.refresh(rf.image.line_offset))
+		self.deltas.extend(rf.refresh())
 
 	@staticmethod
 	def rl_determine(system, context, path):
@@ -2665,18 +2985,25 @@ class Frame(Core):
 		system, fspath = rl_syntax.location_path()
 		vi = self.paths[dpath]
 
-		try:
-			src = session.sources.select_resource(fspath)
-			load = False
-		except KeyError:
-			typref = session.lookup_type(fspath)
-			syntype = session.load_type(typref)
-			src = session.sources.create_resource(system.identity, typref, syntype, fspath)
-			load = True
+		typref = session.lookup_type(fspath)
+		syntype = session.load_type(typref)
 
-		new = Refraction(src)
-		new.focus[0].set(-1)
-		new.keyboard = session.keyboard
+		if typref == 'reflection':
+			source = session.sources.create_resource(system.identity, typref, syntype, fspath)
+			new = Reflection(session.device, session.theme['empty'].inscribe(ord(' ')), source)
+			new.keyboard = session.keyboard
+			load = False
+		else:
+			try:
+				source = session.sources.select_resource(fspath)
+				load = False
+			except KeyError:
+				source = session.sources.create_resource(system.identity, typref, syntype, fspath)
+				load = True
+
+			new = Refraction(source)
+			new.focus[0].set(-1)
+			new.keyboard = session.keyboard
 
 		self.attach(dpath, new)
 		self.views[vi].content_location_revision = rl_syntax.source.active
@@ -2684,7 +3011,7 @@ class Frame(Core):
 		self.switch_division(dpath)
 
 		if load:
-			system.load_resource(src, new)
+			system.load_resource(source, new)
 
 	@comethod('location', 'switch/previous')
 	def rl_switch_previous(self, session, dpath, location, content, quantity=1):
@@ -2761,6 +3088,19 @@ class Frame(Core):
 		))
 		self.stacks = [list() for x in range(len(self.areas))]
 
+	def reconfigure(self):
+		"""
+		# Reconfigure all the views in order to signal motion or size changes.
+		"""
+
+		define = self.define
+		deltas = self.deltas
+
+		for stack, areas in zip(self.stacks, self.areas):
+			for vs in stack:
+				for a, v in zip(areas, vs.refractions()):
+					v.configure(deltas, define, a)
+
 	@comethod('frame', 'refresh/view/images')
 	def f_refresh_views(self):
 		"""
@@ -2784,12 +3124,11 @@ class Frame(Core):
 		# Window size changed; remodel and render the new frame.
 		"""
 
-		rfcopy = list(self.views)
 		self.area = area
+		stacks = self.stacks
 		self.remodel(area)
-		self.fill(rfcopy)
-		self.refocus()
-		self.f_refresh()
+		self.stacks = stacks
+		self.reconfigure()
 
 	def resize_footer(self, dpath, height):
 		"""
@@ -2811,11 +3150,11 @@ class Frame(Core):
 			d -= self.structure.fm_border_width
 
 		rf.configure(rf.deltas, rf.define, rf.area.resize(-d, 0))
-		rf.vi_compensate()
+		rf.v_compensate()
 
 		p.area = p.area.move(-d, 0)
 		# &render will emit the entire image, so make sure the footer is trimmed.
-		p.vi_compensate()
+		p.v_compensate()
 
 		# Update frame areas.
 		self.areas[vi] = (self.areas[vi][0], rf.area, p.area)
@@ -3125,14 +3464,6 @@ class Frame(Core):
 		if pg.area.lines == 0:
 			pg_allocation = self.prompting.pg_line_allocation
 
-			# When opening, maintain the content's last page status.
-			if rf.image.line_offset + rf.area.lines > rf.source.ln_count() - 1:
-				# The view is at the end, rather than covering the last
-				# few lines, make sure they are visible with the open prompt.
-				scroll = rf.image.line_offset + pg_allocation
-			else:
-				scroll = None
-
 			self.resize_footer(dpath, pg_allocation)
 			self.deltas.extend(
 				self.fill_areas(
@@ -3141,9 +3472,7 @@ class Frame(Core):
 			)
 			self.deltas.extend(pg.refresh(0))
 
-			# Perform after area updates so that it is not filtered.
-			if scroll is not None:
-				rf.scroll((lambda x: scroll + 1))
+			rf.footer_opened(pg_allocation)
 		else:
 			self.deltas.extend(pg.refresh(0))
 
@@ -3168,21 +3497,10 @@ class Frame(Core):
 		d = 0
 		rl, rf, pg = self.select(dpath).refractions()
 
-		if pg.area.lines > 0:
-			# When closing, maintain the content's last page status.
-			if rf.image.line_offset + rf.area.lines > rf.source.ln_count() - 1:
-				# The view is at the end, rather than covering the last
-				# few lines, make sure they are visible with the open prompt.
-				scroll = rf.image.line_offset - pg.area.lines
-			else:
-				scroll = None
-
+		pg_line_count = pg.area.lines
+		if pg_line_count > 0:
 			d = self.resize_footer(dpath, 0)
-			self.deltas.extend(rf.refresh(rf.image.line_offset))
-
-			if scroll is not None:
-				rf.scroll((lambda x: scroll - 1))
-
+			rf.footer_closed(pg_line_count)
 			if pg is self.focus:
 				self.refocus()
 		return d
@@ -3224,20 +3542,27 @@ class Frame(Core):
 
 		# Handle prompt local cd case.
 		ixn = proc.sole(Instruction)
-		if ixn is not None and ixn.invokes('cd'):
-			for rpath in ixn.fields[1:]:
-				self.pg_change_context_path(src, lines[0].ln_content, exectx, path, rpath)
-			return None
+		if ixn is not None:
+			if ixn.invokes('cd'):
+				for rpath in ixn.fields[1:]:
+					self.pg_change_context_path(src, lines[0].ln_content, exectx, path, rpath)
+				return None
 
 		if not exectx.dispatching:
+			# process execution context
 			return exectx.evaluate(None, 0, path, proc)
 
 		work = Work.allocate(target, lines)
-		work.spawn(exectx, path, proc)
+		if isinstance(target, Reflection):
+			target.connect(session.transcript, exectx, work, path, proc)
+			wa = annotations.ExecutionStatus(work, 'prompt-dispatch', proc.title())
+			rl.annotate(wa)
+		else:
+			work.spawn(exectx, path, proc)
+			# Track work status with an annotation while Work continues.
+			wa = annotations.ExecutionStatus(work, 'prompt-dispatch', proc.title())
+			target.annotate(wa)
 
-		# Track work status with an annotation while Work continues.
-		wa = annotations.ExecutionStatus(work, 'prompt-dispatch', proc.title())
-		target.annotate(wa)
 		return work
 
 	@staticmethod
@@ -3257,7 +3582,7 @@ class Frame(Core):
 		self.pg_select_last_field(prompt)
 
 	@comethod('prompt', 'switch/revision/previous')
-	def pg_swtich_revision_previous(self, prompt, dpath, quantity=1):
+	def pg_switch_revision_previous(self, prompt, dpath, quantity=1):
 		self.pg_open(dpath)
 		src = prompt.source
 		src.r_switch_revision_previous(quantity)
@@ -3343,6 +3668,10 @@ class Frame(Core):
 		# Iterable of screen deltas.
 		"""
 
+		if vstat.mode == 'relay':
+			# Presume the reflected application can manage focus indication.
+			return
+
 		si = list(self.structure.scale_ipositions(
 			self.structure.indicate,
 			(vstat.area.left_offset, vstat.area.top_offset),
@@ -3388,6 +3717,10 @@ class Frame(Core):
 		vstack = self.stacks[division]
 		vss = vstack[level:level+quantity]
 		del vstack[level:level+quantity]
+
+		for vs in vss:
+			if isinstance(vs.content, Reflection):
+				vs.content.close()
 
 		nlevel = level
 		if level >= len(vstack):

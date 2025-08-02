@@ -94,6 +94,10 @@ insert = Mode(('cursor', 'insert/characters', ()))
 annotations = Mode(('cursor', 'transition/annotation/void', ()))
 relay = Mode(('view', 'dispatch/device/status', ()))
 
+if 'relay':
+	mode = relay
+	a(("-5"), 'reflection/transition/control')
+
 # Dispatch; return control.
 for mode in (control, insert):
 	# Set of combinations need to be trapped so they can be forwarded.
@@ -160,6 +164,8 @@ for mode in (control, insert):
 
 if 'controls':
 	mode = control
+	a(("-4"), 'reflection/transition/relay')
+	a(("-5"), 'session/ineffective')
 
 	a((k_return, km_writing, km_shift), 'cursor/seek/void/line/previous')
 	a((k_return, km_writing), 'cursor/seek/void/line/next')

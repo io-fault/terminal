@@ -163,10 +163,68 @@ area_resize(PyObj self, PyObj args)
 	return((PyObj) ao);
 }
 
+static PyObj
+area_from_bytes(PyObj subtype, PyObj memory)
+{
+	PyObj rob;
+	AreaObject ao;
+	Py_ssize_t len = 0;
+	char *buf = NULL;
+	struct CellArea *ca;
+
+	if (PyBytes_AsStringAndSize(memory, &buf, &len) < 0)
+		return(NULL);
+
+	if (len != 8)
+	{
+		PyErr_SetString(PyExc_ValueError, "areas are represented with exactly 8 bytes");
+		return(NULL);
+	}
+
+	rob = PyAllocate(subtype);
+	if (rob == NULL)
+		return(NULL);
+	ao = (AreaObject) rob;
+	ca = (struct CellArea *) buf;
+
+	ao->area.top_offset = ca->top_offset;
+	ao->area.left_offset = ca->left_offset;
+	ao->area.lines = ca->lines;
+	ao->area.span = ca->span;
+
+	return(rob);
+}
+
+static PyObj
+area_intersect(PyObj self, PyObj selection)
+{
+	PyObj rob;
+	AreaObject bo = (AreaObject) self, so, ao;
+
+	if (!PyObject_IsInstance(selection, Py_TYPE(self)))
+	{
+		PyErr_SetString(PyExc_ValueError, "cannot intersect with non-area type");
+		return(NULL);
+	}
+
+	so = (AreaObject) selection;
+
+	rob = PyAllocate(Py_TYPE(self));
+	if (rob == NULL)
+		return(NULL);
+
+	ao = (AreaObject) rob;
+	ao->area = aintersection(bo->area, so->area);
+
+	return(rob);
+}
+
 static PyMethodDef
 area_methods[] = {
 	{"move", (PyCFunction) area_move, METH_VARARGS, NULL},
 	{"resize", (PyCFunction) area_resize, METH_VARARGS, NULL},
+	{"from_bytes", (PyCFunction) area_from_bytes, METH_CLASS|METH_O, NULL},
+	{"intersect", (PyCFunction) area_intersect, METH_O, NULL},
 	{NULL,},
 };
 
@@ -226,6 +284,32 @@ area_compare(PyObj self, PyObj operand, int op)
 }
 
 static PyObj
+area_str(PyObj self)
+{
+	AreaObject ao = (AreaObject) self;
+
+	return(PyUnicode_FromFormat("[^%d<%d %dx%d]",
+		(int) ao->area.top_offset,
+		(int) ao->area.left_offset,
+		(int) ao->area.lines,
+		(int) ao->area.span
+	));
+}
+
+static PyObj
+area_repr(PyObj self)
+{
+	AreaObject ao = (AreaObject) self;
+
+	return(PyUnicode_FromFormat(PYTHON_MODULE_PATH("Area(%d, %d, %d, %d)"),
+		(int) ao->area.top_offset,
+		(int) ao->area.left_offset,
+		(int) ao->area.lines,
+		(int) ao->area.span
+	));
+}
+
+static PyObj
 area_new(PyTypeObject *subtype, PyObj args, PyObj kw)
 {
 	static char *kwlist[] = {
@@ -269,8 +353,30 @@ AreaType = {
 	.tp_getset = area_getset,
 	.tp_richcompare = area_compare,
 	.tp_hash = area_hash,
+	.tp_repr = area_repr,
+	.tp_str = area_str,
 	.tp_new = area_new,
 };
+
+static int
+area_type_initialize(PyTypeObject *typ)
+{
+	PyObj td = typ->tp_dict;
+	PyObj c;
+
+	c = PyLong_FromLong(sizeof(struct CellArea));
+	if (c == NULL)
+		return(-1);
+
+	if (PyDict_SetItemString(td, "size", c) < 0)
+	{
+		Py_DECREF(c);
+		return(-1);
+	}
+
+	Py_DECREF(c);
+	return(0);
+}
 
 static int
 glyph_initialize(CellObject co, PyObj args, PyObj kw)
@@ -603,21 +709,27 @@ screen_rewrite(PyObj self, PyObj args)
 	ScreenObject so = (ScreenObject) self;
 	PyObj cell, iter;
 	AreaObject target;
+	struct CellArea selection;
 
 	if (!PyArg_ParseTuple(args, "O!O", &AreaType, &target, &iter))
 		return(NULL);
+
+	// Translate relative to zero.
+	selection = target->area;
+	selection.top_offset -= so->dimensions.top_offset;
+	selection.left_offset -= so->dimensions.left_offset;
 
 	// Loop and copy cells.
 	// Stop at end of iterator or if the cursor traverses &edge.
 	{
 		const size_t lnd = so->dimensions.span - target->area.span;
-		const size_t lines = target->area.lines;
-		const size_t span = target->area.span;
+		const size_t lines = selection.lines;
+		const size_t span = selection.span;
 
 		struct Cell const *edge = so->image + (so->dimensions.span * so->dimensions.lines);
 		struct Cell *cursor = so->image
-			+ (so->dimensions.span * target->area.top_offset)
-			+ target->area.left_offset;
+			+ (so->dimensions.span * selection.top_offset)
+			+ selection.left_offset;
 		size_t offset = 0;
 
 		PyLoop_ForEach(iter, &cell)
@@ -668,7 +780,11 @@ screen_select(PyObj self, PyObj area)
 		return(NULL);
 	}
 
+	// Translate relative to zero.
 	selection = aintersection(so->dimensions, ao->area);
+	selection.top_offset -= so->dimensions.top_offset;
+	selection.left_offset -= so->dimensions.left_offset;
+
 	rob = PyList_New(selection.lines * selection.span);
 	if (rob == NULL)
 		return(NULL);
@@ -701,34 +817,30 @@ screen_select(PyObj self, PyObj area)
 }
 
 static PyObj
-screen_replicate(PyObj self, PyObj args, PyObj kw)
+screen_replicate_cells(PyObj self, PyObj args, PyObj kw)
 {
 	static char *kwlist[] = {
-		"area",
-		"line",
-		"cell",
+		"destination",
+		"source",
 		NULL
 	};
 
 	ScreenObject so = (ScreenObject) self;
-	AreaObject destination;
+	AreaObject destination, source;
 	struct CellArea src, dst;
 	struct Cell *tmpbuf;
-	unsigned short y, x;
 
-	#define FIELDS &AreaType, &destination, &y, &x
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "O!HH", kwlist, FIELDS))
+	#define FIELDS &AreaType, &destination, &AreaType, &source
+	if (!PyArg_ParseTupleAndKeywords(args, kw, "O!O!", kwlist, FIELDS))
 		return(NULL);
 	#undef FIELDS
 
 	/* Constrain areas to the screen's dimensions. */
-	dst = aintersection(so->dimensions, destination->area);
-	src = aintersection(so->dimensions, (struct CellArea) {
-		.top_offset = y,
-		.left_offset = x,
-		.lines = dst.lines,
-		.span = dst.span
-	});
+	src = aintersection(so->dimensions, source->area);
+	dst = destination->area;
+	dst.lines = src.lines;
+	dst.span = src.span;
+	dst = aintersection(so->dimensions, dst);
 
 	/* Constrain to the minimum size. */
 	if (dst.lines < src.lines)
@@ -782,7 +894,7 @@ screen_replicate(PyObj self, PyObj args, PyObj kw)
 
 static PyMethodDef
 screen_methods[] = {
-	{"replicate", (PyCFunction) screen_replicate, METH_VARARGS|METH_KEYWORDS, NULL},
+	{"replicate_cells", (PyCFunction) screen_replicate_cells, METH_VARARGS|METH_KEYWORDS, NULL},
 	{"rewrite", (PyCFunction) screen_rewrite, METH_VARARGS, NULL},
 	{"select", (PyCFunction) screen_select, METH_O, NULL},
 	{NULL,},
@@ -1014,7 +1126,15 @@ device_key(PyObject *self, PyObject *ext)
 				int fn = FunctionKey_Number(ctl->st_dispatch);
 				int mbutton = ScreenCursorKey_Number(ctl->st_dispatch);
 
-				if (fn > 0 && fn <= 32)
+				if (ctl->st_dispatch == -3)
+				{
+					rob = PyUnicode_FromFormat("(screen/resize)[-]");
+				}
+				else if (ctl->st_dispatch == -2)
+				{
+					rob = PyUnicode_FromFormat("(session/synchronize)[%U%U]", modstr, ext);
+				}
+				else if (fn > 0 && fn <= 32)
 				{
 					rob = PyUnicode_FromFormat("[F%d][%U%U]", fn, modstr, ext);
 				}
@@ -1088,18 +1208,25 @@ device_transfer_event(PyObject *self)
 	}
 	Py_END_ALLOW_THREADS;
 
+	if (r == 0 && errno != 0)
+	{
+		PyErr_SetFromErrno(NULL);
+		errno = 0;
+		return(NULL);
+	}
+
 	return(PyLong_FromLong(r));
 }
 
 static PyObject *
 device_replicate_cells(PyObject *self, PyObject *args)
 {
-	AreaObject sub, rep;
+	AreaObject dst, src;
 
-	if (!PyArg_ParseTuple(args, "O!O!", &AreaType, &sub, &AreaType, &rep))
+	if (!PyArg_ParseTuple(args, "O!O!", &AreaType, &dst, &AreaType, &src))
 		return(NULL);
 
-	Device_ReplicateCells(D(self), sub->area, rep->area);
+	Device_ReplicateCells(D(self), dst->area, src->area);
 	Py_RETURN_NONE;
 }
 
@@ -1147,29 +1274,40 @@ device_synchronize_io(PyObject *self)
 }
 
 static PyObject *
-device_reconnect(PyObject *self)
+device_resize_screen(PyObject *self)
 {
-	ScreenObject screen;
 	DeviceObject devob = (DeviceObject) self;
+	ScreenObject screen = devob->dev_screen;
 	struct Device *dev = devob->dev_terminal;
-	Py_ssize_t ssize = dev->cmd_dimensions->v_cells * sizeof(struct Cell);
+	Py_ssize_t ssize = sizeof(struct Cell);
+	uint16_t lines = dev->cmd_dimensions->y_cells;
+	uint16_t span = dev->cmd_dimensions->x_cells;
+	PyObject *ba, *old_screen;
+	struct CellArea sa;
 
-	Py_XDECREF(devob->dev_image);
-	devob->dev_image = PyMemoryView_FromMemory(dev->cmd_image, ssize, PyBUF_WRITE);
-	if (devob->dev_image == NULL)
-		return(NULL);
+	old_screen = devob->dev_screen;
 
-	screen = devob->dev_screen;
-	free(screen->image);
-	screen->image = dev->cmd_image;
-	screen->dimensions = *dev->cmd_view;
+	sa = (struct CellArea) {0, 0, lines, span};
+	ssize *= lines;
+	ssize *= span;
 
-	PyBuffer_Release(&(screen->memory));
-	if (PyObject_GetBuffer(devob->dev_image, &(screen->memory), PyBUF_WRITABLE) < 0)
+	ba = PyByteArray_FromStringAndSize("", 0);
+	if (PyByteArray_Resize(ba, ssize) < 0)
 	{
+		Py_DECREF(ba);
 		return(NULL);
 	}
 
+	screen = screen_create(&ScreenType, ba, &sa);
+	Py_DECREF(ba);
+	if (screen == NULL)
+		return(NULL);
+
+	devob->dev_screen = screen;
+	dev->cmd_image = screen->image;
+	dev->cmd_view = &screen->dimensions;
+
+	Py_XDECREF(old_screen);
 	Py_RETURN_NONE;
 }
 
@@ -1261,6 +1399,100 @@ device_integrate(PyObject *self, PyObject *args)
 	return(PyLong_FromLong(v));
 }
 
+/**
+	// Temporary solution reflections.
+*/
+static PyObject *
+device_controls_translate_cursor(PyObject *self, PyObject *args)
+{
+	struct MatrixParameters *mp = DeviceMatrixParameters(self);
+	struct ControllerStatus *ctl = DeviceController(self);
+	AreaObject ao;
+	struct CellArea *ca;
+
+	if (!PyArg_ParseTuple(args, "O!", &AreaType, &ao))
+		return(NULL);
+
+	ca = &ao->area;
+
+	ctl->st_top -= ca->top_offset * (mp->y_cell_units * mp->scale_factor);
+	ctl->st_left -= ca->left_offset * (mp->x_cell_units * mp->scale_factor);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject *
+device_matrix_snapshot(PyObject *self, PyObject *args)
+{
+	struct MatrixParameters *mp = DeviceMatrixParameters(self);
+	AreaObject ao;
+	struct CellArea *ca;
+	struct MatrixParameters lmp;
+
+	PyObject *rob;
+
+	if (!PyArg_ParseTuple(args, "O!", &AreaType, &ao))
+		return(NULL);
+
+	ca = &ao->area;
+	memcpy(&lmp, mp, sizeof(lmp));
+
+	lmp.x_cells = ca->span;
+	lmp.y_cells = ca->lines;
+	lmp.v_cells = lmp.x_cells * lmp.y_cells;
+
+	lmp.x_screen_units = lmp.x_cell_units * ca->span;
+	lmp.y_screen_units = lmp.y_cell_units * ca->lines;
+
+	rob = PyBytes_FromStringAndSize(&lmp, sizeof(lmp));
+	return(rob);
+}
+
+static PyObject *
+device_controls_snapshot(PyObject *self, PyObject *args)
+{
+	PyObject *rob;
+	DeviceObject devob = (DeviceObject) self;
+	struct Device *dev = devob->dev_terminal;
+	int32_t lcurrent;
+	long l;
+
+	l = lcurrent = dev->cmd_status->st_dispatch;
+	if (!PyArg_ParseTuple(args, "|l", &l))
+		return(NULL);
+
+	dev->cmd_status->st_dispatch = (int32_t) l;
+	dev->cmd_status->st_receiver = NULL;
+
+	rob = PyBytes_FromStringAndSize(dev->cmd_status, sizeof(struct ControllerStatus));
+
+	dev->cmd_status->st_dispatch = lcurrent;
+	return(rob);
+}
+
+static PyObject *
+device_integrate_controls(PyObject *self, PyObject *snapshot)
+{
+	DeviceObject devob = (DeviceObject) self;
+	struct Device *dev = devob->dev_terminal;
+	char *buf;
+	Py_ssize_t l = 0;
+
+	if (PyBytes_AsStringAndSize(snapshot, &buf, &l) < 0)
+		return(NULL);
+
+	if (l < sizeof(struct ControllerStatus))
+	{
+		PyErr_SetString(PyExc_ValueError, "snapshot too small");
+		return(NULL);
+	}
+
+	memcpy(dev->cmd_status, buf, sizeof(struct ControllerStatus));
+	dev->cmd_status->st_receiver = NULL;
+
+	Py_RETURN_NONE;
+}
+
 static PyMethodDef device_methods[] = {
 	{"key", (PyCFunction) device_key, METH_O, NULL},
 	{"quantity", (PyCFunction) device_quantity, METH_NOARGS, NULL},
@@ -1271,7 +1503,7 @@ static PyMethodDef device_methods[] = {
 	{"transfer_text", (PyCFunction) device_transfer_text, METH_NOARGS, NULL},
 	{"transmit", (PyCFunction) device_transmit, METH_VARARGS, NULL},
 
-	{"reconnect", (PyCFunction) device_reconnect, METH_NOARGS, NULL},
+	{"resize_screen", (PyCFunction) device_resize_screen, METH_NOARGS, NULL},
 	{"define", (PyCFunction) device_define, METH_VARARGS, NULL},
 	{"integrate", (PyCFunction) device_integrate, METH_VARARGS, NULL},
 	{"replicate_cells", (PyCFunction) device_replicate_cells, METH_VARARGS, NULL},
@@ -1283,6 +1515,11 @@ static PyMethodDef device_methods[] = {
 
 	{"update_frame_status", (PyCFunction) device_update_frame_status, METH_VARARGS, NULL},
 	{"update_frame_list", (PyCFunction) device_update_frame_list, METH_VARARGS, NULL},
+
+	{"controls_translate_cursor", (PyCFunction) device_controls_translate_cursor, METH_VARARGS, NULL},
+	{"matrix_snapshot", (PyCFunction) device_matrix_snapshot, METH_VARARGS, NULL},
+	{"controls_snapshot", (PyCFunction) device_controls_snapshot, METH_VARARGS, NULL},
+	{"integrate_controls", (PyCFunction) device_integrate_controls, METH_O, NULL},
 
 	{NULL, NULL, 0, NULL}
 };
@@ -1303,8 +1540,6 @@ device_clear(PyObject *self)
 {
 	DeviceObject devob = (DeviceObject) self;
 
-	Py_XDECREF(devob->dev_image);
-	devob->dev_image = NULL;
 	Py_XDECREF(devob->dev_screen);
 	devob->dev_screen = NULL;
 }
@@ -1357,22 +1592,18 @@ device_new(PyTypeObject *subtype, PyObj args, PyObj kw)
 	if (devob->dev_terminal == NULL)
 		goto error;
 
-	/* Initialize memoryview referencing the image */
+	/* Initialize 1x1 screen */
 	{
-		Py_ssize_t ssize = devob->dev_terminal->cmd_dimensions->v_cells * sizeof(struct Cell);
-		devob->dev_image = PyMemoryView_FromMemory(devob->dev_terminal->cmd_image, ssize, PyBUF_WRITE);
-	}
-	if (devob->dev_image == NULL)
-		goto error;
+		PyObj ba;
+		struct Cell zero_buf = {0,};
+		struct CellArea sa = {0, 0, 1, 1};
 
-	/* Initialize screen */
-	{
-		struct CellArea sa = {
-			.left_offset = 0, .top_offset = 0,
-			.lines = devob->dev_terminal->cmd_dimensions->y_cells,
-			.span = devob->dev_terminal->cmd_dimensions->x_cells
-		};
-		devob->dev_screen = screen_create(&ScreenType, devob->dev_image, &sa);
+		ba = PyByteArray_FromStringAndSize((const char *) &zero_buf, sizeof(struct Cell));
+		if (ba == NULL)
+			goto error;
+
+		devob->dev_screen = screen_create(&ScreenType, ba, &sa);
+		Py_DECREF(ba);
 	}
 	if (devob->dev_screen == NULL)
 		goto error;
@@ -1424,6 +1655,8 @@ INIT(module, 0, NULL)
 		PYTHON_TYPES()
 	#undef ID
 
+	if (area_type_initialize(&AreaType) < 0)
+		goto error;
 	if (cell_type_initialize(&CellType) < 0)
 		goto error;
 	if (line_type_initialize(&LineType) < 0)

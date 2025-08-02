@@ -41,7 +41,6 @@ typedef struct ScreenObject *ScreenObject;
 
 struct DeviceObject {
 	PyObject_HEAD
-	PyObj dev_image; /* memoryview of cmd_image */
 	PyObj dev_screen; /* ScreenObject */
 	struct Device *dev_terminal;
 };

@@ -12,6 +12,9 @@
 	@property (nonatomic) TerminalApplication co_function;
 @end
 
+#define CellMatrix_GetCellImage(cm) (cm.device.cmd_image)
+#define CellMatrix_GetCellArea(cm) (cm.device.cmd_view)
+
 /**
 	// Terminal Application and API support.
 
@@ -80,7 +83,7 @@
 		// Send an application instruction with insertion text and quantity.
 	*/
 	- (void)
-		dispatchApplicationInstruction: (enum ApplicationInstruction) ai
+		dispatchApplicationInstruction: (int32_t) ai
 		withText: (NSString *) s
 		quantity: (int32_t) q;
 
@@ -101,8 +104,6 @@
 	/* Screen */
 	@property (nonatomic) struct GlyphInscriptionParameters inscription;
 	@property (nonatomic) struct MatrixParameters dimensions;
-	@property (nonatomic) struct CellArea view;
-	@property (nonatomic) struct Cell *cellImage;
 
 	/* Event dispatch (pipe might be superior) */
 	@property (retain,nonatomic) dispatch_queue_t event_queue;
