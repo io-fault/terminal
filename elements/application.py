@@ -855,10 +855,6 @@ class Session(Core):
 				# the screen state so that the replicate instruction may
 				# work with the desired frame.
 				d.replicate_cells(area, data)
-				d.synchronize()
-
-				# No invalidation necessary here as the cell replication
-				# has been performed directly on the frame buffer.
 				s.replicate_cells(area, data)
 			else:
 				# Update the screen with the given data and signal

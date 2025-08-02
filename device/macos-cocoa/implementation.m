@@ -1517,6 +1517,12 @@ device_replicate_cells(void *context, struct CellArea target, struct CellArea so
 	if (x < source.left_offset)
 		x = source.left_offset;
 
+	dispatch_sync(terminal.render_queue, ^(void) {
+		IOSurfaceLock(terminal.pixelImage, 0, NULL);
+		[terminal updatePixels];
+		IOSurfaceUnlock(terminal.pixelImage, 0, NULL);
+	});
+
 	dispatch_async(terminal.render_queue, ^(void) {
 		/*
 			// Constrain the area size to avoid reaching
@@ -1542,7 +1548,6 @@ device_replicate_cells(void *context, struct CellArea target, struct CellArea so
 			// Update the invalidated areas now to avoid such cases.
 		*/
 		IOSurfaceLock(terminal.pixelImage, 0, NULL);
-		[terminal updatePixels];
 		constrain_area(mp, &constrained);
 		constrain_area(mp, &src);
 		[terminal copyPixels: constrained fromSource: src];
