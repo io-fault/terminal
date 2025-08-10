@@ -91,13 +91,12 @@ device_define(void *context, const char *uexpression)
 {
 	struct CellMatrix *cmd = (struct CellMatrix *) context;
 
-	size_t sl = strlen(uexpression);
+	size_t sl = strlen(uexpression), parts = 0;
+	int32_t cp;
 
-	if (sl == 1 && uexpression[0] < 128)
-	{
-		// Fast path.
-		return((int32_t) uexpression[0]);
-	}
+	parts = utf8_identify_codepoint(&cp, uexpression, sl);
+	if (parts == sl)
+		return(cp); // Exact codepoint.
 
 	return(-1);
 }

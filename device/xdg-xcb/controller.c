@@ -334,15 +334,11 @@ device_wait_event(struct CellMatrix *cmd)
 					len = xkb_state_key_get_utf8(cmd->xk.xk_empty, code, buf, sizeof(buf));
 					if (len > 0)
 					{
-						mbstate_t mbs = {0,};
-						char32_t c = 0;
+						uint32_t cp = 0;
 
-						if (mbrtoc32(&c, buf, len, &mbs) > 0)
-						{
-							ctl->st_dispatch = toupper(c);
-							/* dispatch event */
-							break;
-						}
+						utf8_identify_codepoint(&cp, buf, len);
+						ctl->st_dispatch = toupper(cp);
+						break;
 					}
 				}
 

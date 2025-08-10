@@ -1,9 +1,10 @@
+#include <assert.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uchar.h>
 
 #include <fontconfig/fontconfig.h>
 
@@ -24,6 +25,8 @@
 #include <cairo-xcb.h>
 
 #include <pango/pangocairo.h>
+
+#include <fault/utf-8.h>
 
 #define __XDG_XCB_TERMINAL_DEVICE__
 #include <fault/terminal/device.h>

@@ -4,7 +4,9 @@
 	// with cocoa applications.
 */
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
+#include <string.h>
 
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
@@ -16,6 +18,8 @@
 #include <fault/terminal/cocoa.h>
 
 #include <fault/terminal/static.h>
+
+#include <fault/utf-8.h>
 
 static void dispatch_application_instruction(CellMatrix *, NSString *, int32_t, int32_t);
 
@@ -1381,32 +1385,6 @@ clipsToBounds
 	return(YES);
 }
 
-- (int32_t)
-defineCodepoint: (NSString *) ux
-{
-	int32_t cpi;
-	NSValue *v;
-
-	/* Positive codepoint */
-	if (string_codepoint_count(ux) == 1)
-		return(string_codepoint(ux));
-
-	/* Requires an expression; allocate a slot for the codepoint if necessary. */
-	v = [self.stringToCodepoint objectForKey: ux];
-	if (v == nil)
-	{
-		/* Allocate */
-		self.expressionIdentifierSequence -= 1;
-		v = [NSValue valueWithBytes: &(_expressionIdentifierSequence) objCType: @encode(int32_t)];
-
-		[self.codepointToString setObject: ux forKey: v];
-		[self.stringToCodepoint setObject: v forKey: ux];
-	}
-
-	[v getValue: &cpi size: sizeof(cpi)];
-	return(cpi);
-}
-
 - (NSImage *)
 resizeImage: (CIImage *) ci
 pixelsWide: (uint32_t) width
@@ -1467,7 +1445,35 @@ static int32_t
 device_define(void *context, const char *uexpression)
 {
 	CellMatrix *terminal = context;
-	return([terminal defineCodepoint: [NSString stringWithUTF8String: uexpression]]);
+	size_t sl = strlen(uexpression), parts = 0;
+	int32_t cp;
+	NSString *ux;
+	NSValue *v;
+
+	parts = utf8_identify_codepoint(&cp, uexpression, sl ? sl : 1);
+	if (parts == sl)
+		return(cp); // Exact codepoint.
+
+	// Lookup assigned negative codepoint.
+	ux = [NSString stringWithUTF8String: uexpression];
+
+	// Check for existing record.
+	v = [terminal.stringToCodepoint objectForKey: ux];
+	if (v == nil)
+	{
+		/* Allocate */
+		int32_t xis;
+		terminal.expressionIdentifierSequence -= 1;
+		xis = terminal.expressionIdentifierSequence;
+
+		v = [NSValue valueWithBytes: &xis objCType: @encode(int32_t)];
+
+		[terminal.codepointToString setObject: ux forKey: v];
+		[terminal.stringToCodepoint setObject: v forKey: ux];
+	}
+
+	[v getValue: &cp size: sizeof(cp)];
+	return(cp);
 }
 
 /**

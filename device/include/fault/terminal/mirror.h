@@ -1,5 +1,5 @@
-#include <locale.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +8,8 @@
 #include <math.h>
 #include <errno.h>
 #include <sys/types.h>
+
+#include <fault/utf-8.h>
 
 #define __MIRROR_TERMINAL_DEVICE__
 #include <fault/terminal/device.h>

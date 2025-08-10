@@ -1,7 +1,6 @@
 /**
 	// Device (method) implementation for xdg-xcb.
 */
-#include <locale.h>
 #include <fault/terminal/xdg-xcb.h>
 #include <fault/terminal/static.h>
 
@@ -23,26 +22,18 @@ device_define(void *context, const char *uexpression)
 {
 	struct CellMatrix *cmd = (struct CellMatrix *) context;
 
-	mbstate_t mbs = {0,};
-	size_t parts = -1;
-	char32_t c = 0;
-	size_t sl = strlen(uexpression);
+	size_t sl = strlen(uexpression), parts = 0;
+	int32_t cp;
 
-	if (sl == 1 && uexpression[0] < 128)
+	if (sl < 2 && uexpression[0] < 128)
 	{
 		// Fast path.
 		return((int32_t) uexpression[0]);
 	}
 
-	parts = mbrtoc32(&c, uexpression, sl, &mbs);
+	parts = utf8_identify_codepoint(&cp, uexpression, sl);
 	if (parts == sl)
-		return(c); // Exact codepoint.
-
-	if (parts > 0)
-	{
-		// Sequence needing representation index.
-		return(3);
-	}
+		return(cp); // Exact codepoint.
 
 	return(-1);
 }
@@ -283,16 +274,6 @@ device_manage_terminal(const char *factor, TerminalApplication app)
 	struct CellMatrix *cmd = malloc(sizeof(struct CellMatrix));
 	struct Device_XDisplay *xi = &cmd->xi;
 	struct Device_XController *xk = &cmd->xk;
-
-	/* For mbrto32c */
-	if (setlocale(LC_CTYPE, "C.UTF-8") == NULL)
-	{
-		if (setlocale(LC_CTYPE, "en_US.UTF-8") == NULL)
-		{
-			fprintf(stderr,
-				"io.fault.terminal: could not set locale for UTF-8 recodings.\n");
-		}
-	}
 
 	*cmd = (struct CellMatrix)
 	{
