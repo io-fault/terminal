@@ -157,11 +157,22 @@ def test_Line_properties(test):
 	test/li.ln_extension == 'ext'
 
 def alloc_lambda_forms():
-	from ...elements import fields
-	from fault.syntax import format
+	from fault.context import tools
+	from fault.system.text import cells as syscellcount
+	from fault.syntax import format, keywords
+	from ...elements.application import kwf_isolate
+	from ...configuration import load_sections, load_syntax
 	from ...configuration import types
 	from ...configuration import colors
 	from ...cells.types import Glyph
+	from ...cells.text import graphemes, words
+
+	# Character Unit Segmentation
+	cus = tools.cachedcalls(128)(
+		tools.compose(list, words,
+			tools.partial(graphemes, syscellcount, ctlsize=4, tabsize=4)
+		)
+	)
 
 	cell = Glyph(codepoint=-1,
 		cellcolor=colors.palette[colors.cell['default']],
@@ -173,13 +184,24 @@ def alloc_lambda_forms():
 	}
 	theme['title'] = theme['field-annotation-title']
 
-	kwi = fields.prepare(*types.implementations['lambda'])
+	sr = load_syntax('lambda', theme)
+	fimethod, ficonfig, ce, eol, ic, ils = sr
+
+	if 'routers' not in ficonfig:
+		ficonfig['routers'] = []
+	ficonfig['routers'].append("\U0010fa01")
+
+	fiprofile = keywords.Profile.from_keywords_v1(**ficonfig)
+	fiparser = keywords.Parser.from_profile(fiprofile)
+	fields = format.Fields(fiparser, kwf_isolate)
+
 	return module.Reformulations(
-		'lambda', theme,
-		format.Characters.from_codec('utf-8', 'surrogateescape'),
-		format.Lines('\n', '\t'),
-		kwi,
-		fields.segmentation(4, 4),
+		lf_type='lambda',
+		lf_theme=theme,
+		lf_codec=format.Characters.from_codec('utf-8', 'surrogateescape'),
+		lf_lines=format.Lines('\n', '\t'),
+		lf_fields=fields,
+		lf_units=cus,
 	)
 
 def test_Reformulations_fields(test):
@@ -415,7 +437,7 @@ def test_Redirection(test):
 	test/red.port == None
 	test/red.operand == 'operand'
 	test/red.operator == '>>'
-	test/red.extend('+suffix').operand == 'operand+suffix'
+	test/red.suffix('+suffix').operand == 'operand+suffix'
 
 def test_Redirection_default_port(test):
 	"""
