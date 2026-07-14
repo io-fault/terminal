@@ -70,7 +70,6 @@ device_render_image(void *context)
 	struct CellMatrix *cmd = (struct CellMatrix *) context;
 	struct Device *xd = &cmd->xd;
 	struct Device_XDisplay *xi = &cmd->xi;
-	struct Device_TileCache *tc = &xi->cache;
 
 	system_units_t cell_height = xd->cmd_dimensions->y_cell_units;
 	system_units_t cell_width = xd->cmd_dimensions->x_cell_units;
