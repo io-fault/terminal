@@ -420,6 +420,75 @@ cache_acquire_tile(struct Device_TileCache *tc, struct Cell *c, system_units_t *
 	return(&tc->dtc_image_cache[tr->tr_image]);
 }
 
+static inline cache_record_t
+cache_required_tile(void *ctx, cache_record_t r)
+{
+	struct Cell *cell = cache_record_key(r);
+	struct TileAddress *ta = (struct TileAddress *) cache_record_value(r);
+	struct Device_XDisplay *xi = ctx;
+	struct Device_XImage *ti = &xi->tile_images[ta->tr_image];
+
+	// Update cached pixels.
+	render_tile(ti->di_context, ti->di_layout,
+		xi->cell_width, xi->cell_height,
+		ta->tr_line, ta->tr_cell, cell);
+
+	return(r);
+}
+
+/**
+	// Primary interface used by the device to select the cell pixels.
+*/
+struct Device_XImage *
+cache_require_tile(struct Device_XDisplay *xi, struct Cell *cell, system_units_t *xt, system_units_t *yt)
+{
+	struct TileAddress *ta;
+
+	ta = (struct TileAddress *) cache_require(
+		&xi->tile_cache, (cache_key_t *) cell,
+		cache_acquire_slot_fixed,
+		cache_required_tile, xi
+	);
+
+	*xt = ta->tr_cell * xi->cell_width;
+	*yt = ta->tr_line * xi->cell_height;
+
+	return(&xi->tile_images[ta->tr_image]);
+}
+
+extern inline const size_t
+cache_key_size(void)
+{
+	return(sizeof(struct Cell));
+}
+
+extern inline const size_t
+cache_value_size(void)
+{
+	return(sizeof(struct TileAddress));
+}
+
+extern inline void
+cache_evict_record(cache_storage_t *c, cache_record_t r)
+{
+	// Cache is fixed size, but explicitly do nothing when idle slots are reclaimed.
+}
+
+#include <math.h>
+
+extern inline void
+cache_initialize_slot(cache_storage_t *c, cache_record_t r, size_t di, size_t ri)
+{
+	struct TileAddress *ta = (struct TileAddress *) cache_record_value(r);
+	uint32_t cs = (c->distribution_size / TILECACHE_DFACTOR);
+	uint32_t confinement = (uint32_t) sqrt(cs);
+	uint32_t ci = (c->allocation_size * TILECACHE_AFACTOR * di) + ri;
+
+	ta->tr_cell = ci % confinement;
+	ta->tr_image = ci / cs;
+	ta->tr_line = (ci - (ta->tr_image * cs)) / confinement;
+}
+
 void
 device_initialize_cache(struct CellMatrix *cmd, system_units_t cell_width, system_units_t cell_height, size_t volume_root)
 {
@@ -434,6 +503,10 @@ device_initialize_cache(struct CellMatrix *cmd, system_units_t cell_width, syste
 	tc->dtc_image_limit = volume_root * volume_root * volume_root;
 	tc->dtc_image_next = 0;
 
+	cache_initialize(&xi->tile_cache,
+		volume_root * volume_root * TILECACHE_DFACTOR,
+		volume_root / (TILECACHE_DFACTOR * TILECACHE_AFACTOR), TILECACHE_AFACTOR);
+
 	// Record allocation minimum and number of buckets.
 	tc->dtc_allocation_size = volume_root;
 	tc->dtc_distribution_size = volume_root * ((volume_root > 1 ? volume_root : 2) / 2);
@@ -442,15 +515,16 @@ device_initialize_cache(struct CellMatrix *cmd, system_units_t cell_width, syste
 	assert(tc->dtc_image_limit >= tc->dtc_distribution_size * tc->dtc_allocation_size);
 
 	// Storage images.
-	tc->dtc_image_cache = malloc(sizeof(struct Device_XImage) * tc->dtc_image_confinement);
+	xi->tile_images = malloc(sizeof(struct Device_XImage) * tc->dtc_image_confinement);
 	{
 		system_units_t pxwidth = cell_width * volume_root;
 		system_units_t pxheight = cell_height * volume_root;
-		struct Device_XImage *img = tc->dtc_image_cache;
+		struct Device_XImage *img = xi->tile_images;
 
 		for (int i = 0; i < volume_root; ++i)
 			device_allocate_image(cmd, &img[i], (int) pxwidth, (int) pxheight);
 	}
+	tc->dtc_image_cache = xi->tile_images;
 
 	// Allocate hash.
 	sasize = sizeof(size_t) * tc->dtc_distribution_size;
@@ -519,5 +593,7 @@ device_initialize_display(struct CellMatrix *cmd)
 	xi->layout = pango_cairo_create_layout(xi->context);
 	pango_layout_set_font_description(xi->layout, xi->font);
 
+	xi->cell_width = cwidth;
+	xi->cell_height = cheight;
 	device_initialize_cache(cmd, cwidth, cheight, 16);
 }

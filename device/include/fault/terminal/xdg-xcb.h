@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <sys/types.h>
 
 #include <fontconfig/fontconfig.h>
 
@@ -27,9 +29,14 @@
 #include <pango/pangocairo.h>
 
 #include <fault/utf-8.h>
+#include <fault/hash.h>
+#include <fault/cache/factor.h>
 
 #define __XDG_XCB_TERMINAL_DEVICE__
 #include <fault/terminal/device.h>
+
+#define TILECACHE_DFACTOR 2
+#define TILECACHE_AFACTOR 2
 
 /*
 	// Single keyboard device.
@@ -63,6 +70,14 @@ struct TileRecord
 	ssize_t tr_hits, tr_passes, tr_rate;
 	uint16_t tr_image, tr_line, tr_cell; // Value
 	struct Cell tr_key;
+};
+
+/**
+	// Value structure of tile cache.
+*/
+struct TileAddress
+{
+	uint16_t tr_image, tr_line, tr_cell;
 };
 
 /**
@@ -111,6 +126,9 @@ struct Device_XDisplay
 
 	struct GlyphInscriptionParameters glyphctl;
 	struct Device_TileCache cache;
+	system_units_t cell_width, cell_height;
+	cache_storage_t tile_cache;
+	struct Device_XImage *tile_images;
 
 	int icount, rcount, ccount;
 	struct CellArea *invalids;
@@ -136,3 +154,4 @@ struct CellMatrix
 int device_initialize_controller(struct CellMatrix *, struct Device_XController *);
 int device_wait_key(struct CellMatrix *cmd, struct ControllerStatus *ctl);
 struct Device_XImage *cache_acquire_tile(struct Device_TileCache *, struct Cell *, system_units_t *, system_units_t *);
+struct Device_XImage *cache_require_tile(struct Device_XDisplay *, struct Cell *, system_units_t *, system_units_t *);

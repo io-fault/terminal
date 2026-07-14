@@ -89,7 +89,7 @@ device_render_image(void *context)
 			struct Device_XImage *ti;
 			system_units_t xt, yt;
 
-			ti = cache_acquire_tile(tc, Cell, &xt, &yt);
+			ti = cache_require_tile(xi, Cell, &xt, &yt);
 
 			cairo_set_source_surface(xi->context, ti->di_cairo_resource, xdst-xt, ydst-yt);
 			cairo_rectangle(xi->context, xdst, ydst, cell_width, cell_height);
