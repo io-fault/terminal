@@ -14,13 +14,62 @@
 #import <IOSurface/IOSurface.h>
 #import <CoreImage/CIFilterBuiltins.h>
 
+#include <fault/cache/factor.h>
+#include <fault/utf-8.h>
 #include <fault/terminal/device.h>
 #include <fault/terminal/cocoa.h>
 
+struct CacheTile {
+	NSBitmapImageRep *ct_object;
+};
+typedef struct CacheTile cache_tile_t;
+
+extern inline const size_t
+cache_key_size(void)
+{
+	return(sizeof(struct Cell));
+}
+
+extern inline const size_t
+cache_value_size(void)
+{
+	return(sizeof(cache_tile_t));
+}
+
+/**
+	// Release the bitmap object held by the cache.
+
+	// While records are never deleted, they are relcaimed when space is needed.
+*/
+extern inline void
+cache_evict_record(cache_storage_t *c, cache_record_t r)
+{
+	cache_tile_t *v = (cache_tile_t *) cache_record_value(r);
+	void *n = NULL;
+
+	[v->ct_object release];
+	v->ct_object = nil;
+}
+
+/**
+	// Create a bitmap object for the cache.
+*/
+extern inline cache_record_t
+cache_required_tile(void *ctx, cache_record_t r)
+{
+	CellMatrix *cm = (CellMatrix *) ctx;
+	cache_tile_t *v = (cache_tile_t *) cache_record_value(r);
+	struct Cell *cell = (struct Cell *) cache_record_key(r);
+	NSBitmapImageRep *ir;
+
+	ir = [cm renderCell: cell];
+	[ir retain];
+	v->ct_object = ir;
+
+	return(r);
+}
+
 #include <fault/terminal/static.h>
-
-#include <fault/utf-8.h>
-
 static void dispatch_application_instruction(CellMatrix *, NSString *, int32_t, int32_t);
 
 #pragma mark CALayer SPI
@@ -89,25 +138,6 @@ uline(enum LinePattern lp)
 		case lp_void:
 			return NSUnderlineStyleNone;
 		break;
-	}
-}
-
-/**
-	// Rotate channels: RGBA -> BGRA
-*/
-static inline
-void
-bgra(NSBitmapImageRep *ir)
-{
-	uint32_t i, npixels = [ir pixelsWide] * [ir pixelsHigh];
-	uint32_t *pixel = (uint32_t *) ir.bitmapData;
-
-	for (i = 0; i < npixels; ++i)
-	{
-		uint32_t s = pixel[i];
-		pixel[i] = (s & 0xFF00FF00)
-			| ((s & 0x000000FF) << 16)
-			| ((s & 0x00FF0000) >> 16);
 	}
 }
 
@@ -204,6 +234,12 @@ main
 matrixParameters
 {
 	return(&_dimensions);
+}
+
+- (const cache_storage_t *)
+tilesAddress
+{
+	return(&_tiles);
 }
 
 - (struct Device *)
@@ -482,6 +518,7 @@ initWithFrame: (CGRect) r
 	[self updateFont: font withContext: fontctx];
 	[self setTileCache: [[NSCache alloc] init]];
 
+	cache_initialize(CellMatrix_GetTileCache(self), 256, 32, 4);
 	self.dimensions = (struct MatrixParameters) {0,};
 
 	self.pending_updates = [[NSMutableArray alloc] init];
@@ -564,7 +601,7 @@ centerBounds: (CGSize) size
 	// Get the cached image for the cell or render one and place into the cache.
 */
 - (NSBitmapImageRep *)
-cellBitmap: (struct Cell *) cell
+cellBitmapOldCache: (struct Cell *) cell
 {
 	NSBitmapImageRep *ir;
 	NSData *key = [NSData dataWithBytes: (void *) cell length: sizeof(struct Cell)];
@@ -588,6 +625,19 @@ cellBitmap: (struct Cell *) cell
 	}
 
 	return(ir);
+}
+
+- (NSBitmapImageRep *)
+cellBitmap: (struct Cell *) cell
+{
+	cache_value_t *v;
+	v = cache_require(
+		CellMatrix_GetTileCache(self),
+		(cache_key_t *) cell,
+		cache_acquire_slot_fixed,
+		cache_required_tile, (void *) self
+	);
+	return((NSBitmapImageRep *) *v);
 }
 
 - (NSBitmapImageRep *)
@@ -760,6 +810,42 @@ renderPixelsCell: (struct Cell *) cell withImage: (NSImage *) img
 }
 
 /**
+	// Rotate channels: RGBA -> BGRA
+*/
+static inline void
+bgra(NSBitmapImageRep *ir)
+{
+	uint32_t i, npixels = [ir pixelsWide] * [ir pixelsHigh];
+	uint32_t *pixel = (uint32_t *) ir.bitmapData;
+
+	for (i = 0; i < npixels; ++i)
+	{
+		uint32_t s = pixel[i];
+		pixel[i] = (s & 0xFF00FF00)
+			| ((s & 0x000000FF) << 16)
+			| ((s & 0x00FF0000) >> 16);
+	}
+}
+
+- (NSBitmapImageRep *)
+renderCell: (struct Cell *) cell
+{
+	NSBitmapImageRep *ir = nil;
+
+	if (Cell_PixelsType(*cell))
+	{
+		NSValue *v = [NSValue valueWithBytes: &(cell->c_codepoint) objCType: @encode(int32_t)];
+		ir = [self renderPixelsCell: cell withImage: self.integrations[v]];
+	}
+	else
+		ir = [self renderGlyphCell: cell withFont: self.font];
+
+	// Reformat pixels.
+	bgra(ir);
+	return(ir);
+}
+
+/**
 	// render_queue only method.
 */
 - (void)
@@ -785,7 +871,7 @@ updatePixels
 		[self.pending_updates[i] getValue: &ca size: sizeof(ca)];
 
 		constrain_area(mp, &ca);
-		if (ca.lines * ca.span < 32)
+		if (true || ca.lines * ca.span < 32)
 		{
 			/* Don't bother with dispatch when the volume is small. */
 			[self drawPixels: ca];
@@ -982,6 +1068,7 @@ drawPixels: (struct CellArea) ca
 
 		assert(dsty >= 0);
 		assert(dsty < maxrow);
+		assert(ci != nil);
 
 		for (i = 0; i < height; ++i)
 		{

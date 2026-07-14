@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import <CoreImage/CIFilterBuiltins.h>
 
+#include <fault/cache/factor.h>
 #include <fault/terminal/device.h>
 #include <fault/terminal/cocoa.h>
 

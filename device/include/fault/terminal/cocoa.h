@@ -14,6 +14,7 @@
 
 #define CellMatrix_GetCellImage(cm) (cm.device.cmd_image)
 #define CellMatrix_GetCellArea(cm) (cm.device.cmd_view)
+#define CellMatrix_GetTileCache(cm) ([cm tilesAddress])
 
 /**
 	// Terminal Application and API support.
@@ -132,6 +133,7 @@
 	@property (retain,nonatomic) NSFont *italic;
 	@property (retain,nonatomic) NSFont *boldItalic;
 	@property (retain,nonatomic) NSFont *caps;
+	@property (nonatomic) cache_storage_t tiles;
 @end
 
 /**
