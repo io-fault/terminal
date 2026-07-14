@@ -1,0 +1,2 @@
+http://fault.io/integration/intrinsics/hash
+http://fault.io/integration/intrinsics/cache
