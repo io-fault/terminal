@@ -389,7 +389,9 @@ configureFont: (NSFont *) dfont withContext: (NSFontManager *) fontctx
 		cellmatrix_calculate_dimensions(mp, self.frame.size.width, self.frame.size.height);
 		[self centerBounds: self.frame.size];
 		[self configurePixelImage];
-		[self setTileCache: [[NSCache alloc] init]];
+
+		cache_release(CellMatrix_GetTileCache(self));
+		cache_initialize(CellMatrix_GetTileCache(self), 256, 32, 4);
 	});
 }
 
@@ -516,7 +518,6 @@ initWithFrame: (CGRect) r
 	};
 	self.font = nil;
 	[self updateFont: font withContext: fontctx];
-	[self setTileCache: [[NSCache alloc] init]];
 
 	cache_initialize(CellMatrix_GetTileCache(self), 256, 32, 4);
 	self.dimensions = (struct MatrixParameters) {0,};
@@ -595,36 +596,6 @@ centerBounds: (CGSize) size
 
 	[self setBoundsOrigin: CGPointMake(xpad, ypad)];
 	[self setBoundsSize: CGSizeMake(mp->x_screen_units, mp->y_screen_units)];
-}
-
-/**
-	// Get the cached image for the cell or render one and place into the cache.
-*/
-- (NSBitmapImageRep *)
-cellBitmapOldCache: (struct Cell *) cell
-{
-	NSBitmapImageRep *ir;
-	NSData *key = [NSData dataWithBytes: (void *) cell length: sizeof(struct Cell)];
-
-	ir = [self.tileCache objectForKey: key];
-	if (ir == nil)
-	{
-		if (Cell_PixelsType(*cell))
-		{
-			NSValue *v = [NSValue valueWithBytes: &(cell->c_codepoint) objCType: @encode(int32_t)];
-			ir = [self renderPixelsCell: cell withImage: self.integrations[v]];
-		}
-		else
-		{
-			ir = [self renderGlyphCell: cell withFont: self.font];
-		}
-
-		/* Convert cached tile from RGBA to BGRA for copying into the IOSurface */
-		bgra(ir);
-		[self.tileCache setObject: ir forKey: key];
-	}
-
-	return(ir);
 }
 
 - (NSBitmapImageRep *)
@@ -862,39 +833,15 @@ updatePixels
 	struct MatrixParameters *mp = [self matrixParameters];
 	int i, total = self.pending_updates.count;
 
-	dispatch_group_t dg = dispatch_group_create();
-	dispatch_queue_t dq = dispatch_queue_create("cell-update", DISPATCH_QUEUE_CONCURRENT);
-
 	for (i = self.completed_updates; i < total; ++i)
 	{
 		struct CellArea ca;
 		[self.pending_updates[i] getValue: &ca size: sizeof(ca)];
 
 		constrain_area(mp, &ca);
-		if (true || ca.lines * ca.span < 32)
-		{
-			/* Don't bother with dispatch when the volume is small. */
-			[self drawPixels: ca];
-		}
-		else
-		{
-			int ln = 0, lines = ca.lines;
-			for (ln = 0; ln < lines; ln += 8)
-			{
-				dispatch_group_async(dg, dq, ^(void){
-					struct CellArea cac = ca;
-					cac.top_offset += ln;
-					cac.lines = MIN(8, lines - ln);
-
-					[self drawPixels: cac];
-				});
-			}
-		}
-
+		[self drawPixels: ca];
 		++self.completed_updates;
 	}
-
-	dispatch_group_wait(dg, DISPATCH_TIME_FOREVER);
 }
 
 /*

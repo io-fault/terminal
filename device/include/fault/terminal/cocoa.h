@@ -127,7 +127,6 @@
 	@property (nonatomic) int32_t expressionIdentifierSequence;
 	@property (retain,nonatomic) NSMutableDictionary<NSValue *, NSString *> *codepointToString;
 	@property (retain,nonatomic) NSMutableDictionary<NSString *, NSValue *> *stringToCodepoint;
-	@property (retain,nonatomic) NSCache <NSData *, NSBitmapImageRep *> *tileCache;
 	@property (retain,nonatomic) NSFont *font;
 	@property (retain,nonatomic) NSFont *bold;
 	@property (retain,nonatomic) NSFont *italic;
