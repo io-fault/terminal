@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import <CoreImage/CIFilterBuiltins.h>
 
+#include <fault/cache/factor.h>
 #include <fault/terminal/device.h>
 #include <fault/terminal/cocoa.h>
 
@@ -740,6 +741,7 @@ create_matrix_window(NSScreen *screen, NSFontManager *fontctx, NSFont *font)
 	[cm resizeMatrix: screen_size];
 	[cm centerBounds: screen_size];
 	cm.event_text = nil;
+	[cm configureTileCache: 16];
 
 	return(root);
 }

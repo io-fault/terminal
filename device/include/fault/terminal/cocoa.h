@@ -14,6 +14,7 @@
 
 #define CellMatrix_GetCellImage(cm) (cm.device.cmd_image)
 #define CellMatrix_GetCellArea(cm) (cm.device.cmd_view)
+#define CellMatrix_GetTileCache(cm) (cm.tileIndexPointer)
 
 /**
 	// Terminal Application and API support.
@@ -126,12 +127,15 @@
 	@property (nonatomic) int32_t expressionIdentifierSequence;
 	@property (retain,nonatomic) NSMutableDictionary<NSValue *, NSString *> *codepointToString;
 	@property (retain,nonatomic) NSMutableDictionary<NSString *, NSValue *> *stringToCodepoint;
-	@property (retain,nonatomic) NSCache <NSData *, NSBitmapImageRep *> *tileCache;
 	@property (retain,nonatomic) NSFont *font;
 	@property (retain,nonatomic) NSFont *bold;
 	@property (retain,nonatomic) NSFont *italic;
 	@property (retain,nonatomic) NSFont *boldItalic;
 	@property (retain,nonatomic) NSFont *caps;
+
+	@property (nonatomic,direct) IOSurfaceRef *cacheImages;
+	@property (nonatomic,direct,readonly) cache_storage_t *tileIndexPointer;
+	@property (nonatomic,direct) cache_storage_t tileIndex;
 @end
 
 /**
