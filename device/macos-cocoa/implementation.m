@@ -19,10 +19,13 @@
 #include <fault/terminal/device.h>
 #include <fault/terminal/cocoa.h>
 
-struct CacheTile {
-	NSBitmapImageRep *ct_object;
+#define TILECACHE_DFACTOR 4
+#define TILECACHE_AFACTOR 2
+
+struct TileAddress {
+	uint16_t tr_image, tr_line, tr_cell;
 };
-typedef struct CacheTile cache_tile_t;
+typedef struct TileAddress cache_tile_t;
 
 extern inline const size_t
 cache_key_size(void)
@@ -37,22 +40,33 @@ cache_value_size(void)
 }
 
 /**
-	// Release the bitmap object held by the cache.
+	// Initialize cached cell addresses.
+*/
+extern inline void
+cache_initialize_slot(cache_storage_t *c, cache_record_t r, size_t di, size_t ri)
+{
+	cache_tile_t *ta = (cache_tile_t *) cache_record_value(r);
+	uint32_t cs = (c->distribution_size / TILECACHE_DFACTOR);
+	uint32_t volume_root = (uint32_t) sqrt(cs);
+	uint32_t ci = (c->allocation_size * TILECACHE_AFACTOR * di) + ri;
 
-	// While records are never deleted, they are relcaimed when space is needed.
+	ta->tr_cell = ci % volume_root;
+	ta->tr_image = ci / cs;
+	ta->tr_line = (ci - (ta->tr_image * cs)) / volume_root;
+}
+
+/**
+	// Explicitly do nothing.
+	// Records are only reclaimed and the configured tile address is reused.
 */
 extern inline void
 cache_evict_record(cache_storage_t *c, cache_record_t r)
 {
-	cache_tile_t *v = (cache_tile_t *) cache_record_value(r);
-	void *n = NULL;
-
-	[v->ct_object release];
-	v->ct_object = nil;
+	;
 }
 
 /**
-	// Create a bitmap object for the cache.
+	// Render the cell and copy the pixels into the tile cache.
 */
 extern inline cache_record_t
 cache_required_tile(void *ctx, cache_record_t r)
@@ -60,11 +74,31 @@ cache_required_tile(void *ctx, cache_record_t r)
 	CellMatrix *cm = (CellMatrix *) ctx;
 	cache_tile_t *v = (cache_tile_t *) cache_record_value(r);
 	struct Cell *cell = (struct Cell *) cache_record_key(r);
+	IOSurfaceRef ios = cm.cacheImages[v->tr_image];
 	NSBitmapImageRep *ir;
 
 	ir = [cm renderCell: cell];
-	[ir retain];
-	v->ct_object = ir;
+	{
+		unsigned char *dst = IOSurfaceGetBaseAddress(ios);
+		unsigned char *src = ir.bitmapData;
+		size_t width = [ir pixelsWide];
+		size_t height = [ir pixelsHigh];
+		size_t line = IOSurfaceGetBytesPerRow(ios);
+		size_t pixels = width * IOSurfaceGetBytesPerElement(ios);
+
+		// Adjust dst to be relative to the first pixel in the cached tile.
+		dst += v->tr_line * line * height;
+		dst += v->tr_cell * pixels;
+
+		for (int i = 0; i < height; ++i)
+		{
+			memcpy(
+				dst + (i * line),
+				src + (i * pixels),
+				pixels
+			);
+		}
+	}
 
 	return(r);
 }
@@ -236,12 +270,6 @@ matrixParameters
 	return(&_dimensions);
 }
 
-- (const cache_storage_t *)
-tilesAddress
-{
-	return(&_tiles);
-}
-
 - (struct Device *)
 deviceReference
 {
@@ -342,6 +370,7 @@ isOpaque
 - (void)
 dealloc
 {
+	IOSurfaceRef *images = self.cacheImages;
 	self.pixelImageLayer.contents = nil;
 
 	if (self.pixelImage != NULL)
@@ -355,6 +384,17 @@ dealloc
 		IOSurfaceDecrementUseCount(self.dispatchedImage);
 		self.dispatchedImage = NULL;
 	}
+
+	if (images != NULL)
+	{
+		// Release the old one; cell size has probably changed.
+		for (int i = 0; images[i] != NULL; ++i)
+			IOSurfaceDecrementUseCount(images[i]);
+		free(images);
+		self.cacheImages = NULL;
+	}
+
+	cache_release(&_tileIndex);
 
 	return([super dealloc]);
 }
@@ -389,9 +429,7 @@ configureFont: (NSFont *) dfont withContext: (NSFontManager *) fontctx
 		cellmatrix_calculate_dimensions(mp, self.frame.size.width, self.frame.size.height);
 		[self centerBounds: self.frame.size];
 		[self configurePixelImage];
-
-		cache_release(CellMatrix_GetTileCache(self));
-		cache_initialize(CellMatrix_GetTileCache(self), 256, 32, 4);
+		[self configureTileCache: 16];
 	});
 }
 
@@ -461,6 +499,65 @@ configurePixelImage
 	[self.pixelImageLayer setContents: (id) self.pixelImage];
 }
 
+- (void)
+configureTileCache: (size_t) volume_root
+{
+	const unsigned bpp = 4;
+	struct MatrixParameters *mp = [self matrixParameters];
+
+	size_t cell_width = mp->x_cell_units * mp->scale_factor;
+	size_t cell_height = mp->y_cell_units * mp->scale_factor;
+	size_t width = volume_root * cell_width;
+	size_t height = volume_root * cell_height;
+
+	size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, width * bpp);
+	size_t total = IOSurfaceAlignProperty(kIOSurfaceAllocSize, height * bpr);
+	IOSurfaceRef *images = self.cacheImages;
+
+	if (images != NULL)
+	{
+		// Release the old one; cell size has probably changed.
+		for (int i = 0; images[i] != NULL; ++i)
+			IOSurfaceDecrementUseCount(images[i]);
+	}
+
+	// +1 for the NULL terminator so that releases don't require the old volume root.
+	images = realloc(images, sizeof(IOSurfaceRef) * (volume_root + 1));
+	assert(images != NULL);
+
+	for (int i = 0; i < volume_root; ++i)
+	{
+		images[i] = IOSurfaceCreate(
+			(CFDictionaryRef)
+			@{
+				(id) kIOSurfaceWidth: @(width),
+				(id) kIOSurfaceHeight: @(height),
+				(id) kIOSurfaceBytesPerElement: @(bpp),
+				(id) kIOSurfaceElementHeight: @(1),
+				(id) kIOSurfaceElementWidth: @(1),
+				(id) kIOSurfaceBytesPerRow: @(bpr),
+				(id) kIOSurfaceAllocSize: @(total),
+				(id) kIOSurfacePixelFormat: @((unsigned int) 'BGRA')
+			}
+		);
+
+		memset(IOSurfaceGetBaseAddress(images[i]), 0x00, total);
+	}
+
+	// Use NULL termination in case of volume_root changes on reconfigure.
+	images[volume_root] = NULL;
+	self.cacheImages = images;
+
+	cache_release(CellMatrix_GetTileCache(self));
+	{
+		// Distribute the rows of cells across the buckets.
+		size_t dsize = volume_root * volume_root * TILECACHE_DFACTOR;
+		size_t asize = volume_root / (TILECACHE_DFACTOR * TILECACHE_AFACTOR);
+
+		cache_initialize(CellMatrix_GetTileCache(self), dsize, asize, TILECACHE_AFACTOR);
+	}
+}
+
 - (instancetype)
 initWithFrame: (CGRect) r
 	andFont: (NSFont *) font
@@ -518,9 +615,8 @@ initWithFrame: (CGRect) r
 	};
 	self.font = nil;
 	[self updateFont: font withContext: fontctx];
-
-	cache_initialize(CellMatrix_GetTileCache(self), 256, 32, 4);
 	self.dimensions = (struct MatrixParameters) {0,};
+	_tileIndexPointer = &_tileIndex;
 
 	self.pending_updates = [[NSMutableArray alloc] init];
 	self.completed_updates = 0;
@@ -1002,27 +1098,40 @@ drawPixels: (struct CellArea) ca
 	int width = mp->x_cell_units * sf;
 	int height = mp->y_cell_units * sf;
 	int cellpixels = bpp * width;
+	int tile_line = IOSurfaceGetBytesPerRow(self.cacheImages[0]);
 
+	// Copy pixels from the tile cache.
 	mforeach(CellMatrix_GetCellArea(self)->span, image, (&ca))
 	{
-		NSBitmapImageRep *ci = [self cellBitmap: Cell];
+		const cache_tile_t tile = *((cache_tile_t *)
+			cache_require(
+				CellMatrix_GetTileCache(self),
+				(cache_key_t *) Cell,
+				cache_acquire_slot_fixed,
+				cache_required_tile, (void *) self
+			)
+		);
+		IOSurfaceRef tiles = self.cacheImages[tile.tr_image];
+		unsigned char *src = IOSurfaceGetBaseAddress(tiles);
+
 		CGRect ar = ptranslate(mp, Offset, Line);
-		int i;
 		int left = ar.origin.x * sf;
 		int dsty = maxrow - (((0.0 + ar.origin.y) * sf) + height);
 		int dstoffset = left * bpp;
-		unsigned char *src = ci.bitmapData;
+
+		// Adjust src to be relative to the first pixel in the cached tile.
+		src += tile.tr_line * tile_line * height;
+		src += tile.tr_cell * bpp * width;
 
 		assert(dsty >= 0);
 		assert(dsty < maxrow);
-		assert(ci != nil);
 
-		for (i = 0; i < height; ++i)
+		for (int i = 0; i < height; ++i)
 		{
 			int row = i + dsty;
 			memcpy(
 				dst + (bpr * row) + dstoffset,
-				src + (i * cellpixels),
+				src + (i * tile_line),
 				cellpixels
 			);
 		}
