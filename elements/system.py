@@ -510,7 +510,7 @@ class Completion(IO):
 		code = os.waitstatus_to_exitcode(status)
 		log.append((self.execute, (*link.context, link.event, rpid, code, rusage)))
 
-def loop(scheduler, pending, signal, *, delay=16, limit=16):
+def loop(scheduler, pending, signal, throttle, *, delay=16, limit=16):
 	"""
 	# Event loop for system I/O.
 	"""
@@ -520,8 +520,8 @@ def loop(scheduler, pending, signal, *, delay=16, limit=16):
 		scheduler.execute()
 
 		if pending():
-			# Cause the (session/synchronize) event to be issued.
-			signal()
+			throttle() # io.throttle.acquire()
+			signal() # (session/synchronize)
 		else:
 			# &delay timeout.
 			pass
@@ -532,7 +532,7 @@ class IOManager(object):
 	"""
 
 	@classmethod
-	def allocate(Class, signal, *, Scheduler=Scheduler):
+	def allocate(Class, signal, throttle, *, Scheduler=Scheduler):
 		"""
 		# Instantiate an I/O instance with the default &Scheduler.
 
@@ -542,21 +542,24 @@ class IOManager(object):
 			# that &transfer synchronization should be performed.
 		"""
 
-		return Class(signal, Scheduler())
+		return Class(signal, throttle, Scheduler())
 
-	def take(self):
+	def take(self, limit=None):
 		"""
 		# Remove the current set of transfers for processing by the main loop.
 		"""
 
 		n = len(self.transfers)
+		if limit is not None and n > limit:
+			n = limit
 		r = self.transfers[:n]
 		del self.transfers[:n]
 		return r
 
-	def __init__(self, signal, scheduler):
+	def __init__(self, signal, throttle, scheduler):
 		self._thread_id = None
 		self.signal = signal
+		self.throttle = throttle
 		self.scheduler = scheduler
 		self.transfers = []
 
@@ -569,7 +572,7 @@ class IOManager(object):
 			return
 
 		from fault.system import thread
-		largs = (self.scheduler, self.transfers.__len__, self.signal)
+		largs = (self.scheduler, self.transfers.__len__, self.signal, self.throttle.acquire)
 		self._thread_id = thread.create(loop, largs)
 
 	def schedule(self, workreference, io, *args):

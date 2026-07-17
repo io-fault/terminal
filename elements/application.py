@@ -1093,11 +1093,21 @@ class Session(Core):
 		"""
 
 		# Acquire events prepared by &.system.IO.loop.
-		events = self.host.io.take()
+		io = self.host.io
+		events = io.take(8)
 
 		for io_context, io_transfer in events:
 			# Apply the performed transfer using the &io_context.
 			io_context(io_transfer)
+
+		if io.transfers:
+			# Not finished.
+			self.device.synchronize_io()
+		else:
+			try:
+				io.throttle.release()
+			except:
+				pass
 
 	@comethod('session', 'ineffective')
 	def s_operation_not_found(self):
@@ -1438,8 +1448,9 @@ def main(inv:process.Invocation) -> process.Exit:
 	configuration.load_sections()
 	device = Device()
 
+	from fault.system.thread import amutex
 	host = Host(
-		IOManager.allocate(device.synchronize_io),
+		IOManager.allocate(device.synchronize_io, amutex()),
 		files.root,
 		System(
 			'system',
