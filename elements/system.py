@@ -470,9 +470,6 @@ class Transmission(IO):
 		if self.transferred(xfer):
 			scheduler.cancel(link)
 			log.append((self.final, None))
-			# Workaround to trigger ev_clear to release the file descriptor.
-			scheduler.enqueue(lambda: None)
-			del link
 
 @dataclass()
 class Completion(IO):
@@ -1448,7 +1445,7 @@ class Host(Context):
 		return self.receive(work, *work.target.extend_line_selection_relative())
 
 	@comethod('redirection', '>>*')
-	def replace_document(self, work, operand, path):
+	def extend_document(self, work, operand, path):
 		return self.receive(work, *work.target.extend_document())
 
 	def store_resource(self, log, source, view):
