@@ -870,7 +870,8 @@ class Process(Context):
 
 		# The target view is selected by the path for application instructions.
 		command = ixn.fields
-		rsession, frame, l, content, p, rf = self.session.select_path(path)
+		rsession, frame, vs, rf = self.session.select_path(path)
+		l, content, p = vs.refractions()
 
 		if '/' in command[0]:
 			# Full path.

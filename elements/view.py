@@ -2756,7 +2756,7 @@ class Frame(Core):
 
 		return '/' + s + '/' + '/'.join(str(x+1) for x in dpath)
 
-	def select_path(self, vertical:int, division:int, type=None):
+	def select_path(self, vertical:int, division:int, level:int=None, type=None):
 		"""
 		# Select the view triple identified by &vertical and &division along
 		# with the exact focus identified by &type.
@@ -2764,7 +2764,11 @@ class Frame(Core):
 
 		vi = int(vertical) - 1
 		di = int(division) - 1
-		ds = self.views[self.paths[(vi, di)]]
+		if level is None:
+			# Focused level.
+			ds = self.views[self.paths[(vi, di)]]
+		else:
+			ds = self.stacks[self.paths[(vi, di)]][int(level) - 1]
 
 		fe = ds.content
 		if type == 'location':
@@ -2772,7 +2776,7 @@ class Frame(Core):
 		elif type == 'prompt':
 			fe = ds.prompt
 
-		return *ds.refractions(), fe
+		return ds, fe
 
 	def __init__(self, prompting, define, theme, fs, keyboard, area, index=None, title=None):
 		self.prompting = prompting

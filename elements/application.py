@@ -191,11 +191,14 @@ class Session(Core):
 		"""
 
 		fid = path[0]
-		for f in self.frames:
+		for i, f in enumerate(self.frames):
 			if f.title == fid:
+				fid = i
 				break
 		else:
-			f = self.frames[int(fid)-1]
+			# Presume 1-based integer index.
+			fid = int(fid) - 1
+			f = self.frames[fid]
 
 		return (self, f, *f.select_path(*path[1:]))
 
