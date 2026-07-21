@@ -627,7 +627,7 @@ class ExecutionStatus(object):
 		self.operation = operation
 
 	def close(self):
-		self.work.interrupt()
+		pass
 
 	def update(self, li, structure):
 		# No response to insertions or deletions.

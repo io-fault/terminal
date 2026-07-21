@@ -3,7 +3,7 @@
 """
 import itertools
 import dataclasses
-from collections.abc import Sequence, Iterable
+from collections.abc import Sequence, Iterable, Mapping
 from typing import Optional, Callable
 from fault.system import files
 from fault.context import tools
@@ -2640,12 +2640,15 @@ class Structure(object):
 		# this field is updated when location history is used to switch the content.
 		# When location-content inconsistencies occur, this field is referenced to
 		# restore the &location.source's corresponding revision.
+	# /jobs/
+		# The dispatched work associated with the view.
 	"""
 
 	location: Refraction
 	content: Refraction
 	prompt: Refraction
 	content_location_revision: int = 0
+	jobs: Mapping[Work] = dataclasses.field(default_factory=dict)
 
 	def refractions(self):
 		return (self.location, self.content, self.prompt)
@@ -2687,6 +2690,39 @@ class Structure(object):
 		for v in self.refractions():
 			if v.area.lines > 0:
 				yield from v.refresh()
+
+	def work_dispatched(self, work):
+		self.jobs[work] = None
+
+	def work_completed(self, work):
+		wk = self.jobs.pop(work)
+
+	def work_list(self):
+		return list(self.jobs)
+
+	def work_suspend(self, negotiable=True):
+		js = list(self.jobs)
+		for work in js:
+			work.suspend()
+		return len(js)
+
+	def work_resume(self):
+		js = list(self.jobs)
+		for work in js:
+			work.resume()
+		return len(js)
+
+	def work_interrupt(self, negotiable=True):
+		js = list(self.jobs)
+		for work in js:
+			work.interrupt(negotiable)
+		return len(js)
+
+	def work_terminate(self, timeout=0):
+		js = list(self.jobs)
+		for work in js:
+			work.terminate(timeout)
+		return len(js)
 
 class Frame(Core):
 	"""
@@ -3521,6 +3557,45 @@ class Frame(Core):
 		pi = iter(itertools.chain(*map(Procedure.terminate, icommands)))
 		return Procedure.structure(pi)
 
+	@comethod('work', 'list')
+	def list_work(self, control):
+		"""
+		# List the currently executing work associated with the view.
+		"""
+
+		for work in control.work_list():
+			yield work.source[0].relevel(0)
+			for ln in work.source[1:]:
+				yield ln.relevel(1)
+
+	@comethod('work', 'terminate')
+	def terminate_work(self, control):
+		"""
+		# Request associated work termination.
+		"""
+		control.work_terminate()
+
+	@comethod('work', 'interrupt')
+	def interrupt_work(self, control):
+		"""
+		# Immediately stop associated work.
+		"""
+		control.work_interrupt(True)
+
+	@comethod('work', 'suspend')
+	def suspend_work(self, control):
+		"""
+		# Suspend associated work.
+		"""
+		control.work_suspend(True)
+
+	@comethod('work', 'resume')
+	def resume_work(self, control):
+		"""
+		# Resume any associated work.
+		"""
+		control.work_resume()
+
 	def pg_execute(self, dpath, session):
 		"""
 		# Execute the command present on the prompt of the &dpath division.
@@ -3529,7 +3604,8 @@ class Frame(Core):
 		# The dispatched &Work or a count of instructions executed.
 		"""
 
-		rl, target, pg = self.select(dpath).refractions()
+		vs = self.select(dpath)
+		rl, target, pg = vs.refractions()
 		src = pg.source
 		lines = list(src.select(0, src.ln_count()))
 		sys, path = System.structure(lines[0].ln_content)
@@ -3556,17 +3632,16 @@ class Frame(Core):
 			# process execution context
 			return exectx.evaluate(None, 0, path, proc)
 
-		work = Work.allocate(target, lines)
+		revision = pg.source.active
+		work = Work.allocate(vs, target, lines)
 		if isinstance(target, Reflection):
 			target.connect(session.transcript, exectx, work, path, proc)
-			wa = annotations.ExecutionStatus(work, 'prompt-dispatch', proc.title())
-			rl.annotate(wa)
 		else:
 			work.spawn(exectx, path, proc)
-			# Track work status with an annotation while Work continues.
 			wa = annotations.ExecutionStatus(work, 'prompt-dispatch', proc.title())
-			target.annotate(wa)
+			pg.annotate(wa)
 
+		vs.work_dispatched(work)
 		return work
 
 	@staticmethod
