@@ -3638,8 +3638,6 @@ class Frame(Core):
 			target.connect(session.transcript, exectx, work, path, proc)
 		else:
 			work.spawn(exectx, path, proc)
-			wa = annotations.ExecutionStatus(work, 'prompt-dispatch', proc.title())
-			pg.annotate(wa)
 
 		vs.work_dispatched(work)
 		return work
