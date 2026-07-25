@@ -2561,15 +2561,26 @@ class Work(object):
 	# Procedure dispatch context tracking process status.
 	"""
 
+	from dataclasses import field as _field
+
+	control: object
 	target: object
 	source: Sequence[Line]
-	procedures: Sequence[Procedure]
-	cursors: Sequence[object]
-	status: Mapping[object, dict]
+	procedures: Sequence[Procedure] = _field(default_factory=list)
+	cursors: Sequence[object] = _field(default_factory=list)
+	executing: Mapping[int, object] = _field(default_factory=dict)
+	log: Sequence[tuple[int, int]] = _field(default_factory=list)
+
+	from os import kill as ProcessSignal
+	from signal import SIGKILL, SIGINT, SIGSTOP, SIGTSTP, SIGCONT, SIGTERM
+	from fault.time.system import utc as SystemClock
+	SystemClock = staticmethod(SystemClock)
+
+	__hash__ = object.__hash__
 
 	@classmethod
-	def allocate(Class, relation, lines):
-		return Class(weakref.proxy(relation), lines, [], [], {})
+	def allocate(Class, control, relation, lines, *args):
+		return Class(weakref.proxy(control), weakref.proxy(relation), lines, *args)
 
 	@property
 	def system(self):
@@ -2596,7 +2607,7 @@ class Work(object):
 		cursor = system.evaluate(weakref.proxy(self), index, path, proc, copy)
 		self.procedures.append(proc)
 		self.cursors.append(cursor)
-		self.proceed(index, None, None)
+		self.proceed(index, None, None, None)
 
 		return index
 
@@ -2607,28 +2618,57 @@ class Work(object):
 
 		return tools.partial(self.spawn, system, path, proc), path, ()
 
-	def proceed(self, index, pid, code):
+	def proceed(self, index, pid, code, usage):
 		"""
 		# Proceed to the next step and configure the next callback.
 		"""
 
-		try:
-			if pid in self.status or pid is None:
-				self.status[pid] = code
+		ts = self.SystemClock()
+		start_time, xl = self.executing.pop(pid, (ts, None))
+		self.log.append((start_time, ts, pid, code, usage))
+
+		if index is not None:
+			try:
 				xl = self.cursors[index].send(code)
-				self.status[xl.event.source] = xl
-		except StopIteration:
-			# End of procedure.
-			self.cursors[index] = None
-			if self.cursors.count(None) == len(self.cursors):
+			except StopIteration:
+				# End of procedure.
+				self.cursors[index] = None
+				if self.cursors.count(None) == len(self.cursors):
+					self.control.work_completed(self)
+			else:
+				self.executing[xl.event.source] = (ts, xl)
+
+	def signal(self, signo):
+		"""
+		# Send the given &signo to all processes dispatched by the work.
+		"""
+
+		for pid, (start, link) in self.executing.items():
+			if link is not None:
 				try:
-					self.target.annotate(None)
-				except (ReferenceError, AttributeError):
-					# Nothing to do if the reference is gone or annotate is not present.
+					self.ProcessSignal(pid, signo)
+				except ProcessLookupError:
 					pass
 
-	from os import kill
-	def interrupt(self):
+	def suspend(self, negotiable=True):
+		"""
+		# Pause all executing processes.
+		"""
+		self.signal(self.SIGTSTP if negotiable else self.SIGSTOP)
+
+	def resume(self):
+		"""
+		# Continue all suspended processes.
+		"""
+		self.signal(self.SIGCONT)
+
+	def terminate(self, timeout=None):
+		"""
+		# Request termination.
+		"""
+		self.signal(self.SIGTERM)
+
+	def interrupt(self, negotiable=True):
 		# File descriptors can be held by the cursors,
 		# so force close the generators here.
 		for c in self.cursors:
@@ -2636,12 +2676,79 @@ class Work(object):
 				c.close()
 
 		# Let the later completions finish the status and zero cursors.
-		for pid, link in self.status.items():
-			if link is not None and not isinstance(link, int):
-				try:
-					self.kill(pid, 9)
-				except ProcessLookupError:
-					pass
+		self.signal(self.SIGINT if negotiable else self.SIGKILL)
+
+class WorkControl(Protocol):
+	"""
+	# Interfaces for controlling and monitoring work sets.
+
+	# Implemented by &Work owners, &.view.Structure.
+	"""
+
+	def work_dispatched(self, work:Work):
+		"""
+		# Called when &work was spawned for monitoring by &self.
+		"""
+		pass
+
+	def work_completed(self, work:Work):
+		"""
+		# Called when monitored &work was completed.
+		"""
+		pass
+
+	def work_suspend(self, negotiable=True) -> int:
+		"""
+		# Pause all monitored work such that it may be signalled to continue.
+
+		# [ Parameters ]
+		# /negotiable/
+			# Whether the suspension is a requirement. On POSIX, this means `SIGSTOP`
+			# when &False and `SIGTSTP` when &True.
+		# [ Returns ]
+		# Number of work units signalled.
+		"""
+		pass
+
+	def work_resume(self) -> int:
+		"""
+		# Continue any suspended work.
+
+		# [ Returns ]
+		# Number of work units signalled.
+		"""
+		pass
+
+	def work_interrupt(self, negotiable=True) -> int:
+		"""
+		# Stop all work operations.
+
+		# [ Parameters ]
+		# /negotiable/
+			# Whether the interrupt is a requirement. On POSIX, this means `SIGKILL`
+			# when &False and `SIGINT` when &True.
+		# [ Returns ]
+		# Number of work units signalled.
+		"""
+		pass
+
+	def work_terminate(self, timeout=None) -> int:
+		"""
+		# Request work operations to exit.
+
+		# [ Parameters ]
+		# /timeout/
+			# The time to wait before escalating to interrupt.
+		# [ Returns ]
+		# Number of work units signalled.
+		"""
+		pass
+
+	def work_list(self) -> Sequence[Work]:
+		"""
+		# Snapshot of dispatched work instances.
+		"""
+		pass
 
 @dataclass()
 class Syntax(object):

@@ -615,32 +615,3 @@ class Directory(object):
 		elif self.status != status:
 			# Update &matches.
 			self.select(status)
-
-class ExecutionStatus(object):
-	"""
-	# Process execution status.
-	"""
-
-	def __init__(self, work, title, operation):
-		self.work = work
-		self.title = title
-		self.operation = operation
-
-	def close(self):
-		self.work.interrupt()
-
-	def update(self, li, structure):
-		# No response to insertions or deletions.
-		pass
-
-	def image(self):
-		yield ('inclusion-keyword', self.operation)
-		yield ('field-annotation-separator', '[')
-		yield ('literal-words', self.insertion())
-		yield ('field-annotation-separator', ']')
-
-	def insertion(self):
-		for pid, code in self.work.status.items():
-			if code is not None and not isinstance(code, int):
-				return str(pid)
-		return "-"

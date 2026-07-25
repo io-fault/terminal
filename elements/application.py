@@ -191,11 +191,14 @@ class Session(Core):
 		"""
 
 		fid = path[0]
-		for f in self.frames:
+		for i, f in enumerate(self.frames):
 			if f.title == fid:
+				fid = i
 				break
 		else:
-			f = self.frames[int(fid)-1]
+			# Presume 1-based integer index.
+			fid = int(fid) - 1
+			f = self.frames[fid]
 
 		return (self, f, *f.select_path(*path[1:]))
 
@@ -898,6 +901,7 @@ class Session(Core):
 		'system': (lambda s, f, k: s._content_system(s, f)),
 		'process': (lambda s, f, k: s.process),
 		'host': (lambda s, f, k: s.host),
+		'control': (lambda s, f, k: f['control']),
 		'log': (lambda s, f, k: s.log),
 		'focus': (lambda s, f, k: f),
 		'key': (lambda s, f, k: k),
@@ -1007,6 +1011,7 @@ class Session(Core):
 				'location': lcp.location,
 				'content': lcp.content,
 				'prompt': lcp.prompt,
+				'control': lcp, # Work Controls
 			}
 			cl = tools.partial(self.lookup, [view.source, view, frame, self])
 			self._oc = tools.cachedcalls(16)(cl)

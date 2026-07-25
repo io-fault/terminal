@@ -499,7 +499,7 @@ class Completion(IO):
 			except (ReferenceError, AttributeError):
 				pass
 			else:
-				wpeval(index, rpid, self.exit_code)
+				wpeval(index, rpid, self.exit_code, self.usage)
 
 	def transition(self, scheduler, log, link):
 		rpid, status, rusage = self.system_operation(link.event.source, 0)
@@ -870,7 +870,8 @@ class Process(Context):
 
 		# The target view is selected by the path for application instructions.
 		command = ixn.fields
-		rsession, frame, l, content, p, rf = self.session.select_path(path)
+		rsession, frame, vs, rf = self.session.select_path(path)
+		l, content, p = vs.refractions()
 
 		if '/' in command[0]:
 			# Full path.
@@ -910,10 +911,16 @@ class Process(Context):
 			'location': l,
 			'text': text,
 			'quantity': q,
+			'control': vs,
 		}
 
 		rsession.trace(phy, isrc, itype, mpath, op)
-		op(*(x(rsession, focus, '') for x in sels), *args) # Prompt instruction.
+		r = op(*(x(rsession, focus, '') for x in sels), *args) # Prompt instruction.
+		if r not in {None, True, False}:
+			# Line insertion.
+			content.source.insert_lines(content.coordinates()[0], r)
+			content.source.checkpoint()
+
 		return True
 
 	def evaluate(self, workreference, index, path, procedure, fdmap=()):
@@ -1284,7 +1291,7 @@ class Host(Context):
 				if isinstance(step, Composition):
 					exit_code = (yield self.compose(workreference, index, path, step, self.replicate(fdmap)))
 				elif isinstance(step, Procedure):
-					# Replicate is necessary here as the sub-generato
+					# Replicate is necessary here as the sub-generator
 					# will be closing the fdmap it receives as well.
 					exit_code = (yield from self.evaluate(workreference, index, path, step, self.replicate(fdmap)))
 				else:
@@ -1295,6 +1302,7 @@ class Host(Context):
 						path = list((self.fs_root + path) @ step.fields[1])
 						exit_code = 0
 					else:
+						# System command.
 						exit_code = (yield self.execute(workreference, index, path, step, self.replicate(fdmap)))
 
 				skip = check(exit_code)
