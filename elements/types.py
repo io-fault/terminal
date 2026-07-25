@@ -2568,10 +2568,13 @@ class Work(object):
 	source: Sequence[Line]
 	procedures: Sequence[Procedure] = _field(default_factory=list)
 	cursors: Sequence[object] = _field(default_factory=list)
-	status: Mapping[object, dict] = _field(default_factory=dict)
+	executing: Mapping[int, object] = _field(default_factory=dict)
+	log: Sequence[tuple[int, int]] = _field(default_factory=list)
 
 	from os import kill as ProcessSignal
 	from signal import SIGKILL, SIGINT, SIGSTOP, SIGTSTP, SIGCONT, SIGTERM
+	from fault.time.system import utc as SystemClock
+	SystemClock = staticmethod(SystemClock)
 
 	__hash__ = object.__hash__
 
@@ -2604,7 +2607,7 @@ class Work(object):
 		cursor = system.evaluate(weakref.proxy(self), index, path, proc, copy)
 		self.procedures.append(proc)
 		self.cursors.append(cursor)
-		self.proceed(index, None, None)
+		self.proceed(index, None, None, None)
 
 		return index
 
@@ -2615,29 +2618,33 @@ class Work(object):
 
 		return tools.partial(self.spawn, system, path, proc), path, ()
 
-	def proceed(self, index, pid, code):
+	def proceed(self, index, pid, code, usage):
 		"""
 		# Proceed to the next step and configure the next callback.
 		"""
 
-		try:
-			if pid in self.status or pid is None:
-				self.status[pid] = code
+		ts = self.SystemClock()
+		start_time, xl = self.executing.pop(pid, (ts, None))
+		self.log.append((start_time, ts, pid, code, usage))
+
+		if index is not None:
+			try:
 				xl = self.cursors[index].send(code)
-				self.status[xl.event.source] = xl
-		except StopIteration:
-			# End of procedure.
-			self.cursors[index] = None
-			if self.cursors.count(None) == len(self.cursors):
-				self.control.work_completed(self)
+			except StopIteration:
+				# End of procedure.
+				self.cursors[index] = None
+				if self.cursors.count(None) == len(self.cursors):
+					self.control.work_completed(self)
+			else:
+				self.executing[xl.event.source] = (ts, xl)
 
 	def signal(self, signo):
 		"""
 		# Send the given &signo to all processes dispatched by the work.
 		"""
 
-		for pid, link in self.status.items():
-			if link is not None and not isinstance(link, int):
+		for pid, (start, link) in self.executing.items():
+			if link is not None:
 				try:
 					self.ProcessSignal(pid, signo)
 				except ProcessLookupError:

@@ -499,7 +499,7 @@ class Completion(IO):
 			except (ReferenceError, AttributeError):
 				pass
 			else:
-				wpeval(index, rpid, self.exit_code)
+				wpeval(index, rpid, self.exit_code, self.usage)
 
 	def transition(self, scheduler, log, link):
 		rpid, status, rusage = self.system_operation(link.event.source, 0)
