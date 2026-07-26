@@ -1305,7 +1305,7 @@ class System(object):
 	# /sys_title/
 		# An optional, user defined, label used to distinguish a system.
 
-		# Sessions use &System instances to select &.element.Execution instances.
+		# Sessions use &System instances to select &.system.Context instances.
 		# In cases where isolation or variation is desired by a user, the title
 		# can be used to force a distinction to be made so that process sets can
 		# be isolated without compromising one of the other fields.

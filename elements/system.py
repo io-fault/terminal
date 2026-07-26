@@ -788,10 +788,17 @@ class IOManager(object):
 class Context(Core):
 	"""
 	# The common system context for dispatching and managing jobs.
+
+	# [ Elements ]
+	# /identity/
+		# The identifier that should be used to key an instance.
+	# /index/
+		# The index of instructions available for execution.
 	"""
 
 	identity: System
 	dispatching: bool
+	index: Mapping
 
 	def execute(self):
 		pass
@@ -829,13 +836,6 @@ class Process(Context):
 	"""
 	# Application instruction interface and thread manager for user
 	# dispatched operations.
-
-	# [ Elements ]
-	# /identity/
-		# The identity of the system that operations are dispatched on.
-		# The object that is used to identify an &Execution instance within a &Session.
-	# /index/
-		# The index of application instructions.
 	"""
 
 	dispatching = False
@@ -971,9 +971,6 @@ class Host(Context):
 	# [ Elements ]
 	# /io/
 		# The I/O event handler used to service and spawn &Executable processes.
-	# /identity/
-		# The identity of the system that operations are dispatched on.
-		# The object that is used to identify an &Execution instance within a &Session.
 	# /encoding/
 		# The encoding to use for environment variables and argument vectors.
 		# This may *not* be consistent with the preferred filesystem encoding.
