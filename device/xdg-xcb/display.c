@@ -8,7 +8,7 @@ device_release_image(struct CellMatrix *cmd, struct Device_XImage *ri)
 {
 	if (ri->di_context != NULL)
 	{
-		cairo_destory(ri->di_context);
+		cairo_destroy(ri->di_context);
 		ri->di_context = NULL;
 	}
 

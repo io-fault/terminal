@@ -1,6 +1,10 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <math.h>
+#include <wchar.h>
+#include <uchar.h>
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -119,7 +123,8 @@ struct CellMatrix
 	uint8_t xk_event_type;
 };
 
+void device_initialize_display(struct CellMatrix *);
 int device_initialize_controller(struct CellMatrix *, struct Device_XController *);
-int device_wait_key(struct CellMatrix *cmd, struct ControllerStatus *ctl);
+int device_wait_event(struct CellMatrix *);
 struct Device_XImage *cache_acquire_tile(struct Device_TileCache *, struct Cell *, system_units_t *, system_units_t *);
 struct Device_XImage *cache_require_tile(struct Device_XDisplay *, struct Cell *, system_units_t *, system_units_t *);
