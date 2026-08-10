@@ -449,6 +449,7 @@ class Transmission(IO):
 			try:
 				self.data = memoryview(next(self.state))
 			except StopIteration:
+				self.data = b'' # Release (zero-length) memoryview reference.
 				return True
 
 		return False
@@ -459,17 +460,24 @@ class Transmission(IO):
 
 	def transition(self, scheduler, log, link):
 		try:
-			byteswritten = self.system_operation(link.event.port, self.data[:self.write_size])
-		except BrokenPipeError:
-			byteswritten = 0
-			self.interrupt()
+			try:
+				byteswritten = self.system_operation(link.event.port, self.data[:self.write_size])
+			except BrokenPipeError:
+				byteswritten = 0
+				self.interrupt()
 
-		xfer = self.data[:byteswritten]
-		log.append((self.execute, xfer))
+			xfer = self.data[:byteswritten]
+			log.append((self.execute, xfer))
 
-		if self.transferred(xfer):
-			scheduler.cancel(link)
-			log.append((self.final, None))
+			if self.transferred(xfer):
+				scheduler.cancel(link)
+				log.append((self.final, None))
+			elif sys.platform == 'linux':
+				# Resubmit.
+				scheduler.cancel(link)
+				scheduler.dispatch(link)
+		except BlockingIOError:
+			pass
 
 @dataclass()
 class Completion(IO):
