@@ -1428,6 +1428,10 @@ def identify_executable(inv):
 def main(inv:process.Invocation) -> process.Exit:
 	from .. import configuration
 
+	# Disable SIGPIPE. Necessary on linux; optional on others.
+	import signal
+	signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+
 	inv.imports(['TERMINAL_LOG', 'TERMINAL_SESSION'])
 	config = {
 		'interface-device': None,
