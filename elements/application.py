@@ -1103,7 +1103,10 @@ class Session(Core):
 
 		for io_context, io_transfer in events:
 			# Apply the performed transfer using the &io_context.
-			io_context(io_transfer)
+			try:
+				io_context(io_transfer)
+			except BaseException as ei:
+				self.error("I/O Integration", ei)
 
 		if io.transfers:
 			# Not finished.
