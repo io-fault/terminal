@@ -144,6 +144,39 @@ text = {
 
 	'command-terminator': 'red',
 	'delimiter': 'absolute-red',
+
+	# Execution status displays(monitors).
+	'monitor-frame-active': 'absolute-green',
+	'monitor-frame-inactive': 'absolute-yellow',
+	'monitor-frame-error': 'absolute-red',
+
+	'status-title': 'foreground',
+	'status-identity': 'gray',
+
+	# Unit label colors: blue-s, yellow-m, red-h.
+	'status-duration': 'foreground',
+	'status-duration-seconds': 'blue',
+	'status-duration-minutes': 'orange',
+	'status-duration-hours': 'red',
+	'status-duration-days': 'absolute-red',
+	'status-duration-years': 'gray',
+
+	'status-field-operation': 'dark',
+	'status-field-label': 'dark',
+	'status-field-separator': 'dark',
+
+	# Work progress.
+	'status-transactions-executing': 'orange',
+	'status-transactions-executed': 'green',
+	'status-transactions-failed': 'red',
+	'status-transactions-granted': 'blue',
+
+	'status-resource-usage': 'magenta',
+
+	# Advisory message counts.
+	'status-advisory-notices': 'blue',
+	'status-advisory-warnings': 'yellow',
+	'status-advisory-errors': 'red',
 }
 
 # Cell fill colors. Usually, just default assigned to background.
