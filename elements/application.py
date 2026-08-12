@@ -220,6 +220,9 @@ class Session(Core):
 		self.logfile = None
 		self.cache = [] # Lines
 
+		# Status monitors.
+		self.monitor_images = {}
+
 		self.executable = executable
 
 		self.process = Process(
@@ -511,6 +514,7 @@ class Session(Core):
 		rf = Refraction(src)
 		rf.forms = self.pg_forms(src)
 		rf.keyboard = self.keyboard
+		rf.monitor_images = self.monitor_images
 
 		return rf
 
@@ -530,6 +534,7 @@ class Session(Core):
 		rf = Refraction(src)
 		rf.forms = self.rl_forms(src, reference.ref_context)
 		rf.keyboard = self.keyboard
+		rf.monitor_images = self.monitor_images
 
 		return rf
 
@@ -573,6 +578,7 @@ class Session(Core):
 				load = True
 
 			rf = Refraction(source)
+			rf.monitor_images = self.monitor_images
 		rf.keyboard = self.keyboard
 
 		if load:

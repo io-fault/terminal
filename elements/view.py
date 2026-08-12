@@ -455,6 +455,7 @@ class Refraction(CellMatrix):
 		self.system = self.source.origin.ref_system # Default execution context.
 		self.forms = resource.forms
 		self.annotation = None
+		self.monitor_images = None
 
 		self.focus = (Position(), Position())
 		self.query = {} # Query state; last search, seek, etc.
@@ -889,14 +890,14 @@ class Refraction(CellMatrix):
 		# Render the &Phrase instance for the given line.
 		"""
 
-		return next(self.forms.render((self.source.sole(offset),)))
+		return next(self.forms.render((self.source.sole(offset),), context=self.monitor_images))
 
 	def iterphrases(self, start, stop, *, islice=itertools.islice):
 		"""
 		# Render the &Phrase instances for the given range.
 		"""
 
-		c = self.forms.render(self.source.select(start, stop))
+		c = self.forms.render(self.source.select(start, stop), context=self.monitor_images)
 		e = itertools.repeat(self.forms.lf_empty_phrase)
 		return islice(itertools.chain(c, e), 0, stop - start)
 
@@ -965,7 +966,7 @@ class Refraction(CellMatrix):
 			except IndexError:
 				li = self.forms.ln_interpret("", offset=lo)
 
-			ph = next(rline((li,)))
+			ph = next(rline((li,), context=self.monitor_images))
 			larea = slice(rlo, rlo+1)
 			self.image.update(larea, (ph,))
 			yield from self.v_render(larea)
@@ -1327,9 +1328,9 @@ class Refraction(CellMatrix):
 			lfields = list(lfields)
 			fai.update(li, lfields)
 			caf = phc(Line(ln, 0, ""), delimit(fai))
-			phrase = Phrase(itertools.chain(phc(li, lfields), caf))
+			phrase = Phrase(itertools.chain(phc(li, lfields, context=self.monitor_images), caf))
 		else:
-			phrase = Phrase(phc(li, lfields))
+			phrase = Phrase(phc(li, lfields, context=self.monitor_images))
 
 		# Translate codepoint offsets to cell offsets.
 		m_cell = phrase.m_cell
@@ -3044,6 +3045,7 @@ class Frame(Core):
 			new = Refraction(source)
 			new.focus[0].set(-1)
 			new.keyboard = session.keyboard
+			new.monitor_images = session.monitor_images
 
 		self.attach(dpath, new)
 		self.views[vi].content_location_revision = rl_syntax.source.active
