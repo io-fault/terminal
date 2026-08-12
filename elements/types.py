@@ -1722,14 +1722,14 @@ class Reformulations(object):
 
 		return Line(ln_offset, il, lc, lx)
 
-	def render(self, ilines:Iterable[Line]):
+	def render(self, ilines:Iterable[Line], context=None):
 		"""
 		# Construct &Phrase instances from the given &ilines.
 		"""
 
 		lines = list(ilines)
 		return map(Phrase, (
-			self.compose(li, fields)
+			self.compose(li, fields, context=context)
 			for li, fields in zip(
 				lines,
 				self.lf_fields.structure(lines),
@@ -1872,7 +1872,7 @@ class Reformulations(object):
 			for ft, fc in fields
 		)
 
-	def cursor(self, line, fields) -> Iterable[Words]:
+	def cursor(self, line, fields, context=None) -> Iterable[Words]:
 		"""
 		# Construct a Phrase instance representing the structured line
 		# for display with a cursor.
@@ -1888,9 +1888,14 @@ class Reformulations(object):
 
 		yield from self.redirect_indentation(itype, line.ln_level)
 		yield from self.redirect_exceptions(content)
-		yield Redirect((1, ' ', tg('line-termination'), '\n'))
 
-	def compose(self, line, fields) -> Iterable[Words]:
+		yield Redirect((1, ' ', tg('line-termination'), '\n'))
+		if line.ln_extension and context is not None:
+			for monitor in line.ln_extension.split():
+				ext = context.get(monitor, ())
+				yield from Phrase.redirect(self.lf_units, ((tg(ft, ft), fc) for ft, fc in ext))
+
+	def compose(self, line, fields, context=None) -> Iterable[Words]:
 		"""
 		# Construct a Phrase instance representing the structured line.
 		"""
@@ -1913,7 +1918,16 @@ class Reformulations(object):
 
 		yield from self.redirect_indentation(itype, line.ln_level)
 		yield from self.redirect_exceptions(content)
-		yield from self.redirect_trail(line.ln_trail)
+		if line.ln_extension and context is not None:
+			# Presumably, the monitor will serve as the extra cursor cell, so
+			# only display the highlighted spaces of the trail.
+			yield from list(self.redirect_trail(line.ln_trail))[:-1]
+
+			for monitor in line.ln_extension.split():
+				ext = context.get(monitor, ())
+				yield from Phrase.redirect(self.lf_units, ((tg(ft, ft), fc) for ft, fc in ext))
+		else:
+			yield from self.redirect_trail(line.ln_trail)
 
 	def __str__(self):
 		return ''.join(x[1] for x in self.i_format())
