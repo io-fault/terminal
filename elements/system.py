@@ -1254,7 +1254,7 @@ class Host(Context):
 		xps = executable.fs_path_string()
 		argv[0] = xps
 
-		inv = Invocation(xps, argv, environ=self.local(path))
+		inv = Invocation(xps, argv, environ=self.local(path), set_process_group=True)
 		red = ixn.redirect(workreference, self, path)
 		return (inv.spawn, path, red)
 
