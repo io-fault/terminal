@@ -536,6 +536,42 @@ class IOManager(object):
 	# System dispatch for I/O jobs.
 	"""
 
+	from fault.time.types import Timestamp
+	Time = Timestamp.Measure
+	from fault.time.system import utc
+	Clock = staticmethod(utc)
+	del utc
+
+	from fault.system import query as sq
+	from fault.transcript import metrics as usage_metrics_types
+	read_process_usage = staticmethod(sq.process_usage_scan)
+	zero_usage = usage_metrics_types.Procedure(
+		usage_metrics_types.Work(w_prepared=1),
+		usage_metrics_types.Advisory(),
+		usage_metrics_types.Resource(),
+	)
+	del sq
+
+	@classmethod
+	def usage_reader(Class, pid=None, limit=128):
+		"""
+		# Construct a callable to read the current usage without holding
+		# references to &Class.
+		"""
+
+		def rpu(pid=pid, limit=limit, reaping=False, *, Time=Class.Time, rpu=Class.read_process_usage, umt=Class.usage_metrics_types):
+			pm = rpu(pid, limit)
+			d = Time.of(second=pm.maximum_elapsed_time)
+
+			pt = pm.processing_time()
+			ru = umt.Resource(pm.process_count, pm.average_maximum_memory, pt, d)
+			if reaping:
+				pm.zombie_count -= 1
+			return (
+				umt.Advisory(pm.locked_count, pm.suspended_count, pm.zombie_count), ru
+			)
+		return rpu
+
 	@classmethod
 	def allocate(Class, signal, throttle, *, Scheduler=Scheduler):
 		"""
