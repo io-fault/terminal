@@ -482,38 +482,48 @@ class Transmission(IO):
 @dataclass()
 class Completion(IO):
 	pid: int = None
+	system_clock: Callable = None
+	usage_reader: Callable = None
 	exit_code: int = None
 	usage = None
+	event_type = Event.process_exit
 	interrupt_signal = signal.SIGKILL
 
-	try:
-		system_operation = os.wait4
-	except AttributeError:
-		# Maintain the invariant by extending the returned tuple with None.
-		@staticmethod
-		def system_operation(pid, options, *, op=os.waitpid):
-			return op(pid, options) + (None,)
-	event_type = Event.process_exit
+	# Status and usage reading.
+	system_operation = staticmethod(os.waitpid)
 
 	def interrupt(self):
 		if self.exit_code is None:
 			os.kill(self.pid, self.interrupt_signal)
 
 	def execute(self, status):
-		work, index, event, rpid, self.exit_code, self.usage = status
+		event, work, *evalp = status
 		if work is not None:
 			try:
 				wpeval = work.proceed
 			except (ReferenceError, AttributeError):
 				pass
 			else:
-				wpeval(index, rpid, self.exit_code, self.usage)
+				wpeval(*evalp)
 
 	def transition(self, scheduler, log, link):
-		rpid, status, rusage = self.system_operation(link.event.source, 0)
+		time = self.system_clock()
+		advisory, resource = self.usage_reader(limit=1, reaping=True)
+		rpid, status = self.system_operation(link.event.source, 0)
 		assert rpid == link.event.source
-		code = os.waitstatus_to_exitcode(status)
-		log.append((self.execute, (*link.context, link.event, rpid, code, rusage)))
+
+		exitcode = os.waitstatus_to_exitcode(status)
+		prepared = 1
+		if exitcode == 0:
+			executed = 1
+			failed = 0
+		elif exitcode is not None:
+			failed = 1
+			executed = 0
+		w = IOManager.usage_metrics_types.Work(prepared, executed, 0, failed)
+		rusage = IOManager.usage_metrics_types.Procedure(w, advisory, resource)
+
+		log.append((self.execute, (link.event, *link.context, rpid, exitcode, time, rusage)))
 
 def loop(scheduler, pending, signal, throttle, *, delay=16, limit=16):
 	"""
@@ -635,7 +645,9 @@ class IOManager(object):
 		"""
 
 		if pid is not None:
-			return self.schedule(workreference, Completion(pid), pid)
+			ur = self.usage_reader(pid=pid)
+			sio = Completion(pid, self.Clock, ur)
+			return self.schedule(workreference, sio, pid)
 
 	def pipe(self, workreference, index, readcontext, writecontext, spawns, path):
 		"""

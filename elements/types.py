@@ -2816,6 +2816,7 @@ class Work(object):
 
 	from dataclasses import field as _field
 
+	monitor: Monitor
 	control: object
 	target: object
 	source: Sequence[Line]
@@ -2826,14 +2827,12 @@ class Work(object):
 
 	from os import kill as ProcessSignal
 	from signal import SIGKILL, SIGINT, SIGSTOP, SIGTSTP, SIGCONT, SIGTERM
-	from fault.time.system import utc as SystemClock
-	SystemClock = staticmethod(SystemClock)
 
 	__hash__ = object.__hash__
 
 	@classmethod
-	def allocate(Class, control, relation, lines, *args):
-		return Class(weakref.proxy(control), weakref.proxy(relation), lines, *args)
+	def allocate(Class, monitor, control, relation, lines, *args):
+		return Class(monitor, weakref.proxy(control), weakref.proxy(relation), lines, *args)
 
 	@property
 	def system(self):
@@ -2860,7 +2859,7 @@ class Work(object):
 		cursor = system.evaluate(weakref.proxy(self), index, path, proc, copy)
 		self.procedures.append(proc)
 		self.cursors.append(cursor)
-		self.proceed(index, None, None, None)
+		self.proceed(index, None, None, system.io.Clock(), system.io.zero_usage)
 
 		return index
 
@@ -2871,25 +2870,30 @@ class Work(object):
 
 		return tools.partial(self.spawn, system, path, proc), path, ()
 
-	def proceed(self, index, pid, code, usage):
+	def proceed(self, index, pid, exitcode, time, usage):
 		"""
 		# Proceed to the next step and configure the next callback.
 		"""
 
-		ts = self.SystemClock()
-		start_time, xl = self.executing.pop(pid, (ts, None))
-		self.log.append((start_time, ts, pid, code, usage))
+		start_time, xl = self.executing.pop(pid, (time, None))
+		self.log.append((start_time, time, pid, exitcode, usage))
+		if index is None:
+			# No cursor; likely initialization from spawn.
+			return
 
-		if index is not None:
-			try:
-				xl = self.cursors[index].send(code)
-			except StopIteration:
-				# End of procedure.
-				self.cursors[index] = None
-				if self.cursors.count(None) == len(self.cursors):
-					self.control.work_completed(self)
-			else:
-				self.executing[xl.event.source] = (ts, xl)
+		try:
+			xl = self.cursors[index].send(exitcode)
+		except StopIteration:
+			# End of procedure.
+			self.cursors[index] = None
+			if self.cursors.count(None) == len(self.cursors):
+				self.control.work_completed(self)
+			pid_new = None
+		else:
+			pid_new = xl.event.source
+			self.executing[pid_new] = (time, xl)
+
+		self.monitor.switch(usage, pid_new, time)
 
 	def signal(self, signo):
 		"""

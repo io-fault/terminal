@@ -2697,6 +2697,7 @@ class Structure(object):
 
 	def work_completed(self, work):
 		wk = self.jobs.pop(work)
+		work.monitor.clear()
 
 	def work_list(self):
 		return list(self.jobs)
@@ -3635,13 +3636,20 @@ class Frame(Core):
 			return exectx.evaluate(None, 0, path, proc)
 
 		revision = pg.source.active
-		work = Work.allocate(vs, target, lines)
+		monitor = session.monitor(target.source, target.coordinates()[0])
+		if hasattr(exectx, 'io'):
+			monitor.usage = exectx.io.usage_reader(limit=128)
+		else:
+			monitor.usage = (lambda x: None)
+		work = Work.allocate(monitor, vs, target, lines)
 		if isinstance(target, Reflection):
 			target.connect(session.transcript, exectx, work, path, proc)
 		else:
+			monitor.install()
 			work.spawn(exectx, path, proc)
 
 		vs.work_dispatched(work)
+		session.monitor_status()
 		return work
 
 	@staticmethod
