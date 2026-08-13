@@ -473,7 +473,7 @@ class Transmission(IO):
 				scheduler.cancel(link)
 				log.append((self.final, None))
 			elif sys.platform == 'linux':
-				# Resubmit.
+				# Resubmit. (Yield for other I/O usage)
 				scheduler.cancel(link)
 				scheduler.dispatch(link)
 		except BlockingIOError:
