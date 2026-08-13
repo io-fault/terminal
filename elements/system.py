@@ -575,7 +575,7 @@ class IOManager(object):
 
 			pt = pm.processing_time()
 			ru = umt.Resource(pm.process_count, pm.average_maximum_memory, pt, d)
-			if reaping:
+			if reaping and pm.zombie_count > 0:
 				pm.zombie_count -= 1
 			return (
 				umt.Advisory(pm.locked_count, pm.suspended_count, pm.zombie_count), ru
