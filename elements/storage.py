@@ -393,6 +393,47 @@ class Resource(types.Core):
 
 		self._commit(self.modifications.redo(quantity))
 
+	def attach_line_monitor(self, lo:int, monitor:int):
+		li = self.sole(lo)
+		ms = str(monitor)
+		mv = li.ln_extension.split()
+		if ms in mv:
+			return False
+
+		mv.append(ms)
+		li = li.__class__(li.ln_offset, li.ln_level, li.ln_content, ' '.join(mv))
+		self.elements[lo] = self.forms.ln_sequence(li)
+		return True
+
+	def line_monitor_attached(self, lo:int, monitor:int):
+		li = self.sole(lo)
+		ms = str(monitor)
+		mv = li.ln_extension.split()
+		return ms in mv
+
+	def detach_line_monitor(self, lo:int, monitor:int):
+		li = self.sole(lo)
+		ms = str(monitor)
+		mv = li.ln_extension.split()
+		try:
+			mv.remove(ms)
+		except ValueError:
+			return False
+
+		li = li.__class__(li.ln_offset, li.ln_level, li.ln_content, ' '.join(mv))
+		self.elements[lo] = self.forms.ln_sequence(li)
+		return True
+
+	def lines_changed(self, *lines):
+		ds = [delta.Update(ln, "", "", 0) for ln in set(lines)]
+		vs = list(self.views)
+		for rf in vs:
+			if not rf.frame_visible:
+				continue
+
+			for d in ds:
+				rf.deltas.extend(list(rf.v_update(d)))
+
 	def _commit(self, deltas):
 		"""
 		# Apply pending modifications.

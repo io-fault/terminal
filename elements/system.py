@@ -473,7 +473,7 @@ class Transmission(IO):
 				scheduler.cancel(link)
 				log.append((self.final, None))
 			elif sys.platform == 'linux':
-				# Resubmit.
+				# Resubmit. (Yield for other I/O usage)
 				scheduler.cancel(link)
 				scheduler.dispatch(link)
 		except BlockingIOError:
@@ -482,38 +482,48 @@ class Transmission(IO):
 @dataclass()
 class Completion(IO):
 	pid: int = None
+	system_clock: Callable = None
+	usage_reader: Callable = None
 	exit_code: int = None
 	usage = None
+	event_type = Event.process_exit
 	interrupt_signal = signal.SIGKILL
 
-	try:
-		system_operation = os.wait4
-	except AttributeError:
-		# Maintain the invariant by extending the returned tuple with None.
-		@staticmethod
-		def system_operation(pid, options, *, op=os.waitpid):
-			return op(pid, options) + (None,)
-	event_type = Event.process_exit
+	# Status and usage reading.
+	system_operation = staticmethod(os.waitpid)
 
 	def interrupt(self):
 		if self.exit_code is None:
 			os.kill(self.pid, self.interrupt_signal)
 
 	def execute(self, status):
-		work, index, event, rpid, self.exit_code, self.usage = status
+		event, work, *evalp = status
 		if work is not None:
 			try:
 				wpeval = work.proceed
 			except (ReferenceError, AttributeError):
 				pass
 			else:
-				wpeval(index, rpid, self.exit_code, self.usage)
+				wpeval(*evalp)
 
 	def transition(self, scheduler, log, link):
-		rpid, status, rusage = self.system_operation(link.event.source, 0)
+		time = self.system_clock()
+		advisory, resource = self.usage_reader(limit=1, reaping=True)
+		rpid, status = self.system_operation(link.event.source, 0)
 		assert rpid == link.event.source
-		code = os.waitstatus_to_exitcode(status)
-		log.append((self.execute, (*link.context, link.event, rpid, code, rusage)))
+
+		exitcode = os.waitstatus_to_exitcode(status)
+		prepared = 1
+		if exitcode == 0:
+			executed = 1
+			failed = 0
+		elif exitcode is not None:
+			failed = 1
+			executed = 0
+		w = IOManager.usage_metrics_types.Work(prepared, executed, 0, failed)
+		rusage = IOManager.usage_metrics_types.Procedure(w, advisory, resource)
+
+		log.append((self.execute, (link.event, *link.context, rpid, exitcode, time, rusage)))
 
 def loop(scheduler, pending, signal, throttle, *, delay=16, limit=16):
 	"""
@@ -535,6 +545,42 @@ class IOManager(object):
 	"""
 	# System dispatch for I/O jobs.
 	"""
+
+	from fault.time.types import Timestamp
+	Time = Timestamp.Measure
+	from fault.time.system import utc
+	Clock = staticmethod(utc)
+	del utc
+
+	from fault.system import query as sq
+	from fault.transcript import metrics as usage_metrics_types
+	read_process_usage = staticmethod(sq.process_usage_scan)
+	zero_usage = usage_metrics_types.Procedure(
+		usage_metrics_types.Work(w_prepared=1),
+		usage_metrics_types.Advisory(),
+		usage_metrics_types.Resource(),
+	)
+	del sq
+
+	@classmethod
+	def usage_reader(Class, pid=None, limit=128):
+		"""
+		# Construct a callable to read the current usage without holding
+		# references to &Class.
+		"""
+
+		def rpu(pid=pid, limit=limit, reaping=False, *, Time=Class.Time, rpu=Class.read_process_usage, umt=Class.usage_metrics_types):
+			pm = rpu(pid, limit)
+			d = Time.of(second=pm.maximum_elapsed_time)
+
+			pt = pm.processing_time()
+			ru = umt.Resource(pm.process_count, pm.average_maximum_memory, pt, d)
+			if reaping and pm.zombie_count > 0:
+				pm.zombie_count -= 1
+			return (
+				umt.Advisory(pm.locked_count, pm.suspended_count, pm.zombie_count), ru
+			)
+		return rpu
 
 	@classmethod
 	def allocate(Class, signal, throttle, *, Scheduler=Scheduler):
@@ -599,7 +645,9 @@ class IOManager(object):
 		"""
 
 		if pid is not None:
-			return self.schedule(workreference, Completion(pid), pid)
+			ur = self.usage_reader(pid=pid)
+			sio = Completion(pid, self.Clock, ur)
+			return self.schedule(workreference, sio, pid)
 
 	def pipe(self, workreference, index, readcontext, writecontext, spawns, path):
 		"""
@@ -1218,7 +1266,7 @@ class Host(Context):
 		xps = executable.fs_path_string()
 		argv[0] = xps
 
-		inv = Invocation(xps, argv, environ=self.local(path))
+		inv = Invocation(xps, argv, environ=self.local(path), set_process_group=True)
 		red = ixn.redirect(workreference, self, path)
 		return (inv.spawn, path, red)
 

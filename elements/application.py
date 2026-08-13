@@ -202,6 +202,22 @@ class Session(Core):
 
 		return (self, f, *f.select_path(*path[1:]))
 
+	def monitor(self, source, line):
+		"""
+		# Allocate a &types.Monitor instance for the given &source and &line
+		# with a session unique identifier and frame.
+
+		# [ Returns ]
+		# The created monitor instance.
+		"""
+
+		self.monitor_identity_sequence += 1
+		i = self.monitor_identity_sequence
+		m = types.Monitor(i, source, line)
+		f = self.monitor_images[str(i)] = m.image
+		self.status_monitors.add(m)
+		return m
+
 	def __init__(self, terminal:Device, system, executable, frames, title='', position=(0,0), dimensions=None):
 		self.title = title
 		self.device = terminal
@@ -219,6 +235,15 @@ class Session(Core):
 		self.local_modifiers = ''
 		self.logfile = None
 		self.cache = [] # Lines
+
+		# Status monitors.
+		self.monitor_images = {}
+		self.status_monitors = weakref.WeakSet() # Active.
+		cb = tools.partial(self.relay_status,
+			self.host.io.Clock, self.status_monitors, self.host.io.transfers)
+		from .system import Link, Event
+		self.status_link = Link(Event.time(100*(10**6)), cb)
+		self.monitor_identity_sequence = 0
 
 		self.executable = executable
 
@@ -511,6 +536,7 @@ class Session(Core):
 		rf = Refraction(src)
 		rf.forms = self.pg_forms(src)
 		rf.keyboard = self.keyboard
+		rf.monitor_images = self.monitor_images
 
 		return rf
 
@@ -530,6 +556,7 @@ class Session(Core):
 		rf = Refraction(src)
 		rf.forms = self.rl_forms(src, reference.ref_context)
 		rf.keyboard = self.keyboard
+		rf.monitor_images = self.monitor_images
 
 		return rf
 
@@ -573,6 +600,7 @@ class Session(Core):
 				load = True
 
 			rf = Refraction(source)
+			rf.monitor_images = self.monitor_images
 		rf.keyboard = self.keyboard
 
 		if load:
@@ -1116,6 +1144,28 @@ class Session(Core):
 				io.throttle.release()
 			except:
 				pass
+
+		if not self.status_monitors:
+			self.host.io.scheduler.cancel(self.status_link)
+
+	def monitor_status(self):
+		"""
+		# Connect &relay_status to time elapsed events using the host's scheduler.
+		"""
+
+		s = self.host.io.scheduler
+		s.cancel(self.status_link)
+		s.dispatch(self.status_link)
+
+	@staticmethod
+	def elapse_monitors(a):
+		smv, ts = a
+		for sm in smv:
+			sm.elapsed(ts)
+
+	@staticmethod
+	def relay_status(clock, monitors, transfers, link, elapse=elapse_monitors):
+		transfers.append((elapse, (list(monitors), clock())))
 
 	@comethod('session', 'ineffective')
 	def s_operation_not_found(self):

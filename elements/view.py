@@ -455,6 +455,7 @@ class Refraction(CellMatrix):
 		self.system = self.source.origin.ref_system # Default execution context.
 		self.forms = resource.forms
 		self.annotation = None
+		self.monitor_images = None
 
 		self.focus = (Position(), Position())
 		self.query = {} # Query state; last search, seek, etc.
@@ -889,14 +890,14 @@ class Refraction(CellMatrix):
 		# Render the &Phrase instance for the given line.
 		"""
 
-		return next(self.forms.render((self.source.sole(offset),)))
+		return next(self.forms.render((self.source.sole(offset),), context=self.monitor_images))
 
 	def iterphrases(self, start, stop, *, islice=itertools.islice):
 		"""
 		# Render the &Phrase instances for the given range.
 		"""
 
-		c = self.forms.render(self.source.select(start, stop))
+		c = self.forms.render(self.source.select(start, stop), context=self.monitor_images)
 		e = itertools.repeat(self.forms.lf_empty_phrase)
 		return islice(itertools.chain(c, e), 0, stop - start)
 
@@ -965,7 +966,7 @@ class Refraction(CellMatrix):
 			except IndexError:
 				li = self.forms.ln_interpret("", offset=lo)
 
-			ph = next(rline((li,)))
+			ph = next(rline((li,), context=self.monitor_images))
 			larea = slice(rlo, rlo+1)
 			self.image.update(larea, (ph,))
 			yield from self.v_render(larea)
@@ -1327,9 +1328,9 @@ class Refraction(CellMatrix):
 			lfields = list(lfields)
 			fai.update(li, lfields)
 			caf = phc(Line(ln, 0, ""), delimit(fai))
-			phrase = Phrase(itertools.chain(phc(li, lfields), caf))
+			phrase = Phrase(itertools.chain(phc(li, lfields, context=self.monitor_images), caf))
 		else:
-			phrase = Phrase(phc(li, lfields))
+			phrase = Phrase(phc(li, lfields, context=self.monitor_images))
 
 		# Translate codepoint offsets to cell offsets.
 		m_cell = phrase.m_cell
@@ -2696,6 +2697,7 @@ class Structure(object):
 
 	def work_completed(self, work):
 		wk = self.jobs.pop(work)
+		work.monitor.clear()
 
 	def work_list(self):
 		return list(self.jobs)
@@ -3044,6 +3046,7 @@ class Frame(Core):
 			new = Refraction(source)
 			new.focus[0].set(-1)
 			new.keyboard = session.keyboard
+			new.monitor_images = session.monitor_images
 
 		self.attach(dpath, new)
 		self.views[vi].content_location_revision = rl_syntax.source.active
@@ -3633,13 +3636,20 @@ class Frame(Core):
 			return exectx.evaluate(None, 0, path, proc)
 
 		revision = pg.source.active
-		work = Work.allocate(vs, target, lines)
+		monitor = session.monitor(target.source, target.coordinates()[0])
+		if hasattr(exectx, 'io'):
+			monitor.usage = exectx.io.usage_reader(limit=128)
+		else:
+			monitor.usage = (lambda x: None)
+		work = Work.allocate(monitor, vs, target, lines)
 		if isinstance(target, Reflection):
 			target.connect(session.transcript, exectx, work, path, proc)
 		else:
+			monitor.install()
 			work.spawn(exectx, path, proc)
 
 		vs.work_dispatched(work)
+		session.monitor_status()
 		return work
 
 	@staticmethod

@@ -1722,14 +1722,14 @@ class Reformulations(object):
 
 		return Line(ln_offset, il, lc, lx)
 
-	def render(self, ilines:Iterable[Line]):
+	def render(self, ilines:Iterable[Line], context=None):
 		"""
 		# Construct &Phrase instances from the given &ilines.
 		"""
 
 		lines = list(ilines)
 		return map(Phrase, (
-			self.compose(li, fields)
+			self.compose(li, fields, context=context)
 			for li, fields in zip(
 				lines,
 				self.lf_fields.structure(lines),
@@ -1872,7 +1872,7 @@ class Reformulations(object):
 			for ft, fc in fields
 		)
 
-	def cursor(self, line, fields) -> Iterable[Words]:
+	def cursor(self, line, fields, context=None) -> Iterable[Words]:
 		"""
 		# Construct a Phrase instance representing the structured line
 		# for display with a cursor.
@@ -1888,9 +1888,14 @@ class Reformulations(object):
 
 		yield from self.redirect_indentation(itype, line.ln_level)
 		yield from self.redirect_exceptions(content)
-		yield Redirect((1, ' ', tg('line-termination'), '\n'))
 
-	def compose(self, line, fields) -> Iterable[Words]:
+		yield Redirect((1, ' ', tg('line-termination'), '\n'))
+		if line.ln_extension and context is not None:
+			for monitor in line.ln_extension.split():
+				ext = context.get(monitor, ())
+				yield from Phrase.redirect(self.lf_units, ((tg(ft, ft), fc) for ft, fc in ext))
+
+	def compose(self, line, fields, context=None) -> Iterable[Words]:
 		"""
 		# Construct a Phrase instance representing the structured line.
 		"""
@@ -1913,7 +1918,16 @@ class Reformulations(object):
 
 		yield from self.redirect_indentation(itype, line.ln_level)
 		yield from self.redirect_exceptions(content)
-		yield from self.redirect_trail(line.ln_trail)
+		if line.ln_extension and context is not None:
+			# Presumably, the monitor will serve as the extra cursor cell, so
+			# only display the highlighted spaces of the trail.
+			yield from list(self.redirect_trail(line.ln_trail))[:-1]
+
+			for monitor in line.ln_extension.split():
+				ext = context.get(monitor, ())
+				yield from Phrase.redirect(self.lf_units, ((tg(ft, ft), fc) for ft, fc in ext))
+		else:
+			yield from self.redirect_trail(line.ln_trail)
 
 	def __str__(self):
 		return ''.join(x[1] for x in self.i_format())
@@ -2555,6 +2569,245 @@ class Procedure(Composite):
 		'failed': (0).__eq__,
 	}
 
+@dataclass()
+class Monitor(object):
+	"""
+	# Status monitor for managing the display of &Work metrics.
+
+	# [ Parameters ]
+	# /identity/
+		# The session unique identifier for the monitor's frame.
+	# /source/
+		# The source containing the monitor.
+	# /cursor/
+		# The position in &source that the monitor is displayed at.
+	# /line/
+		# The line in &source that the monitor was last updated on.
+	# /image/
+		# The current cell image to be displayed by the monitor.
+	# /metrics/
+		# The latest snapshot of metrics that is used to render a frame
+		# for display by the monitor.
+	"""
+
+	from dataclasses import field as _field
+
+	identity: int
+	source: object
+	line: int
+	image: Sequence[tuple] = _field(default_factory=list)
+	start: int = 0
+	cursor: object = None
+
+	from fault.transcript.metrics import Procedure, Work, Advisory, Resource
+	usage: Callable = None
+	metrics: object = Procedure.create()
+	current: object = None
+	title: str = ""
+
+	__hash__ = object.__hash__
+
+	def elapsed(self, timestamp):
+		self.update(self.start or timestamp, timestamp)
+
+	def integrate_motion(self):
+		lstart, lpos, lstop = self.cursor.lines.snapshot()
+		if lpos == lstop:
+			# Deleted.
+			self.line = lpos
+			self.source.attach_line_monitor(self.line, self.identity)
+		elif self.line != lpos:
+			if self.source.detach_line_monitor(self.line, self.identity):
+				self.source.lines_changed(self.line)
+
+			self.line = lpos
+			self.source.attach_line_monitor(self.line, self.identity)
+
+		self.cursor.lines.restore((self.line, self.line, self.line+1))
+
+	def switch(self, metrics, pid, start):
+		"""
+		# Update the transpired work status, &metrics, and
+		# change the current process being monitored, &pid.
+		"""
+
+		self.metrics += metrics
+		if pid is not None:
+			self.current = (pid, start)
+		else:
+			self.current = None
+
+	def update(self, start, stop):
+		try:
+			self.integrate_motion()
+		except IndexError:
+			del self.image[:]
+			self.source.cursors.discard(self.cursor)
+			return
+
+		self.start = start
+		d = start.measure(stop)
+
+		if self.current is not None:
+			p, t = self.current
+			m = self.metrics + self.Procedure(self.Work(), *self.usage(-p, 256))
+		else:
+			p = None
+			m = self.metrics
+
+		self.image[:] = (
+			self.inline(self.title, p, d, m, active=True)
+		)
+
+		# Signal refractions.
+		self.source.lines_changed(self.line)
+
+	def install(self):
+		ls = self.source.sole(self.line).ln_length
+		self.cursor = Cursor.allocate(self.line, 0, ls, 0)
+		self.source.cursors.add(self.cursor)
+		self.source.attach_line_monitor(self.line, self.identity)
+
+	def clear(self):
+		del self.image[:]
+		self.source.cursors.discard(self.cursor)
+		self.integrate_motion()
+		self.source.detach_line_monitor(self.line, self.identity)
+		self.source.lines_changed(self.line)
+
+	labels = {
+		'duration': '',
+		'executing': 'x',
+		'usage': 'u',
+		'failed': 'f',
+		'executed': 'p',
+		'granted': 'c',
+
+		'notices': 'l',
+		'errors': 'z',
+		'warnings': 's',
+	}
+
+	defaults = {
+		'duration': '',
+		'granted': 'cached',
+		'executed': 'processed',
+		'notices': 'locks',
+		'errors': 'zombies',
+		'warnings': 'suspended',
+	}
+
+	# Aggregation Operation
+	operations = {
+		'total': '+',
+		'average': '/',
+		'rate': '^',
+		'rate-recent': '<',
+	}
+
+	def inline(self, title, identity, duration, metrics, compact=True, active=True):
+		"""
+		# Construct a status display with partial identifiers
+		# alongside the metrics.
+		"""
+
+		w = metrics.work
+		m = metrics.msg
+		u = metrics.usage
+		ud = u.r_divisions
+		dt = duration.select('second') + float(duration.select('subsecond'))
+		dt = dt or 0.000001
+		ds = duration.select('millisecond') / 1000
+
+		if compact:
+			l = self.labels.__getitem__
+			title = title[title.rfind('/')+1:]
+		else:
+			dl = self.defaults.__getitem__
+			l = (lambda x: dl.get(x, x))
+
+		if active:
+			yield ('monitor-frame-active', '[')
+		else:
+			yield ('monitor-frame-inactive', '[')
+
+		if title or identity:
+			if title:
+				yield ('status-title', title)
+				if identity:
+					yield ('status-field-separator', '[')
+					yield ('status-identity', str(identity))
+					yield ('status-field-separator', ']')
+			elif identity:
+				yield ('status-identity', str(identity))
+
+			yield ('status-field-separator', ': ')
+
+		yield ('status-duration', "{:.1f}".format(ds))
+		yield ('status-duration-seconds', 's')
+		durationl = l('duration')
+		if durationl:
+			# Suppress the operation if the label isn't visible.
+			yield ('status-field-operation', '+')
+			yield ('status-field-label', durationl)
+
+		xc = w.w_executing
+		if active or xc:
+			yield ('status-field-separator', ' ')
+			yield ('status-transactions-executing', str(xc))
+			if ud > 1:
+				yield ('status-field-operation', '.')
+				yield ('status-transactions-executing', str(ud))
+			yield ('status-field-operation', '+')
+			yield ('status-field-label', l('executing'))
+
+		yield ('status-field-separator', ' ')
+		yield ('status-resource-usage', "{:.1f}".format((u.r_process / dt)))
+		yield ('status-field-operation', '^')
+		yield ('status-field-label', l('usage'))
+
+		if m.m_notices:
+			yield ('status-field-separator', ' ')
+			yield ('status-advisory-notices', str(m.m_notices))
+			yield ('status-field-operation', '+')
+			yield ('status-field-label', l('notices'))
+
+		if m.m_warnings:
+			yield ('status-field-separator', ' ')
+			yield ('status-advisory-warnings', str(m.m_warnings))
+			yield ('status-field-operation', '+')
+			yield ('status-field-label', l('warnings'))
+
+		if m.m_errors:
+			yield ('status-field-separator', ' ')
+			yield ('status-advisory-errors', str(m.m_errors))
+			yield ('status-field-operation', '+')
+			yield ('status-field-label', l('errors'))
+
+		if w.w_failed:
+			yield ('status-field-separator', ' ')
+			yield ('status-transactions-failed', str(w.w_failed))
+			yield ('status-field-operation', '+')
+			yield ('status-field-label', l('failed'))
+
+		if w.w_granted:
+			yield ('status-field-separator', ' ')
+			yield ('status-transactions-granted', str(w.w_granted))
+			yield ('status-field-operation', '+')
+			yield ('status-field-label', l('granted'))
+
+		if w.w_executed:
+			yield ('status-field-separator', ' ')
+			yield ('status-transactions-executed', str(w.w_executed))
+			yield ('status-field-operation', '+')
+			yield ('status-field-label', l('executed'))
+
+		if active:
+			yield ('monitor-frame-active', ']')
+		else:
+			yield ('monitor-frame-inactive', ']')
+
+
 @tools.struct(weakref_slot=True)
 class Work(object):
 	"""
@@ -2563,6 +2816,7 @@ class Work(object):
 
 	from dataclasses import field as _field
 
+	monitor: Monitor
 	control: object
 	target: object
 	source: Sequence[Line]
@@ -2573,14 +2827,12 @@ class Work(object):
 
 	from os import kill as ProcessSignal
 	from signal import SIGKILL, SIGINT, SIGSTOP, SIGTSTP, SIGCONT, SIGTERM
-	from fault.time.system import utc as SystemClock
-	SystemClock = staticmethod(SystemClock)
 
 	__hash__ = object.__hash__
 
 	@classmethod
-	def allocate(Class, control, relation, lines, *args):
-		return Class(weakref.proxy(control), weakref.proxy(relation), lines, *args)
+	def allocate(Class, monitor, control, relation, lines, *args):
+		return Class(monitor, weakref.proxy(control), weakref.proxy(relation), lines, *args)
 
 	@property
 	def system(self):
@@ -2607,7 +2859,7 @@ class Work(object):
 		cursor = system.evaluate(weakref.proxy(self), index, path, proc, copy)
 		self.procedures.append(proc)
 		self.cursors.append(cursor)
-		self.proceed(index, None, None, None)
+		self.proceed(index, None, None, system.io.Clock(), system.io.zero_usage)
 
 		return index
 
@@ -2618,25 +2870,30 @@ class Work(object):
 
 		return tools.partial(self.spawn, system, path, proc), path, ()
 
-	def proceed(self, index, pid, code, usage):
+	def proceed(self, index, pid, exitcode, time, usage):
 		"""
 		# Proceed to the next step and configure the next callback.
 		"""
 
-		ts = self.SystemClock()
-		start_time, xl = self.executing.pop(pid, (ts, None))
-		self.log.append((start_time, ts, pid, code, usage))
+		start_time, xl = self.executing.pop(pid, (time, None))
+		self.log.append((start_time, time, pid, exitcode, usage))
+		if index is None:
+			# No cursor; likely initialization from spawn.
+			return
 
-		if index is not None:
-			try:
-				xl = self.cursors[index].send(code)
-			except StopIteration:
-				# End of procedure.
-				self.cursors[index] = None
-				if self.cursors.count(None) == len(self.cursors):
-					self.control.work_completed(self)
-			else:
-				self.executing[xl.event.source] = (ts, xl)
+		try:
+			xl = self.cursors[index].send(exitcode)
+		except StopIteration:
+			# End of procedure.
+			self.cursors[index] = None
+			if self.cursors.count(None) == len(self.cursors):
+				self.control.work_completed(self)
+			pid_new = None
+		else:
+			pid_new = xl.event.source
+			self.executing[pid_new] = (time, xl)
+
+		self.monitor.switch(usage, pid_new, time)
 
 	def signal(self, signo):
 		"""
