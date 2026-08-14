@@ -691,6 +691,21 @@ class Resource(types.Core):
 				# Insert indentation codepoints raw.
 				fcontent = first
 
+		if ln_level > 0:
+			# When &wholes are indented, it is likely that the final line is
+			# incomplete and the choice of zero indentation cannot be made.
+			# Compensate here by adjusting the first line for either case.
+
+			if first:
+				# Ensure indentation of non-empty line.
+				# Considering the version of the line before &flevel is applied.
+				if target_line.ln_level < ln_level:
+					self.increase_indentation(lo, ln_level)
+			elif wholes:
+				# Ensure zero indentation of empty line when termination is seen.
+				if not target_line.ln_content and target_line.ln_level == ln_level:
+					self.adjust_indentation(lo, lo+1, -ln_level)
+
 		if wholes:
 			# Carry the tail in the first line.
 			suffix = self.substitute_codepoints(lo, co, target_line.ln_length, fcontent)
