@@ -1951,7 +1951,7 @@ class Cursor(object):
 	codepoints: Position
 
 	@classmethod
-	def allocate(Class, lo, cstart, co, cstop):
+	def allocate(Class, lo=0, cstart=0, co=0, cstop=0):
 		i = Class(Position(), Position())
 		i.lines.restore((lo, lo, lo+1))
 		i.codepoints.restore((cstart, co, cstop))
@@ -2824,6 +2824,7 @@ class Work(object):
 	cursors: Sequence[object] = _field(default_factory=list)
 	executing: Mapping[int, object] = _field(default_factory=dict)
 	log: Sequence[tuple[int, int]] = _field(default_factory=list)
+	cursor: Cursor = _field(default_factory=Cursor.allocate)
 
 	from os import kill as ProcessSignal
 	from signal import SIGKILL, SIGINT, SIGSTOP, SIGTSTP, SIGCONT, SIGTERM
