@@ -362,10 +362,9 @@ class Insertion(IO):
 			src.commit()
 
 		fl = self.cursor.lines.get()
-		if self.trim and fl < src.ln_count():
-			if src.sole(fl).ln_void:
-				src.delete_lines(fl, fl+1)
-				src.commit()
+		if self.trim:
+			src.trim_empty(fl)
+			src.commit()
 
 		src.modifications.checkpoint()
 

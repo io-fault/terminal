@@ -3658,10 +3658,12 @@ class Frame(Core):
 			monitor_line = lo + n - 1
 			coordinates = (lo + 2, 0)
 			ilevel = 1
+			trim = True
 		else:
 			monitor_line = target.coordinates()[0]
 			coordinates = target.coordinates()
 			ilevel = 0
+			trim = False
 
 		revision = pg.source.active
 		monitor = session.monitor(target.source, monitor_line)
@@ -3670,7 +3672,7 @@ class Frame(Core):
 		else:
 			monitor.usage = (lambda x: None)
 
-		work = Work.allocate(monitor, vs, target, lines, ilevel)
+		work = Work.allocate(monitor, vs, target, lines, ilevel, trim)
 		if isinstance(target, Reflection):
 			target.connect(session.transcript, exectx, work, path, proc)
 		else:

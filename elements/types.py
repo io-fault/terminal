@@ -2844,6 +2844,7 @@ class Work(object):
 	target: object
 	source: Sequence[Line]
 	level: int = 0
+	trim: bool = False
 	procedures: Sequence[Procedure] = _field(default_factory=list)
 	cursors: Sequence[object] = _field(default_factory=list)
 	executing: Mapping[int, object] = _field(default_factory=dict)
@@ -2912,6 +2913,8 @@ class Work(object):
 			# End of procedure.
 			self.cursors[index] = None
 			if self.cursors.count(None) == len(self.cursors):
+				if self.trim:
+					self.target.source.trim_empty(self.cursor.lines.get())
 				self.control.work_completed(self)
 			pid_new = None
 		else:

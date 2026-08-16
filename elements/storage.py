@@ -774,6 +774,21 @@ class Resource(types.Core):
 		# Export in generator to defer processing in case discarded.
 		return len(lines)
 
+	def trim_empty(self, lo:int):
+		"""
+		# Remove the line identified by &lo if its contents are empty.
+		"""
+
+		if lo >= self.ln_count():
+			return 0
+
+		if self.sole(lo).ln_void:
+			self.delete_lines(lo, lo+1)
+			self.commit()
+			return 1
+
+		return 0
+
 	def insert_lines(self, lo, lines:Iterable[types.Line]):
 		"""
 		# Insert the &lines before &lo.
