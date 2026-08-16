@@ -24,7 +24,7 @@ from fault.system.kernel import Invocation
 from fault.system.kernel import Scheduler
 from fault.syntax.format import Characters
 
-from .types import Core, System, Line, Reference
+from .types import Core, System, Line, Reference, Cursor
 from .types import Procedure, Composition, Instruction
 from .types import Cell, Area, Screen
 from .view import Refraction, Reflection
@@ -297,7 +297,8 @@ class Insertion(IO):
 	"""
 
 	target: Refraction
-	cursor: tuple[int, int, str]
+	cursor: Cursor
+	leading: str
 	trim: bool
 	state: Callable
 	finish: Callable
@@ -316,7 +317,11 @@ class Insertion(IO):
 		i = l = None
 		rf = target if target is not None else work.target
 		try:
-			i = Class(rf, (lo, co, ''), True, *system.codec.Decoder(), level=level)
+			i = Class(rf, Cursor.allocate(), '', False, *system.codec.Decoder(), level=level)
+			i.level = work.level
+			i.cursor.lines.restore((lo, lo, lo))
+			i.cursor.codepoints.restore((co, co, co))
+			rf.source.cursors.add(i.cursor)
 
 			with system.read_pipe() as (rfd, wfd):
 				l = system.io.schedule(work, i, rfd, rfd)
@@ -342,21 +347,21 @@ class Insertion(IO):
 		src = rf.source
 		flines = src.forms.lf_lines
 
-		lo, co, leading = self.cursor
-		self.cursor = src.splice_text(flines, lo, co, leading + lines_txt, ln_level=self.level)
+		lc = self.cursor.coordinates()
+		l, c, self.leading = src.splice_text(flines, *lc, self.leading + lines_txt, ln_level=self.level)
 		src.commit()
 
 	def final(self, ignored=None):
 		src = self.target.source
 
 		flines = src.forms.lf_lines
-		lo, co, remainder = self.cursor
-		ftxt = remainder + self.finish()
+		ftxt = self.leading + self.finish()
 		if ftxt:
-			self.cursor = src.splice_text(flines, lo, co, ftxt, ln_level=self.level)
+			lc = self.cursor.coordinates()
+			l, c, self.leading = src.splice_text(flines, *lc, ftxt, ln_level=self.level)
 			src.commit()
 
-		fl = self.cursor[0]
+		fl = self.cursor.lines.get()
 		if self.trim and fl < src.ln_count():
 			if src.sole(fl).ln_void:
 				src.delete_lines(fl, fl+1)
@@ -1279,8 +1284,10 @@ class Host(Context):
 		# or from history inheritance and reconfigurations.
 
 		rf = workreference.target
+		c = workreference.cursor
+		il = workreference.level
 		pwd = self.fs_root + path
-		ins = Insertion(rf, (*rf.coordinates(), ''), False, *self.codec.Decoder())
+		ins = Insertion(rf, c, '', False, *self.codec.Decoder(), level=il)
 
 		# Build the invocations for the expressed instructions.
 		iv = []
@@ -1311,8 +1318,10 @@ class Host(Context):
 			rx = None
 			tx = None
 		else:
+			c = workreference.cursor
 			rf = workreference.target
-			rx = Insertion(rf, (*rf.coordinates(), ''), False, *self.codec.Decoder())
+			il = workreference.level
+			rx = Insertion(rf, c, '', False, *self.codec.Decoder(), level=il)
 			tx = transmission
 
 		xp = self.prepare(workreference, self.fs_root + path, ixn)
@@ -1528,6 +1537,7 @@ class Host(Context):
 		lf = source.forms
 		path = source.origin.ref_identity
 
-		i = Insertion(view, (0, 0, ''), True, *lf.lf_codec.Decoder())
+		i = Insertion(view, Cursor.allocate(), '', True, *lf.lf_codec.Decoder())
+		view.source.cursors.add(i.cursor)
 		inv = Invocation(self.tool('cat').fs_path_string(), ('cat', str(path)))
 		exitlink = self.io.invoke(None, None, i, None, inv.spawn, None)
