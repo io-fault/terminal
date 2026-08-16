@@ -709,7 +709,6 @@ class Resource(types.Core):
 		if wholes:
 			# Carry the tail in the first line.
 			suffix = self.substitute_codepoints(lo, co, target_line.ln_length, fcontent)
-			end_of_insert = len(wholes[-1])
 			wholes[-1] = wholes[-1] + suffix
 
 			# Force cursors at &lo to beginning of next line.
@@ -729,7 +728,7 @@ class Resource(types.Core):
 
 			# Restore cursors that were offset.
 			self.displace_cursors(lo+dl, -1, 0, 0)
-			self.displace_cursors(lo+dl, 0, 0, end_of_insert)
+			self.displace_cursors(lo+dl, 0, 0, co)
 		else:
 			self.insert_codepoints(lo, co, fcontent)
 			co = co + len(fcontent)
@@ -774,6 +773,21 @@ class Resource(types.Core):
 
 		# Export in generator to defer processing in case discarded.
 		return len(lines)
+
+	def trim_empty(self, lo:int):
+		"""
+		# Remove the line identified by &lo if its contents are empty.
+		"""
+
+		if lo >= self.ln_count():
+			return 0
+
+		if self.sole(lo).ln_void:
+			self.delete_lines(lo, lo+1)
+			self.commit()
+			return 1
+
+		return 0
 
 	def insert_lines(self, lo, lines:Iterable[types.Line]):
 		"""

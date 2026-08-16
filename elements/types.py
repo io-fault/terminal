@@ -1951,11 +1951,26 @@ class Cursor(object):
 	codepoints: Position
 
 	@classmethod
-	def allocate(Class, lo, cstart, co, cstop):
+	def allocate(Class, lo=0, cstart=0, co=0, cstop=0):
 		i = Class(Position(), Position())
 		i.lines.restore((lo, lo, lo+1))
 		i.codepoints.restore((cstart, co, cstop))
 		return i
+
+	def clone(self):
+		"""
+		# Create a new &Cursor instance copying &lines and &codepoints state.
+		"""
+
+		lp = self.lines.snapshot()
+		cp = self.codepoints.snapshot()
+
+		nlp = self.lines.__class__()
+		ncp = self.codepoints.__class__()
+		nlp.restore(lp)
+		ncp.restore(cp)
+
+		return self.__class__(nlp, ncp)
 
 	def coordinates(self) -> tuple[int,int]:
 		"""
@@ -1964,12 +1979,20 @@ class Cursor(object):
 
 		return (self.lines.get(), self.codepoints.get())
 
+	def before(self, ln_offset, cp_offset):
+		lo, co = (self.lines.get(), self.codepoints.get())
+		return lo == ln_offset and co < cp_offset
+
 	def line_delta(self, ln_offset, deleted, inserted):
 		"""
 		# Update the line cursor and view area.
 		"""
 
 		cursor = self.lines
+
+		if self.before(ln_offset, 0):
+			# Cursor is before the line break.
+			ln_offset += 1
 
 		if deleted:
 			self.lines.delete(ln_offset, deleted)
@@ -2820,10 +2843,13 @@ class Work(object):
 	control: object
 	target: object
 	source: Sequence[Line]
+	level: int = 0
+	trim: bool = False
 	procedures: Sequence[Procedure] = _field(default_factory=list)
 	cursors: Sequence[object] = _field(default_factory=list)
 	executing: Mapping[int, object] = _field(default_factory=dict)
 	log: Sequence[tuple[int, int]] = _field(default_factory=list)
+	cursor: Cursor = _field(default_factory=Cursor.allocate)
 
 	from os import kill as ProcessSignal
 	from signal import SIGKILL, SIGINT, SIGSTOP, SIGTSTP, SIGCONT, SIGTERM
@@ -2887,6 +2913,8 @@ class Work(object):
 			# End of procedure.
 			self.cursors[index] = None
 			if self.cursors.count(None) == len(self.cursors):
+				if self.trim:
+					self.target.source.trim_empty(self.cursor.lines.get())
 				self.control.work_completed(self)
 			pid_new = None
 		else:
