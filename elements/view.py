@@ -3609,6 +3609,8 @@ class Frame(Core):
 
 		vs = self.select(dpath)
 		rl, target, pg = vs.refractions()
+		tsrc = target.source
+		is_transcript = not isinstance(target, Reflection) and tsrc.origin.ref_type == 'transcript'
 		src = pg.source
 		lines = list(src.select(0, src.ln_count()))
 		sys, path = System.structure(lines[0].ln_content)
@@ -3635,16 +3637,47 @@ class Frame(Core):
 			# process execution context
 			return exectx.evaluate(None, 0, path, proc)
 
+		if is_transcript:
+			tsrc.checkpoint()
+			# End of file cursor, but before the final line for margin scroll.
+			lo = tsrc.ln_count() - 1
+			li = tsrc.sole(lo)
+			co = len(li.ln_content)
+
+			# Insert text frame.
+			n = tsrc.insert_lines(lo, [
+				Line(0, ln_level=0, ln_content=""),
+				Line(1, ln_level=0, ln_content=str(src.latest + 1) + ':'),
+				Line(2, ln_level=0, ln_content=""),
+			] + lines[1:] + [
+				Line(0, ln_level=0, ln_content=""),
+			])
+			tsrc.commit()
+
+			# Set monitor to be on the last line of the text frame.
+			monitor_line = lo + n - 1
+			coordinates = (lo + 2, 0)
+			ilevel = 1
+		else:
+			monitor_line = target.coordinates()[0]
+			coordinates = target.coordinates()
+			ilevel = 0
+
 		revision = pg.source.active
-		monitor = session.monitor(target.source, target.coordinates()[0])
+		monitor = session.monitor(target.source, monitor_line)
 		if hasattr(exectx, 'io'):
 			monitor.usage = exectx.io.usage_reader(limit=128)
 		else:
 			monitor.usage = (lambda x: None)
-		work = Work.allocate(monitor, vs, target, lines)
+
+		work = Work.allocate(monitor, vs, target, lines, ilevel)
 		if isinstance(target, Reflection):
 			target.connect(session.transcript, exectx, work, path, proc)
 		else:
+			lo, co = coordinates
+			work.cursor.lines.restore((lo, lo, lo+1))
+			work.cursor.codepoints.restore((co, co, co))
+			tsrc.cursors.add(work.cursor)
 			monitor.install()
 			work.spawn(exectx, path, proc)
 
