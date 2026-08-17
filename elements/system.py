@@ -63,12 +63,12 @@ def buffer_lines(ilines):
 			buf = bytearray()
 
 def bufferlines(limit, lines):
-	buffer = b''
+	buffer = bytearray()
 	for l in lines:
 		buffer += l
 		if len(buffer) > limit:
 			yield buffer
-			buffer = b''
+			buffer = bytearray()
 
 	if buffer:
 		yield buffer
@@ -237,7 +237,7 @@ class Relay(IO):
 	queue: list
 
 	closed = False
-	write_size = 512
+	write_size = 1000 * 5
 	system_operation = os.write
 	event_type = Event.io_transmit
 
@@ -304,7 +304,7 @@ class Insertion(IO):
 	finish: Callable
 
 	level: int = 0
-	read_size: int = 1024
+	read_size: int = 1000 * 5
 	system_operation = os.read
 	event_type = Event.io_receive
 
@@ -400,7 +400,7 @@ class Transmission(IO):
 	data: bytes
 	total: int
 
-	write_size = 512
+	write_size = 1000 * 5
 	system_operation = os.write
 	event_type = Event.io_transmit
 
@@ -418,7 +418,7 @@ class Transmission(IO):
 			lfb = system.codec.sequence
 			lfl = rf.forms.lf_lines.sequence
 			ilines = ((li.ln_level, li.ln_content) for li in lines)
-			i = Class(rf, bufferlines(2048, lfb(lfl(ilines))), b'', 0)
+			i = Class(rf, bufferlines(10000, lfb(lfl(ilines))), b'', 0)
 
 			# Instantiate and start.
 			with system.write_pipe() as (rfd, wfd):
@@ -1525,7 +1525,7 @@ class Host(Context):
 		lfl = source.forms.lf_lines.sequence
 		lines = source.select(0, source.ln_count())
 		ilines = ((li.ln_level, li.ln_content) for li in lines)
-		x = Transmission(view, bufferlines(2048, lfb(lfl(ilines))), b'', 0)
+		x = Transmission(view, bufferlines(10000, lfb(lfl(ilines))), b'', 0)
 
 		# The current use of tee here is suspect, but the goal is to have
 		# the file path present in the process status without unusual incantations.
