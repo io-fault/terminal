@@ -1983,21 +1983,20 @@ class Cursor(object):
 		lo, co = (self.lines.get(), self.codepoints.get())
 		return lo == ln_offset and co < cp_offset
 
-	def line_delta(self, ln_offset, deleted, inserted):
+	def line_delta(self, ln_offset, deleted, cp_offset, inserted):
 		"""
 		# Update the line cursor and view area.
 		"""
 
 		cursor = self.lines
 
-		if self.before(ln_offset, 0):
-			# Cursor is before the line break.
-			ln_offset += 1
-
 		if deleted:
 			self.lines.delete(ln_offset, deleted)
 		if inserted:
-			self.lines.insert(ln_offset, inserted)
+			if self.before(ln_offset, cp_offset - (4)):
+				self.lines.insert(ln_offset + 1, inserted)
+			else:
+				self.lines.insert(ln_offset, inserted)
 
 	def codepoint_delta(self, ln_offset, cp_offset, deleted, inserted):
 		"""
@@ -2007,6 +2006,13 @@ class Cursor(object):
 		lo = self.lines.get()
 		if lo == ln_offset:
 			cp_offset -= (4) # Constant offset for internal header.
+			if cp_offset < 0:
+				# Header adjusted.
+				# Original header insertion is never seen here because it
+				# is included when the line is initialized.
+				assert deleted == inserted
+				return
+
 			if deleted:
 				self.codepoints.delete(cp_offset, deleted)
 			if inserted:

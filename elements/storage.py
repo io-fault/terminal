@@ -715,7 +715,7 @@ class Resource(types.Core):
 			eol = co + len(fcontent)
 			# Codepoint offset must be zero here. Otherwise, deletion is
 			# identified as occurring past the cursor.
-			self.displace_cursors(lo, +1, 0, -eol)
+			self.displace_cursors(lo, +1, eol, 0)
 
 			# Identify indentation boundaries and structure the line.
 			ln_i = self.forms.ln_interpret # Universal

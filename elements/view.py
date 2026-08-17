@@ -971,7 +971,7 @@ class Refraction(CellMatrix):
 			self.image.update(larea, (ph,))
 			yield from self.v_render(larea)
 
-	def line_delta(self, ln_offset, deleted, inserted):
+	def line_delta(self, ln_offset, deleted, cp_offset, inserted):
 		"""
 		# Update the line cursor and view area.
 		"""
