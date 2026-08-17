@@ -682,8 +682,8 @@ class Session(Core):
 		# Change the selected frame and redraw the screen to reflect the new status.
 		"""
 
-		if index == self.frame:
-			return
+		if index == self.frame or index >= len(self.frames):
+			return False
 
 		if self.focus:
 			# Never to be seen.
@@ -706,6 +706,7 @@ class Session(Core):
 
 		self.dispatch_delta(self.focus.render())
 		self.device.update_frame_status(self.frame, last)
+		return True
 
 	def allocate_frame(self, layout=None, area=None, title=None):
 		"""
@@ -1269,7 +1270,11 @@ class Session(Core):
 
 	@comethod('screen', 'switch/frame')
 	def s_switch_frame(self, quantity):
-		self.reframe(quantity - 1)
+		return self.reframe(quantity - 1)
+
+	@comethod('screen', 'switch/frame/constant')
+	def s_switch_frame_c(self, *index):
+		return self.s_switch_frame(int(index[0]))
 
 	@comethod('screen', 'previous/frame')
 	def s_frame_switch_previous(self, quantity=1):

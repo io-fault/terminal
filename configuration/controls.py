@@ -10,6 +10,7 @@ k_space = 0x2423
 km_shift = "Shift"
 km_control = "Control"
 km_meta = "Meta"
+km_system = "System"
 km_void = "None"
 km_d = "Distribution"
 
@@ -107,9 +108,9 @@ for mode in (control, insert):
 			for mods in combinations(km_all, i):
 				a((forward, *mods), 'focus/activate')
 
-	a((k_return, km_meta), 'cursor/substitute/selected/command')
+	a((k_return, km_location, km_meta), 'location/open/level')
 	a((k_return, km_location), 'location/execute/operation')
-	a((k_return, km_location, km_shift), 'location/open/level')
+	#a((k_return, km_writing, km_meta), 'cursor/substitute/selected/command')
 
 	# Prompt history. Switching is performed remotely when content is focused.
 	a(('[', km_writing, km_control), 'prompt/switch/revision/previous')
@@ -124,6 +125,20 @@ for mode in (control, insert):
 	# When relocating, override prompt history switching.
 	a(('[', km_location, km_control), 'resource/switch/revision/previous')
 	a((']', km_location, km_control), 'resource/switch/revision/next')
+
+	# Frame control.
+	a(('[', km_shift, km_system), 'screen/previous/frame')
+	a((']', km_shift, km_system), 'screen/next/frame')
+	a(('n', km_shift, km_system), 'screen/create/frame')
+	a(('n', km_control, km_system), 'screen/copy/frame')
+	a(('w', km_shift, km_system), 'screen/close/frame')
+	for i in range(1, 10):
+		a((str(i), km_system), 'screen/switch/frame/constant', (i,))
+
+	# Location control.
+	a(('[', km_system), 'location/switch/previous')
+	a((']', km_system), 'location/switch/next')
+	a(('h', km_shift, km_system), 'location/switch/last')
 
 	a((k_return, km_executing, km_retain), 'prompt/execute/reset')
 	a((k_return, km_executing, km_retain, km_control), 'prompt/execute/repeat')
@@ -158,6 +173,7 @@ for mode in (control, insert):
 	a((0x21E5, km_shift, km_meta), 'frame/switch/view/previous')
 	a(('k', km_meta), 'frame/switch/view/above')
 	a(('j', km_meta), 'frame/switch/view/below')
+	a(('w', km_meta), 'frame/close/view')
 
 	a((0x21E5, km_void, km_d), 'cursor/insert/indentation/selected')
 	a((0x21E5, km_shift, km_d), 'cursor/delete/indentation/selected')
