@@ -3642,21 +3642,27 @@ class Frame(Core):
 			# End of file cursor, but before the final line for margin scroll.
 			lo = tsrc.ln_count() - 1
 			li = tsrc.sole(lo)
-			co = len(li.ln_content)
+			if li.ln_level == 0 and li.ln_content[:-1].isdecimal() and li.ln_content[-1] == '.':
+				index = int(li.ln_content.strip('.'))
+				tsrc.delete_lines(lo, lo + 1)
+			else:
+				index = 1
+				tsrc.delete_lines(lo, lo + 1)
 
 			# Insert text frame.
 			n = tsrc.insert_lines(lo, [
+				Line(0, ln_level=0, ln_content=str(index) + ':'),
 				Line(0, ln_level=0, ln_content=""),
-				Line(1, ln_level=0, ln_content=str(src.latest + 1) + ':'),
-				Line(2, ln_level=0, ln_content=""),
 			] + lines[1:] + [
 				Line(0, ln_level=0, ln_content=""),
+				Line(0, ln_level=0, ln_content=""),
+				Line(0, ln_level=0, ln_content=str(index + 1) + '.'),
 			])
 			tsrc.commit()
 
 			# Set monitor to be on the last line of the text frame.
-			monitor_line = lo + n - 1
-			coordinates = (lo + 2, 0)
+			monitor_line = lo + n - 3
+			coordinates = (lo + 1, 0)
 			ilevel = 1
 			trim = True
 		else:
