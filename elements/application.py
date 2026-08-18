@@ -1055,7 +1055,9 @@ class Session(Core):
 			device.transfer_event()
 
 			key = device.key(self.local_modifiers)
-			self.local_modifiers = ''
+			if not key.startswith('(session/synchronize)'):
+				# Only clear when not synchronizing.
+				self.local_modifiers = ''
 			self.dispatch(key)
 
 			# Transfer all the deltas accumulated on views to screen/device.
