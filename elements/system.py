@@ -20,7 +20,7 @@ from fault.context.tools import partial, cachedcalls, struct
 from fault.system import files
 from fault.system.kernel import Event
 from fault.system.kernel import Link
-from fault.system.kernel import Invocation
+from fault.system.kernel import Invocation, reap_process
 from fault.system.kernel import Scheduler
 from fault.syntax.format import Characters
 
@@ -494,7 +494,7 @@ class Completion(IO):
 	interrupt_signal = signal.SIGKILL
 
 	# Status and usage reading.
-	system_operation = staticmethod(os.waitpid)
+	system_operation = staticmethod(reap_process)
 
 	def interrupt(self):
 		if self.exit_code is None:
@@ -511,12 +511,11 @@ class Completion(IO):
 				wpeval(*evalp)
 
 	def transition(self, scheduler, log, link):
+		pid = link.event.source
 		time = self.system_clock()
 		advisory, resource = self.usage_reader(limit=1, reaping=True)
-		rpid, status = self.system_operation(link.event.source, 0)
-		assert rpid == link.event.source
+		exitcode = self.system_operation(pid)
 
-		exitcode = os.waitstatus_to_exitcode(status)
 		prepared = 1
 		if exitcode == 0:
 			executed = 1
@@ -527,7 +526,7 @@ class Completion(IO):
 		w = IOManager.usage_metrics_types.Work(prepared, executed, 0, failed)
 		rusage = IOManager.usage_metrics_types.Procedure(w, advisory, resource)
 
-		log.append((self.execute, (link.event, *link.context, rpid, exitcode, time, rusage)))
+		log.append((self.execute, (link.event, *link.context, pid, exitcode, time, rusage)))
 
 def loop(scheduler, pending, signal, throttle, *, delay=16, limit=16):
 	"""
