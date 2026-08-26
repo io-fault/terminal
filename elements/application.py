@@ -1528,7 +1528,7 @@ def main(inv:process.Invocation) -> process.Exit:
 			query.hostname(),
 		),
 		'utf-8',
-		str(next(query.executables('env'))),
+		query.executable('env').fs_path_string(),
 		['env'],
 	)
 	host.export(os.environ.items())
