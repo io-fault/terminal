@@ -556,7 +556,7 @@ class IOManager(object):
 	del utc
 
 	from fault.system import query as sq
-	from fault.transcript import metrics as usage_metrics_types
+	from fault.status import io as usage_metrics_types
 	read_process_usage = staticmethod(sq.process_usage_scan)
 	zero_usage = usage_metrics_types.Procedure(
 		usage_metrics_types.Work(w_prepared=1),

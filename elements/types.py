@@ -2628,7 +2628,7 @@ class Monitor(object):
 	start: int = 0
 	cursor: object = None
 
-	from fault.transcript.metrics import Procedure, Work, Advisory, Resource
+	from fault.status.io import Procedure, Work, Advisory, Resource
 	usage: Callable = None
 	metrics: object = Procedure.create()
 	current: object = None
