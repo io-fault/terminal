@@ -789,6 +789,25 @@ class Resource(types.Core):
 
 		return 0
 
+	def overwrite_empty(self, lo:int, content:types.Line):
+		"""
+		# Overwrite the line at the address &lo with &line, but only if it is empty.
+		# If not empty, insert &content afterwards.
+		"""
+
+		if lo >= self.ln_count():
+			return 0
+
+		if self.sole(lo).ln_void:
+			rlines = self.elements[lo:lo+1]
+			slines = [self.forms.ln_sequence(content)]
+			(self.modifications
+				.write(delta.Lines(lo, slines, rlines)))
+		else:
+			self.insert_lines(lo + 1, [content])
+
+		return 1
+
 	def insert_lines(self, lo, lines:Iterable[types.Line]):
 		"""
 		# Insert the &lines before &lo.

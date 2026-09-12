@@ -2902,6 +2902,12 @@ class Work(object):
 
 		return tools.partial(self.spawn, system, path, proc), path, ()
 
+	def note_exit(self, pid, exitcode):
+		src = self.target.source
+		lo = self.cursor.lines.get()
+		src.overwrite_empty(lo, Line(lo, 0, f"{exitcode} <- {pid}"))
+		src.commit()
+
 	def proceed(self, index, pid, exitcode, time, usage):
 		"""
 		# Proceed to the next step and configure the next callback.
@@ -2919,8 +2925,7 @@ class Work(object):
 			# End of procedure.
 			self.cursors[index] = None
 			if self.cursors.count(None) == len(self.cursors):
-				if self.trim:
-					self.target.source.trim_empty(self.cursor.lines.get())
+				self.note_exit(pid, exitcode)
 				self.control.work_completed(self)
 			pid_new = None
 		else:
