@@ -2904,6 +2904,9 @@ class Work(object):
 
 	def note_exit(self, pid, exitcode):
 		src = self.target.source
+		if src.origin.ref_type != 'transcript':
+			return
+
 		lo = self.cursor.lines.get()
 		src.overwrite_empty(lo, Line(lo, 0, f"{exitcode} <- {pid}"))
 		src.commit()
