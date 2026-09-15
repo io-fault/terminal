@@ -926,7 +926,7 @@ class Model(object):
 			for d in range(len(self.fm_divisions[v])):
 				yield (v, d)
 
-	def itercontexts(self, terminal, *, section=0):
+	def itercontexts(self, *, section=0):
 		"""
 		# Construct Context instances for the configured set of panes
 		# in left-to-right and top-to-bottom order.

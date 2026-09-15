@@ -3125,9 +3125,9 @@ class Frame(Core):
 		self.paths = {p: i for i, p in enumerate(self.panes)}
 
 		self.areas = list(zip(
-			itertools.starmap(Area, self.structure.itercontexts(area, section=1)), # location
-			itertools.starmap(Area, self.structure.itercontexts(area)), # content
-			itertools.starmap(Area, self.structure.itercontexts(area, section=3)), # prompt
+			itertools.starmap(Area, self.structure.itercontexts(section=1)), # location
+			itertools.starmap(Area, self.structure.itercontexts()), # content
+			itertools.starmap(Area, self.structure.itercontexts(section=3)), # prompt
 		))
 		self.stacks = [list() for x in range(len(self.areas))]
 
