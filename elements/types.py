@@ -657,36 +657,6 @@ class Model(object):
 
 	# Indicator images (characters) and colors.
 	from ..configuration import symbols
-	fm_iimages = {
-		'left': {
-			'leading': symbols.wedges['up'],
-			'following': symbols.wedges['down'],
-			'visible': symbols.wedges['right'],
-			'reset-solid': symbols.lines['vertical'],
-			'reset-weak': symbols.dotted['vertical'],
-		},
-		'right': {
-			'leading': symbols.wedges['up'],
-			'following': symbols.wedges['down'],
-			'visible': symbols.wedges['left'],
-			'reset-solid': symbols.lines['vertical'],
-			'reset-weak': symbols.dotted['vertical'],
-		},
-		'top': {
-			'leading': symbols.wedges['left'],
-			'following': symbols.wedges['right'],
-			'visible': symbols.wedges['down'],
-			'reset-solid': symbols.lines['horizontal'],
-			'reset-weak': symbols.dotted['horizontal'],
-		},
-		'bottom': {
-			'leading': symbols.wedges['left'],
-			'following': symbols.wedges['right'],
-			'visible': symbols.wedges['up'],
-			'reset-solid': symbols.lines['horizontal'],
-			'reset-weak': symbols.dotted['horizontal'],
-		},
-	}
 
 	def verticals(self):
 		"""
@@ -1265,7 +1235,7 @@ class Model(object):
 		"""
 
 		for pv, coffset, (itype, iimage, offset) in scaled:
-			iis = self.fm_iimages[pv]
+			iis = self.symbols.division_borders[pv]
 			ii = iis[iimage]
 
 			match pv:
