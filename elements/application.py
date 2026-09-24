@@ -183,6 +183,10 @@ class Session(Core):
 			cfgprompts.history_limit,
 		)
 
+	@staticmethod
+	def integrate_symbols(cfgsymbols):
+		return cfgsymbols.division_borders
+
 	def select_path(self, path:list[str|int]):
 		"""
 		# Get the focus context for the given &path of identifiers.
@@ -287,6 +291,7 @@ class Session(Core):
 		self.theme = self.integrate_theme(cfg.colors)
 		self.keyboard = self.integrate_controls(cfg.controls)
 		self.prompting = self.integrate_prompts(cfg.prompts, self.process.identity)
+		self.symbols = self.integrate_symbols(cfg.symbols)
 
 		self.types = self.integrate_types(cfg.types, self.theme)
 		self.types['lambda'] = self.load_type('lambda') # Default syntax type.
@@ -738,6 +743,7 @@ class Session(Core):
 		divcount = sum(x[0] for x in layout)
 
 		f = Frame(
+			self.symbols,
 			self.prompting,
 			self.device.define, self.theme,
 			self.load_type('location'),

@@ -655,9 +655,6 @@ class Model(object):
 		# division. Keyed with the vertical-division index pair.
 	"""
 
-	# Indicator images (characters) and colors.
-	from ..configuration import symbols
-
 	def verticals(self):
 		"""
 		# Get the number of verticals.
@@ -672,7 +669,8 @@ class Model(object):
 
 		return len(self.fm_divisions[vertical])
 
-	def __init__(self, *, border=1, header=2, footer=0):
+	def __init__(self, symbols, *, border=1, header=2, footer=0):
+		self.fm_symbols = symbols
 		self.fm_allocation = None
 		self.fm_context = None
 		self.fm_header_size = header
@@ -706,13 +704,14 @@ class Model(object):
 		# Reset caches derived from the grid's configuration.
 		"""
 
+		ss = self.fm_symbols['frame']
 		self.fm_intersections[:] = {
-			(0, 0): symbols.corners['top-left'],
-			(0, 3): symbols.intersections['left'],
-			(self.fm_context.span-1, 3): symbols.intersections['right'],
-			(self.fm_context.span-1, 0): symbols.corners['top-right'],
-			(0, self.fm_context.lines-1): symbols.corners['bottom-left'],
-			(self.fm_context.span-1, self.fm_context.lines-1): symbols.corners['bottom-right'],
+			(0, 0): ss['top-left'],
+			(0, 3): ss['left'],
+			(self.fm_context.span-1, 3): ss['right'],
+			(self.fm_context.span-1, 0): ss['top-right'],
+			(0, self.fm_context.lines-1): ss['bottom-left'],
+			(self.fm_context.span-1, self.fm_context.lines-1): ss['bottom-right'],
 		}
 
 	def address(self, x, y):
@@ -1009,25 +1008,24 @@ class Model(object):
 		# Draw the surrounding frame of the session panes.
 		"""
 
-		symbols = self.symbols
+		symbols = self.fm_symbols['frame']
 		hlength = width - (self.fm_border_width * 2)
 		vlength = height - (self.fm_border_width * 2)
 
-		horiz = symbols.lines['horizontal']
-		vert = symbols.lines['vertical']
-		corners = symbols.corners
+		horiz = symbols['horizontal']
+		vert = symbols['vertical']
 
 		# Horizontal top.
 		yoffset = 0
-		yield (yoffset, 0, 1, 1), corners['top-left']
+		yield (yoffset, 0, 1, 1), symbols['top-left']
 		yield (yoffset, 1, 1, hlength), horiz
-		yield (yoffset, width - 1, 1, 1), corners['top-right']
+		yield (yoffset, width - 1, 1, 1), symbols['top-right']
 
 		# Horizontal bottom.
 		yoffset = height - 1
-		yield (yoffset, 0, 1, 1), corners['bottom-left']
+		yield (yoffset, 0, 1, 1), symbols['bottom-left']
 		yield (yoffset, 1, 1, hlength), horiz
-		yield (yoffset, width - 1, 1, 1), corners['bottom-right']
+		yield (yoffset, width - 1, 1, 1), symbols['bottom-right']
 
 		# Verticals
 		yield (1, 0, vlength, 1), vert
@@ -1038,34 +1036,26 @@ class Model(object):
 		# Render the divisions for the verticals.
 		"""
 
-		symbols = self.symbols
-		top = symbols.intersections['top']
-		bottom = symbols.intersections['bottom']
-		vl = symbols.lines['vertical']
-		left = symbols.intersections['left']
-		right = symbols.intersections['right']
-		full = symbols.intersections['full']
-		hl = symbols.lines['horizontal']
-
-		yield (position[1], position[0], 1, 1), top
-		yield (position[1] + 1, position[0], size-2, 1), vl
-		yield (position[1] + size - 1, position[0], 1, 1), bottom
+		symbols = self.fm_symbols['frame']
+		yield (position[1], position[0], 1, 1), symbols['top']
+		yield (position[1] + 1, position[0], size-2, 1), symbols['vertical']
+		yield (position[1] + size - 1, position[0], 1, 1), symbols['bottom']
 
 	def r_divide_horizontals(self, solid, position, size):
 		"""
 		# Render the divisions for the horizontals.
 		"""
 
-		symbols = self.symbols
+		symbols = self.fm_symbols['frame']
 		end = (position[0] + size + 1, position[1])
 
 		if solid:
-			hl = symbols.lines['horizontal']
-			li = self.fm_intersections.get(position, symbols.intersections['left'])
-			ri = self.fm_intersections.get(end, symbols.intersections['right'])
+			hl = symbols['horizontal']
+			li = self.fm_intersections.get(position, symbols['left'])
+			ri = self.fm_intersections.get(end, symbols['right'])
 		else:
-			hl = symbols.dotted['horizontal']
-			ri = li = symbols.lines['vertical']
+			hl = symbols['horizontal-weak']
+			ri = li = symbols['vertical']
 
 		yield (position[1], position[0], 1, 1), li
 		yield (position[1], position[0] + 1, 1, size), hl
@@ -1235,7 +1225,7 @@ class Model(object):
 		"""
 
 		for pv, coffset, (itype, iimage, offset) in scaled:
-			iis = self.symbols.division_borders[pv]
+			iis = self.fm_symbols[pv]
 			ii = iis[iimage]
 
 			match pv:

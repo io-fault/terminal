@@ -360,6 +360,9 @@ keyboard = dict(itertools.chain(
 del itertools
 
 division_borders = {
+	'frame': {'horizontal-weak': dotted['horizontal']} \
+		| corners | intersections | lines,
+
 	'left': {
 		'leading': wedges['up'],
 		'following': wedges['down'],

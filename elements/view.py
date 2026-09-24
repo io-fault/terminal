@@ -2816,7 +2816,7 @@ class Frame(Core):
 
 		return ds, fe
 
-	def __init__(self, prompting, define, theme, fs, keyboard, area, index=None, title=None):
+	def __init__(self, symbols, prompting, define, theme, fs, keyboard, area, index=None, title=None):
 		self.prompting = prompting
 		self.define = define
 		self.theme = theme
@@ -2826,7 +2826,7 @@ class Frame(Core):
 		self.area = area
 		self.index = index
 		self.title = title
-		self.structure = Model()
+		self.structure = Model(symbols)
 
 		self.vertical = 0
 		self.division = 0

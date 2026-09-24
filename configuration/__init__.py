@@ -62,3 +62,4 @@ def load_sections():
 	from . import colors
 	from . import types
 	from . import prompts
+	from . import symbols
