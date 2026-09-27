@@ -770,20 +770,20 @@ class Model(object):
 			)
 		)
 
-	def redistribute(self, verticals, allocation=100):
+	def redistribute(self, verticals):
 		"""
 		# Distribute the available vertical area so that each page has at least the
 		# given &allocation.
 
 		# [ Parameters ]
 		# /verticals/
-			# Tuples designating the horizontal count and allocation width.
+			# Tuples designating the horizontal count and relative allocation width.
 		"""
 
 		height = self.fm_context.lines - (self.fm_border_width * 2)
 		width = self.fm_context.span - (self.fm_border_width * 2)
 		nverticals = len(verticals)
-		maxverticals = max(width // allocation, 1)
+		maxverticals = max(width // self.fm_allocation, 1)
 
 		# Fill the available space; excess goes to &inheritor.
 		ralloc = width // maxverticals
@@ -800,7 +800,7 @@ class Model(object):
 		self.fm_verticals = [
 			(
 				(None, 0 + self.fm_border_width),
-				(allocation * x[1] + (max(x[1]-1, 0) * self.fm_border_width), height),
+				(self.fm_allocation * x[1] + (max(x[1]-1, 0) * self.fm_border_width), height),
 			)
 			for x in verticals
 		]
@@ -867,7 +867,7 @@ class Model(object):
 
 		self.fm_context = area
 		self.fm_allocation = allocation
-		self.redistribute(verticals, allocation)
+		self.redistribute(verticals)
 		for i, vd in enumerate(verticals):
 			self.divide(i, vd[0])
 		return self
