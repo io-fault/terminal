@@ -3106,6 +3106,34 @@ class Frame(Core):
 		self.views[:] = [x[d] for x, d in zip(self.stacks, levels)]
 		self.focus = self.views[self.paths[path]].content
 
+	def update_divisions(self):
+		"""
+		# Update the frame's divisions in response to model changes.
+		"""
+
+		# Rebuild division path indexes.
+		self.panes = list(self.structure.iterpanes())
+		self.paths = {p: i for i, p in enumerate(self.panes)}
+
+		self.areas = list(zip(
+			itertools.starmap(Area, self.structure.itercontexts(section=1)), # location
+			itertools.starmap(Area, self.structure.itercontexts()), # content
+			itertools.starmap(Area, self.structure.itercontexts(section=3)), # prompt
+		))
+
+	@comethod('frame', 'set/division/height')
+	def f_set_div_height_value(self, dpath, quantity=0):
+		self.structure.set_horizontal_height(*dpath, quantity)
+		self.update_divisions()
+		self.reconfigure()
+		self.f_refresh()
+
+	@comethod('frame', 'set/division/height/delta')
+	def f_set_div_height_delta(self, dpath, quantity=0):
+		v, h = dpath
+		size = self.structure.fm_divisions[v][h][1][1] + quantity
+		self.f_set_div_height_value(dpath, size)
+
 	def remodel(self, area=None, divisions=None):
 		"""
 		# Update the model in response to changes in the size or layout of the frame.
@@ -3119,16 +3147,7 @@ class Frame(Core):
 			divisions = dd
 
 		self.structure.configure(area, divisions)
-
-		# Rebuild division path indexes.
-		self.panes = list(self.structure.iterpanes())
-		self.paths = {p: i for i, p in enumerate(self.panes)}
-
-		self.areas = list(zip(
-			itertools.starmap(Area, self.structure.itercontexts(section=1)), # location
-			itertools.starmap(Area, self.structure.itercontexts()), # content
-			itertools.starmap(Area, self.structure.itercontexts(section=3)), # prompt
-		))
+		self.update_divisions()
 		self.stacks = [list() for x in range(len(self.areas))]
 
 	def reconfigure(self):

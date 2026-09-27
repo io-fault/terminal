@@ -825,6 +825,42 @@ class Model(object):
 
 		return len(self.fm_verticals)
 
+	def set_horizontal_height(self, vertical, horizontal, height):
+		"""
+		# Change the height of the &horizontal in the &vertical to &height.
+		"""
+
+		v = self.fm_divisions[vertical]
+		if len(v) == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		vp, vd, vm = v[horizontal]
+		last = (horizontal + 1) == len(v)
+		d = height - vd[1]
+
+		if last:
+			# Shrink the preceding division's height to make room.
+			fi = horizontal - 1
+			fvp, fvd, fvm = v[fi]
+			fd = (fvp, (fvd[0], fvd[1] - d), fvm)
+			dd = ((vp[0], vp[1] - d), (vd[0], vd[1] + d), vm)
+		else:
+			# Shrink the following division's height to make room.
+			fi = horizontal + 1
+			fvp, fvd, fvm = v[fi]
+			fd = ((fvp[0], fvp[1] + d), (fvd[0], fvd[1] - d), fvm)
+			dd = (vp, (vd[0], height), vm)
+
+		if fd[1][1] < 7 or dd[1][1] < 7:
+			raise ValueError("cannot reduce division size below 7")
+		if fd[0][1] < 1 or dd[0][1] < 1:
+			raise ValueError("cannot move division below 1")
+
+		v[fi] = fd
+		v[horizontal] = dd
+		self.update_inner_intersections(vertical)
+
 	def set_margin_size(self, vertical, horizontal, section, size):
 		"""
 		# Change the size of the header, footer, or left and right margins
