@@ -884,10 +884,19 @@ class Model(object):
 				for vp, vd, vm in self.fm_divisions[fi]
 			]
 
-		if fv[1][0] < 0 or dv[1][0] < 0:
-			raise ValueError("cannot reduce vertical width below zero")
-		if fv[0][0] < 0 or dv[0][0] < 0:
-			raise ValueError("cannot move vertical offset below zero")
+		for vd in (dv[1], fv[1]):
+			width = vd[0]
+			if width < 0 or width >= self.fm_context.span:
+				bounds = "0 -> " + str(self.fm_context.span)
+				errstr = f"vertical width ({width}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		for vp in (dv[0], fv[0]):
+			left = vp[0]
+			if left < 0 or left >= self.fm_context.span:
+				bounds = "0 -> " + str(self.fm_context.span)
+				errstr = f"vertical offset ({left}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
 
 		self.fm_verticals[fi] = fv
 		self.fm_divisions[fi] = fvd
@@ -923,10 +932,19 @@ class Model(object):
 			fd = ((fvp[0], fvp[1] + d), (fvd[0], fvd[1] - d), fvm)
 			dd = (vp, (vd[0], height), vm)
 
-		if fd[1][1] < 7 or dd[1][1] < 7:
-			raise ValueError("cannot reduce division size below 7")
-		if fd[0][1] < 1 or dd[0][1] < 1:
-			raise ValueError("cannot move division below 1")
+		for vd in (dd[1], fd[1]):
+			height = vd[1]
+			if height < 7 or height >= self.fm_context.lines:
+				bounds = "7 -> " + str(self.fm_context.lines)
+				errstr = f"division height ({height}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		for vp in (dd[0], fd[0]):
+			top = vp[1]
+			if top < 0 or top >= self.fm_context.lines:
+				bounds = "0 -> " + str(self.fm_context.lines)
+				errstr = f"divsion offset ({top}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
 
 		v[fi] = fd
 		v[horizontal] = dd
