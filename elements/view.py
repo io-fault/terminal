@@ -3121,6 +3121,18 @@ class Frame(Core):
 			itertools.starmap(Area, self.structure.itercontexts(section=3)), # prompt
 		))
 
+	@comethod('frame', 'set/vertical/width')
+	def f_set_vertical_width_value(self, dpath, quantity=0):
+		self.structure.set_vertical_width(dpath[0], quantity)
+		self.update_divisions()
+		self.reconfigure()
+		self.f_refresh()
+
+	@comethod('frame', 'set/vertical/width/delta')
+	def f_set_vertical_width_delta(self, dpath, quantity=0):
+		size = self.structure.fm_divisions[dpath[0]][0][1][0] + quantity
+		self.f_set_vertical_width_value(dpath, size)
+
 	@comethod('frame', 'set/division/height')
 	def f_set_div_height_value(self, dpath, quantity=0):
 		self.structure.set_horizontal_height(*dpath, quantity)

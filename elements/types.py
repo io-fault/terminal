@@ -825,6 +825,77 @@ class Model(object):
 
 		return len(self.fm_verticals)
 
+	def set_vertical_width(self, vertical, width):
+		"""
+		# Change the width of the &vertical to &width.
+		"""
+
+		nv = len(self.fm_divisions)
+		if nv == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		last = (vertical + 1) == nv
+		dv = self.fm_verticals[vertical]
+		d = width - dv[1][0]
+
+		if last:
+			# Change the preceding vertical's width to make room.
+			fi = vertical - 1
+
+			dv = (
+				(dv[0][0] - d, dv[0][1]),
+				(dv[1][0] + d, dv[1][1]),
+			)
+			dvd = [
+				((dv[0][0], vp[1]), (dv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.fm_divisions[vertical]
+			]
+
+			fv = self.fm_verticals[fi]
+			fv = (
+				fv[0],
+				(fv[1][0] - d, fv[1][1]),
+			)
+			fvd = [
+				(vp, (fv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.fm_divisions[fi]
+			]
+		else:
+			# Change the following vertical's width to make room.
+			fi = vertical + 1
+
+			dv = (
+				dv[0],
+				(dv[1][0] + d, dv[1][1]),
+			)
+			dvd = [
+				(vp, (dv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.fm_divisions[vertical]
+			]
+
+			fv = self.fm_verticals[fi]
+			fv = (
+				(fv[0][0] + d, fv[0][1]),
+				(fv[1][0] - d, fv[1][1]),
+			)
+			fvd = [
+				((fv[0][0], vp[1]), (fv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.fm_divisions[fi]
+			]
+
+		if fv[1][0] < 0 or dv[1][0] < 0:
+			raise ValueError("cannot reduce vertical width below zero")
+		if fv[0][0] < 0 or dv[0][0] < 0:
+			raise ValueError("cannot move vertical offset below zero")
+
+		self.fm_verticals[fi] = fv
+		self.fm_divisions[fi] = fvd
+		self.fm_verticals[vertical] = dv
+		self.fm_divisions[vertical] = dvd
+		self.update_inner_intersections(fi)
+		self.update_inner_intersections(vertical)
+
 	def set_horizontal_height(self, vertical, horizontal, height):
 		"""
 		# Change the height of the &horizontal in the &vertical to &height.
