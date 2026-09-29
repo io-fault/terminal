@@ -358,3 +358,37 @@ keyboard = dict(itertools.chain(
 	navigation.items(),
 ))
 del itertools
+
+division_borders = {
+	'frame': {'horizontal-weak': dotted['horizontal']} \
+		| corners | intersections | lines,
+
+	'left': {
+		'leading': wedges['up'],
+		'following': wedges['down'],
+		'visible': wedges['right'],
+		'reset-solid': lines['vertical'],
+		'reset-weak': dotted['vertical'],
+	},
+	'right': {
+		'leading': wedges['up'],
+		'following': wedges['down'],
+		'visible': wedges['left'],
+		'reset-solid': lines['vertical'],
+		'reset-weak': dotted['vertical'],
+	},
+	'top': {
+		'leading': wedges['left'],
+		'following': wedges['right'],
+		'visible': wedges['down'],
+		'reset-solid': lines['horizontal'],
+		'reset-weak': dotted['horizontal'],
+	},
+	'bottom': {
+		'leading': wedges['left'],
+		'following': wedges['right'],
+		'visible': wedges['up'],
+		'reset-solid': lines['horizontal'],
+		'reset-weak': dotted['horizontal'],
+	},
+}

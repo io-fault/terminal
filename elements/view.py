@@ -2816,7 +2816,7 @@ class Frame(Core):
 
 		return ds, fe
 
-	def __init__(self, prompting, define, theme, fs, keyboard, area, index=None, title=None):
+	def __init__(self, symbols, prompting, define, theme, fs, keyboard, area, index=None, title=None):
 		self.prompting = prompting
 		self.define = define
 		self.theme = theme
@@ -2826,7 +2826,7 @@ class Frame(Core):
 		self.area = area
 		self.index = index
 		self.title = title
-		self.structure = Model()
+		self.structure = Model(symbols)
 
 		self.vertical = 0
 		self.division = 0
@@ -3106,6 +3106,46 @@ class Frame(Core):
 		self.views[:] = [x[d] for x, d in zip(self.stacks, levels)]
 		self.focus = self.views[self.paths[path]].content
 
+	def update_divisions(self):
+		"""
+		# Update the frame's divisions in response to model changes.
+		"""
+
+		# Rebuild division path indexes.
+		self.panes = list(self.structure.iterpanes())
+		self.paths = {p: i for i, p in enumerate(self.panes)}
+
+		self.areas = list(zip(
+			itertools.starmap(Area, self.structure.itercontexts(section=1)), # location
+			itertools.starmap(Area, self.structure.itercontexts()), # content
+			itertools.starmap(Area, self.structure.itercontexts(section=3)), # prompt
+		))
+
+	@comethod('frame', 'set/vertical/width')
+	def f_set_vertical_width_value(self, dpath, quantity=0):
+		self.structure.set_vertical_width(dpath[0], quantity)
+		self.update_divisions()
+		self.reconfigure()
+		self.f_refresh()
+
+	@comethod('frame', 'set/vertical/width/delta')
+	def f_set_vertical_width_delta(self, dpath, quantity=0):
+		size = self.structure.fm_divisions[dpath[0]][0][1][0] + quantity
+		self.f_set_vertical_width_value(dpath, size)
+
+	@comethod('frame', 'set/division/height')
+	def f_set_div_height_value(self, dpath, quantity=0):
+		self.structure.set_horizontal_height(*dpath, quantity)
+		self.update_divisions()
+		self.reconfigure()
+		self.f_refresh()
+
+	@comethod('frame', 'set/division/height/delta')
+	def f_set_div_height_delta(self, dpath, quantity=0):
+		v, h = dpath
+		size = self.structure.fm_divisions[v][h][1][1] + quantity
+		self.f_set_div_height_value(dpath, size)
+
 	def remodel(self, area=None, divisions=None):
 		"""
 		# Update the model in response to changes in the size or layout of the frame.
@@ -3119,16 +3159,7 @@ class Frame(Core):
 			divisions = dd
 
 		self.structure.configure(area, divisions)
-
-		# Rebuild division path indexes.
-		self.panes = list(self.structure.iterpanes())
-		self.paths = {p: i for i, p in enumerate(self.panes)}
-
-		self.areas = list(zip(
-			itertools.starmap(Area, self.structure.itercontexts(section=1)), # location
-			itertools.starmap(Area, self.structure.itercontexts()), # content
-			itertools.starmap(Area, self.structure.itercontexts(section=3)), # prompt
-		))
+		self.update_divisions()
 		self.stacks = [list() for x in range(len(self.areas))]
 
 	def reconfigure(self):
@@ -3315,7 +3346,7 @@ class Frame(Core):
 				v = dpath[0] - 1
 				if v < 0:
 					v += self.structure.verticals()
-				dpath = (v, self.structure.divisions(v)-1)
+				dpath = (v, self.structure.horizontals(v)-1)
 			else:
 				dpath = (dpath[0]+1, 0)
 				if dpath not in self.paths:

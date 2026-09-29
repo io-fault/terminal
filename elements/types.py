@@ -655,39 +655,6 @@ class Model(object):
 		# division. Keyed with the vertical-division index pair.
 	"""
 
-	# Indicator images (characters) and colors.
-	from ..configuration import symbols
-	fm_iimages = {
-		'left': {
-			'leading': symbols.wedges['up'],
-			'following': symbols.wedges['down'],
-			'visible': symbols.wedges['right'],
-			'reset-solid': symbols.lines['vertical'],
-			'reset-weak': symbols.dotted['vertical'],
-		},
-		'right': {
-			'leading': symbols.wedges['up'],
-			'following': symbols.wedges['down'],
-			'visible': symbols.wedges['left'],
-			'reset-solid': symbols.lines['vertical'],
-			'reset-weak': symbols.dotted['vertical'],
-		},
-		'top': {
-			'leading': symbols.wedges['left'],
-			'following': symbols.wedges['right'],
-			'visible': symbols.wedges['down'],
-			'reset-solid': symbols.lines['horizontal'],
-			'reset-weak': symbols.dotted['horizontal'],
-		},
-		'bottom': {
-			'leading': symbols.wedges['left'],
-			'following': symbols.wedges['right'],
-			'visible': symbols.wedges['up'],
-			'reset-solid': symbols.lines['horizontal'],
-			'reset-weak': symbols.dotted['horizontal'],
-		},
-	}
-
 	def verticals(self):
 		"""
 		# Get the number of verticals.
@@ -695,14 +662,15 @@ class Model(object):
 
 		return len(self.fm_verticals)
 
-	def divisions(self, vertical):
+	def horizontals(self, vertical):
 		"""
-		# Get the number of divisions for the &vertical.
+		# Get the number of horizontals in the &vertical.
 		"""
 
 		return len(self.fm_divisions[vertical])
 
-	def __init__(self, *, border=1, header=2, footer=0):
+	def __init__(self, symbols, *, border=1, header=2, footer=0):
+		self.fm_symbols = symbols
 		self.fm_allocation = None
 		self.fm_context = None
 		self.fm_header_size = header
@@ -716,7 +684,7 @@ class Model(object):
 
 	def sole(self):
 		"""
-		# Initialize verticals and divisions as a sole area.
+		# Initialize verticals and horizontals as a sole area.
 		"""
 
 		self.fm_verticals = [
@@ -726,7 +694,6 @@ class Model(object):
 			))
 		]
 
-		# Divisions(vertical separations).
 		self.fm_divisions[0] = [self.fm_verticals[0] + ((2, 0),)]
 		for k in self.fm_divisions:
 			del self.fm_divisions[k]
@@ -737,18 +704,19 @@ class Model(object):
 		# Reset caches derived from the grid's configuration.
 		"""
 
+		ss = self.fm_symbols['frame']
 		self.fm_intersections[:] = {
-			(0, 0): symbols.corners['top-left'],
-			(0, 3): symbols.intersections['left'],
-			(self.fm_context.span-1, 3): symbols.intersections['right'],
-			(self.fm_context.span-1, 0): symbols.corners['top-right'],
-			(0, self.fm_context.lines-1): symbols.corners['bottom-left'],
-			(self.fm_context.span-1, self.fm_context.lines-1): symbols.corners['bottom-right'],
+			(0, 0): ss['top-left'],
+			(0, 3): ss['left'],
+			(self.fm_context.span-1, 3): ss['right'],
+			(self.fm_context.span-1, 0): ss['top-right'],
+			(0, self.fm_context.lines-1): ss['bottom-left'],
+			(self.fm_context.span-1, self.fm_context.lines-1): ss['bottom-right'],
 		}
 
 	def address(self, x, y):
 		"""
-		# Identify the vertical and division that contain the &x and &y coordinates.
+		# Identify the vertical and horizontals that contain the &x and &y coordinates.
 		"""
 
 		x -= self.fm_context.left_offset
@@ -760,8 +728,7 @@ class Model(object):
 				# Matched vertical.
 				for i, (dp, dd, ds) in enumerate(self.fm_divisions[v]):
 					if y >= dp[1] and y <= dp[1] + dd[1]:
-						# Matched division.
-						# Check Division Section
+						# Matched horizontal; identify section.
 						ry = y - dp[1]
 
 						if ds[0] and ry <= ds[0]:
@@ -778,7 +745,7 @@ class Model(object):
 	@staticmethod
 	def distribute(span:int, allocation:int, separator:int=1):
 		"""
-		# Distribute the available range in &span so that each division has at least the
+		# Distribute the available range in &span so that each horizontal has at least the
 		# requested &allocation.
 		"""
 
@@ -803,20 +770,20 @@ class Model(object):
 			)
 		)
 
-	def redistribute(self, verticals, allocation=100):
+	def redistribute(self, verticals):
 		"""
 		# Distribute the available vertical area so that each page has at least the
 		# given &allocation.
 
 		# [ Parameters ]
 		# /verticals/
-			# Tuples designating the division count and allocation width.
+			# Tuples designating the horizontal count and relative allocation width.
 		"""
 
 		height = self.fm_context.lines - (self.fm_border_width * 2)
 		width = self.fm_context.span - (self.fm_border_width * 2)
 		nverticals = len(verticals)
-		maxverticals = max(width // allocation, 1)
+		maxverticals = max(width // self.fm_allocation, 1)
 
 		# Fill the available space; excess goes to &inheritor.
 		ralloc = width // maxverticals
@@ -833,7 +800,7 @@ class Model(object):
 		self.fm_verticals = [
 			(
 				(None, 0 + self.fm_border_width),
-				(allocation * x[1] + (max(x[1]-1, 0) * self.fm_border_width), height),
+				(self.fm_allocation * x[1] + (max(x[1]-1, 0) * self.fm_border_width), height),
 			)
 			for x in verticals
 		]
@@ -858,57 +825,182 @@ class Model(object):
 
 		return len(self.fm_verticals)
 
-	def set_margin_size(self, vertical, division, section, size):
+	def set_vertical_width(self, vertical, width):
 		"""
-		# Change the size of the header, footer, or left and right margins
-		# for the division identified by &vertical and &division.
+		# Change the width of the &vertical to &width.
 		"""
 
-		key = (vertical, division, section)
+		nv = len(self.fm_divisions)
+		if nv == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		last = (vertical + 1) == nv
+		dv = self.fm_verticals[vertical]
+		d = width - dv[1][0]
+
+		if last:
+			# Change the preceding vertical's width to make room.
+			fi = vertical - 1
+
+			dv = (
+				(dv[0][0] - d, dv[0][1]),
+				(dv[1][0] + d, dv[1][1]),
+			)
+			dvd = [
+				((dv[0][0], vp[1]), (dv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.fm_divisions[vertical]
+			]
+
+			fv = self.fm_verticals[fi]
+			fv = (
+				fv[0],
+				(fv[1][0] - d, fv[1][1]),
+			)
+			fvd = [
+				(vp, (fv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.fm_divisions[fi]
+			]
+		else:
+			# Change the following vertical's width to make room.
+			fi = vertical + 1
+
+			dv = (
+				dv[0],
+				(dv[1][0] + d, dv[1][1]),
+			)
+			dvd = [
+				(vp, (dv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.fm_divisions[vertical]
+			]
+
+			fv = self.fm_verticals[fi]
+			fv = (
+				(fv[0][0] + d, fv[0][1]),
+				(fv[1][0] - d, fv[1][1]),
+			)
+			fvd = [
+				((fv[0][0], vp[1]), (fv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.fm_divisions[fi]
+			]
+
+		for vd in (dv[1], fv[1]):
+			width = vd[0]
+			if width < 0 or width >= self.fm_context.span:
+				bounds = "0 -> " + str(self.fm_context.span)
+				errstr = f"vertical width ({width}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		for vp in (dv[0], fv[0]):
+			left = vp[0]
+			if left < 0 or left >= self.fm_context.span:
+				bounds = "0 -> " + str(self.fm_context.span)
+				errstr = f"vertical offset ({left}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		self.fm_verticals[fi] = fv
+		self.fm_divisions[fi] = fvd
+		self.fm_verticals[vertical] = dv
+		self.fm_divisions[vertical] = dvd
+		self.update_inner_intersections(fi)
+		self.update_inner_intersections(vertical)
+
+	def set_horizontal_height(self, vertical, horizontal, height):
+		"""
+		# Change the height of the &horizontal in the &vertical to &height.
+		"""
+
+		v = self.fm_divisions[vertical]
+		if len(v) == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		vp, vd, vm = v[horizontal]
+		last = (horizontal + 1) == len(v)
+		d = height - vd[1]
+
+		if last:
+			# Shrink the preceding division's height to make room.
+			fi = horizontal - 1
+			fvp, fvd, fvm = v[fi]
+			fd = (fvp, (fvd[0], fvd[1] - d), fvm)
+			dd = ((vp[0], vp[1] - d), (vd[0], vd[1] + d), vm)
+		else:
+			# Shrink the following division's height to make room.
+			fi = horizontal + 1
+			fvp, fvd, fvm = v[fi]
+			fd = ((fvp[0], fvp[1] + d), (fvd[0], fvd[1] - d), fvm)
+			dd = (vp, (vd[0], height), vm)
+
+		for vd in (dd[1], fd[1]):
+			height = vd[1]
+			if height < 7 or height >= self.fm_context.lines:
+				bounds = "7 -> " + str(self.fm_context.lines)
+				errstr = f"division height ({height}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		for vp in (dd[0], fd[0]):
+			top = vp[1]
+			if top < 0 or top >= self.fm_context.lines:
+				bounds = "0 -> " + str(self.fm_context.lines)
+				errstr = f"divsion offset ({top}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		v[fi] = fd
+		v[horizontal] = dd
+		self.update_inner_intersections(vertical)
+
+	def set_margin_size(self, vertical, horizontal, section, size):
+		"""
+		# Change the size of the header, footer, or left and right margins
+		# for the horizontal identified by &vertical and &horizontal.
+		"""
+
+		key = (vertical, horizontal, section)
 		current = self.fm_deltas.get(key, 0)
 
 		self.fm_deltas[key] = size
-		vp, vd, vm = self.fm_divisions[vertical][division]
+		vp, vd, vm = self.fm_divisions[vertical][horizontal]
 		if section == 1:
 			h = size
 			f = vm[1]
 		elif section == 3:
 			h = vm[0]
 			f = size
-		self.fm_divisions[vertical][division] = (vp, vd, (h, f))
+		self.fm_divisions[vertical][horizontal] = (vp, vd, (h, f))
 		self.update_inner_intersections(vertical)
 
 		return size - current
 
-	def divide(self, page, divisions):
+	def divide(self, vertical, count):
 		"""
-		# Split the page (vertical) into divisions
+		# Split the &vertical &count times.
 		"""
 
-		pp, pd = self.fm_verticals[page]
-		self.fm_divisions[page] = [
-			((pp[0], p), (pd[0], height), (2, self.fm_deltas.get((page, di, 3), 0)))
-			for di, (p, height) in enumerate(self.distribute(pd[1], (pd[1] // divisions)-1))
+		pp, pd = self.fm_verticals[vertical]
+		self.fm_divisions[vertical] = [
+			((pp[0], p), (pd[0], height), (2, self.fm_deltas.get((vertical, di, 3), 0)))
+			for di, (p, height) in enumerate(self.distribute(pd[1], (pd[1] // count)-1))
 		]
-		self.update_inner_intersections(page)
+		self.update_inner_intersections(vertical)
 
-	def configure(self, area, divisions, allocation=100):
+	def configure(self, area, verticals, allocation=100):
 		"""
-		# Configure the frame to have `len(divisions)` verticals where
-		# each element describes the number of divisions within the vertical.
+		# Configure the frame to have `len(verticals)` verticals where
+		# each element describes the number of horizontals within the vertical.
 		"""
 
 		self.fm_context = area
 		self.fm_allocation = allocation
-		self.redistribute(divisions, allocation)
-		for i, vd in enumerate(divisions):
+		self.redistribute(verticals)
+		for i, vd in enumerate(verticals):
 			self.divide(i, vd[0])
 		return self
 
 	@property
 	def configuration(self):
 		"""
-		# The configured area and divisions.
+		# Return the configured area and verticals.
 		"""
 
 		return self.fm_context, self.layout
@@ -1041,25 +1133,24 @@ class Model(object):
 		# Draw the surrounding frame of the session panes.
 		"""
 
-		symbols = self.symbols
+		symbols = self.fm_symbols['frame']
 		hlength = width - (self.fm_border_width * 2)
 		vlength = height - (self.fm_border_width * 2)
 
-		horiz = symbols.lines['horizontal']
-		vert = symbols.lines['vertical']
-		corners = symbols.corners
+		horiz = symbols['horizontal']
+		vert = symbols['vertical']
 
 		# Horizontal top.
 		yoffset = 0
-		yield (yoffset, 0, 1, 1), corners['top-left']
+		yield (yoffset, 0, 1, 1), symbols['top-left']
 		yield (yoffset, 1, 1, hlength), horiz
-		yield (yoffset, width - 1, 1, 1), corners['top-right']
+		yield (yoffset, width - 1, 1, 1), symbols['top-right']
 
 		# Horizontal bottom.
 		yoffset = height - 1
-		yield (yoffset, 0, 1, 1), corners['bottom-left']
+		yield (yoffset, 0, 1, 1), symbols['bottom-left']
 		yield (yoffset, 1, 1, hlength), horiz
-		yield (yoffset, width - 1, 1, 1), corners['bottom-right']
+		yield (yoffset, width - 1, 1, 1), symbols['bottom-right']
 
 		# Verticals
 		yield (1, 0, vlength, 1), vert
@@ -1067,50 +1158,42 @@ class Model(object):
 
 	def r_divide_verticals(self, position, size):
 		"""
-		# Render a vertical division.
+		# Render the divisions for the verticals.
 		"""
 
-		symbols = self.symbols
-		top = symbols.intersections['top']
-		bottom = symbols.intersections['bottom']
-		vl = symbols.lines['vertical']
-		left = symbols.intersections['left']
-		right = symbols.intersections['right']
-		full = symbols.intersections['full']
-		hl = symbols.lines['horizontal']
-
-		yield (position[1], position[0], 1, 1), top
-		yield (position[1] + 1, position[0], size-2, 1), vl
-		yield (position[1] + size - 1, position[0], 1, 1), bottom
+		symbols = self.fm_symbols['frame']
+		yield (position[1], position[0], 1, 1), symbols['top']
+		yield (position[1] + 1, position[0], size-2, 1), symbols['vertical']
+		yield (position[1] + size - 1, position[0], 1, 1), symbols['bottom']
 
 	def r_divide_horizontals(self, solid, position, size):
 		"""
-		# Render a horizontal division.
+		# Render the divisions for the horizontals.
 		"""
 
-		symbols = self.symbols
+		symbols = self.fm_symbols['frame']
 		end = (position[0] + size + 1, position[1])
 
 		if solid:
-			hl = symbols.lines['horizontal']
-			li = self.fm_intersections.get(position, symbols.intersections['left'])
-			ri = self.fm_intersections.get(end, symbols.intersections['right'])
+			hl = symbols['horizontal']
+			li = self.fm_intersections.get(position, symbols['left'])
+			ri = self.fm_intersections.get(end, symbols['right'])
 		else:
-			hl = symbols.dotted['horizontal']
-			ri = li = symbols.lines['vertical']
+			hl = symbols['horizontal-weak']
+			ri = li = symbols['vertical']
 
 		yield (position[1], position[0], 1, 1), li
 		yield (position[1], position[0] + 1, 1, size), hl
 		yield (position[1], position[0] + 1 + size, 1, 1), ri
 
-	def r_patch_footer(self, vertical, division):
+	def r_patch_footer(self, vertical, horizontal):
 		"""
 		# Render the dividing line used to separate the &section from the body.
 
 		# Used when opening a prompt in an already drawn frame.
 		"""
 
-		vp, vd, vx = self.fm_divisions[vertical][division]
+		vp, vd, vx = self.fm_divisions[vertical][horizontal]
 		header, footer = vx
 
 		h = vp[0] - self.fm_border_width
@@ -1267,7 +1350,7 @@ class Model(object):
 		"""
 
 		for pv, coffset, (itype, iimage, offset) in scaled:
-			iis = self.fm_iimages[pv]
+			iis = self.fm_symbols[pv]
 			ii = iis[iimage]
 
 			match pv:
