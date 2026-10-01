@@ -637,8 +637,8 @@ class Status(object):
 
 class Model(object):
 	"""
-	# The visual model defining the positions of panes.
-	# Provides state for defining how a window's panes are positioned in an area,
+	# The visual model defining the positions of divisions.
+	# Provides state for defining how a frame's divisions are positioned in an area,
 	# methods for controlling position indicators, and rendering tools for
 	# preparing drawing instructions.
 
@@ -1011,7 +1011,7 @@ class Model(object):
 
 	def iterpanes(self):
 		"""
-		# Identify the paths used to reach a given pane.
+		# Identify the paths used to reach a given division.
 		"""
 
 		for v in range(len(self.fm_verticals)):
@@ -1020,12 +1020,12 @@ class Model(object):
 
 	def itercontexts(self, *, section=0):
 		"""
-		# Construct Context instances for the configured set of panes
+		# Construct (area) contexts for the configured set of divisions
 		# in left-to-right and top-to-bottom order.
 
 		# [ Parameters ]
 		# /section/
-			# The portion of the pane to select.
+			# The portion of the division to select.
 			# Defaults to zero selecting the body.
 		"""
 
@@ -1063,7 +1063,7 @@ class Model(object):
 			position = (lambda: (rx+left, ry+top+dt))
 			dimensions = (lambda: (dl-hborder, height-dt-db))
 		else:
-			raise ValueError("five sections available in a pane, 0-4")
+			raise ValueError("five sections available in a division, 0-4")
 
 		for v in range(len(self.fm_verticals)):
 			for cp, cd, cx in self.fm_divisions[v]:
@@ -1130,7 +1130,7 @@ class Model(object):
 
 	def r_enclose(self, width, height):
 		"""
-		# Draw the surrounding frame of the session panes.
+		# Draw the surrounding border of the frame.
 		"""
 
 		symbols = self.fm_symbols['frame']
@@ -1278,9 +1278,9 @@ class Model(object):
 
 		# [ Parameters ]
 		# /position/
-			# The &fm_context relative position of the pane.
+			# The &fm_context relative position of the division.
 		# /dimensions/
-			# The width and height of the pane.
+			# The width and height of the division.
 		# /horizontal/
 			# The horizontal cursor positions to indicate.
 		# /vertical/
