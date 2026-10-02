@@ -2817,6 +2817,7 @@ class Frame(Core):
 		return ds, fe
 
 	def __init__(self, symbols, prompting, define, theme, fs, keyboard, area, index=None, title=None):
+		self.symbols = symbols
 		self.prompting = prompting
 		self.define = define
 		self.theme = theme
@@ -3289,7 +3290,10 @@ class Frame(Core):
 		if vs.prompt.area.lines > 0:
 			self.deltas.extend(
 				self.fill_areas(
-					self.structure.r_patch_footer(dpath[0], dpath[1])
+					self.r_patch_footer(self.symbols, 1,
+						self.structure.fm_intersections,
+						self.structure.fm_divisions, dpath[0], dpath[1]
+					)
 				)
 			)
 
@@ -3310,8 +3314,13 @@ class Frame(Core):
 
 		aw = self.area.span
 		ah = self.area.lines
-		yield from self.fill_areas(self.structure.r_enclose(aw, ah))
-		yield from self.fill_areas(self.structure.r_divide(aw, ah))
+		yield from self.fill_areas(self.r_enclose(self.symbols, 1, aw, ah))
+		yield from self.fill_areas(
+			self.r_divide(self.symbols, 1,
+				self.structure.fm_intersections,
+				self.structure.fm_verticals,
+				self.structure.fm_divisions, aw, ah)
+		)
 
 	def render(self, *, ichain=itertools.chain.from_iterable):
 		"""
@@ -3325,8 +3334,13 @@ class Frame(Core):
 		ah = self.area.lines
 
 		# Give the frame boundaries higher (display) precedence by rendering last.
-		yield from self.fill_areas(self.structure.r_enclose(aw, ah))
-		yield from self.fill_areas(self.structure.r_divide(aw, ah))
+		yield from self.fill_areas(self.r_enclose(self.symbols, 1, aw, ah))
+		yield from self.fill_areas(
+			self.r_divide(self.symbols, 1,
+				self.structure.fm_intersections,
+				self.structure.fm_verticals,
+				self.structure.fm_divisions, aw, ah)
+		)
 
 	def select(self, dpath):
 		"""
@@ -3541,7 +3555,10 @@ class Frame(Core):
 			self.resize_footer(dpath, pg_allocation)
 			self.deltas.extend(
 				self.fill_areas(
-					self.structure.r_patch_footer(dpath[0], dpath[1])
+					self.r_patch_footer(self.symbols, 1,
+						self.structure.fm_intersections,
+						self.structure.fm_divisions, dpath[0], dpath[1]
+					)
 				)
 			)
 			self.deltas.extend(pg.refresh(0))
@@ -3831,15 +3848,15 @@ class Frame(Core):
 			# Presume the reflected application can manage focus indication.
 			return
 
-		si = list(self.structure.scale_ipositions(
-			self.structure.indicate,
+		si = list(self.scale_ipositions(
+			self.indications,
 			(vstat.area.left_offset, vstat.area.top_offset),
 			(vstat.area.span, vstat.area.lines),
 			vstat.cell(), vstat.line(),
 			vstat.v_cell_offset, vstat.v_line_offset,
 		))
 
-		for pi in self.structure.r_indicators(si):
+		for pi in self.r_indicators(self.symbols, self.structure.fm_intersections, si):
 			(x, y), itype, ic, bc = pi
 			ccell = self.theme['cursor-' + itype]
 			picell = Glyph(textcolor=ccell.cellcolor, codepoint=ord(ic))
@@ -4011,3 +4028,247 @@ class Frame(Core):
 			trf.focus[1].set(h - li.ln_level)
 
 		self.focus = trf
+
+	@classmethod
+	def r_enclose(Class, symbols, border, width, height):
+		"""
+		# Draw the surrounding border of the frame.
+		"""
+
+		hlength = width - (border * 2)
+		vlength = height - (border * 2)
+
+		symbols = symbols['frame']
+		horiz = symbols['horizontal']
+		vert = symbols['vertical']
+
+		# Horizontal top.
+		yoffset = 0
+		yield (yoffset, 0, 1, 1), symbols['top-left']
+		yield (yoffset, 1, 1, hlength), horiz
+		yield (yoffset, width - 1, 1, 1), symbols['top-right']
+
+		# Horizontal bottom.
+		yoffset = height - 1
+		yield (yoffset, 0, 1, 1), symbols['bottom-left']
+		yield (yoffset, 1, 1, hlength), horiz
+		yield (yoffset, width - 1, 1, 1), symbols['bottom-right']
+
+		# Verticals
+		yield (1, 0, vlength, 1), vert
+		yield (1, width-1, vlength, 1), vert
+
+	@classmethod
+	def r_divide_verticals(Class, symbols, position, size):
+		"""
+		# Render the divisions for the verticals.
+		"""
+
+		yield (position[1], position[0], 1, 1), symbols['top']
+		yield (position[1] + 1, position[0], size-2, 1), symbols['vertical']
+		yield (position[1] + size - 1, position[0], 1, 1), symbols['bottom']
+
+	@classmethod
+	def r_divide_horizontals(Class, symbols, ixn, solid, position, size):
+		"""
+		# Render the divisions for the horizontals.
+		"""
+
+		end = (position[0] + size + 1, position[1])
+
+		if solid:
+			hl = symbols['horizontal']
+			li = ixn.get(position, symbols['left'])
+			ri = ixn.get(end, symbols['right'])
+		else:
+			hl = symbols['horizontal-weak']
+			ri = li = symbols['vertical']
+
+		yield (position[1], position[0], 1, 1), li
+		yield (position[1], position[0] + 1, 1, size), hl
+		yield (position[1], position[0] + 1 + size, 1, 1), ri
+
+	@classmethod
+	def r_patch_footer(Class, symbols, border, ixn, divisions, vertical, horizontal):
+		"""
+		# Render the dividing line used to separate the &section from the body.
+
+		# Used when opening a prompt in an already drawn frame.
+		"""
+
+		vp, vd, vx = divisions[vertical][horizontal]
+		header, footer = vx
+
+		h = vp[0] - border
+		v = vp[1]
+
+		yield from Class.r_divide_horizontals(symbols['frame'], ixn, False,
+			(h, v + vd[1] - footer - border), vd[0])
+
+	@classmethod
+	def r_divide(Class, symbols, border, ixn, verticals, divisions, width, height):
+		"""
+		# Render all the divisions necessary to represent the model's configuration.
+
+		# Performs the necessary &r_divide_verticals and &r_divide_horizontals
+		# to represent the configured &verticals and &divisions.
+		"""
+
+		symbols = symbols['frame']
+		for vp, vd in verticals[1:]:
+			yield from Class.r_divide_verticals(symbols, (vp[0]-1, vp[1]-1), height)
+
+		for i, v in enumerate(verticals):
+			for vp, vd, vx in divisions[i][1:]:
+				yield from Class.r_divide_horizontals(symbols, ixn, True, (vp[0]-1, vp[1]-1), vd[0])
+
+			for vp, vd, vx in divisions[i]:
+				header, footer = vx
+				h = vp[0] - border
+				v = vp[1]
+
+				if header:
+					yield from Class.r_divide_horizontals(symbols, ixn, False,
+						(h, v + header), vd[0])
+				if footer:
+					yield from Class.r_divide_horizontals(symbols, ixn, False,
+						(h, v + vd[1] - footer - border), vd[0])
+
+	@classmethod
+	def r_indicators(Class, symbols, ixn, scaled, *, rtypes={}):
+		"""
+		# Render indicators from scaled positions.
+		"""
+
+		for pv, coffset, (itype, iimage, offset) in scaled:
+			iis = symbols[pv]
+			ii = iis[iimage]
+
+			match pv:
+				case 'top' | 'bottom':
+					position = (offset, coffset)
+				case 'left' | 'right':
+					position = (coffset, offset)
+
+			if position in ixn:
+				re = ixn[position]
+			else:
+				# Default horizontal or vertical. Dotted (weak) or solid.
+				re = iis['reset-'+rtypes.get(pv, 'solid')]
+
+			yield (position, itype, ii, re)
+
+	@classmethod
+	def scale_ipositions(Class,
+			indicate,
+			position, dimensions,
+			horizontal, vertical, # Cursor Vectors
+			dx, dy, # Cursor adjustments.
+			*,
+			borders=(1, 1),
+			itypes=(
+				'start-inclusive',
+				'offset-active',
+				'stop-exclusive',
+			),
+			zip=zip, R=itertools.repeat,
+			chain=itertools.chain, rev=reversed,
+		):
+		"""
+		# Annotate and scale the indicator positions in preparation for rendering.
+
+		# [ Parameters ]
+		# /position/
+			# The &fm_context relative position of the division.
+		# /dimensions/
+			# The width and height of the division.
+		# /horizontal/
+			# The horizontal cursor positions to indicate.
+		# /vertical/
+			# The vertical cursor positions to indicate.
+		# /dx/
+			# The difference to apply to horizontals to adjust
+			# for the view's positioning.
+		# /dy/
+			# The difference to apply to verticals to compensate
+			# for the view's positioning.
+
+		# [ Returns ]
+		# #
+			# - (control/type)`string`
+			# - `top`
+			# - `right`
+			# - `bottom`
+			# - `left`
+		# # Cross Offset
+		# # (type)&indicate
+		"""
+
+		borderx, bordery = borders
+		h_offset = position[0] - borderx
+		v_offset = position[1] - bordery
+
+		h_limit = dimensions[0]
+		v_limit = dimensions[1]
+
+		# End of range, inclusive. Used to identify inclusive edge.
+		h_last = horizontal[-1] - 1
+		v_last = vertical[-1] - 1
+
+		# Order is reversed on the opposing sides.
+		# By changing the order, stacked indicators will have different
+		# colors on each side allowing recognition of the intersection.
+
+		v_context = R((v_last, v_limit, v_offset + bordery, dy))
+		h_context = R((h_last, h_limit, h_offset + borderx, dx))
+
+		# Left
+		loffset = h_offset
+		lpositions = zip(R('left'), R(loffset), v_context, rev(vertical), rev(itypes))
+
+		# Right
+		roffset = h_offset + borderx + h_limit
+		rpositions = zip(R('right'), R(roffset), v_context, vertical, itypes)
+
+		# Top
+		toffset = v_offset
+		tpositions = zip(R('top'), R(toffset), h_context, horizontal, itypes)
+
+		# Bottom
+		boffset = v_offset + bordery + v_limit
+		bpositions = zip(R('bottom'), R(boffset), h_context, rev(horizontal), rev(itypes))
+
+		# Dilate and transform.
+		ip = chain(lpositions, rpositions, tpositions, bpositions)
+		for (pv, coffset, i_context, xy, itype) in ip:
+			if xy is None:
+				continue
+			yield pv, coffset, indicate(itype, *i_context, xy)
+
+	@classmethod
+	def indications(Class, itype, last, limit, offset, d, i):
+		"""
+		# Configure a position indicator using the given parameters to identify
+		# the relative position that it should use, the indicator's type for color
+		# selection, and the relative symbol name that should be used.
+		"""
+
+		# Color indicator for adjacency.
+		if i == last and itype in {'offset-active'}:
+			itype = 'stop-inclusive'
+
+		# Apply delta, constrain range, and identify image reference.
+		ri = i - d
+		if ri < 0:
+			# Minimum
+			image = 'leading'
+			ri = 0
+		elif ri >= limit:
+			# Maximum
+			image = 'following'
+			ri = limit - 1
+		else:
+			# Default color and symbol.
+			image = 'visible'
+
+		return itype, image, ri + offset
