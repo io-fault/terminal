@@ -54,7 +54,7 @@ def test_Model_set_margin_size(test):
 	# - &module.Model.set_margin_size
 	"""
 
-	m = module.Model()
+	m = module.Model({})
 	m.configure(module.Area(0, 0, 100, 100), [(1, 1, )])
 
 	test/m.set_margin_size(0, 0, 3, 3) == 3
