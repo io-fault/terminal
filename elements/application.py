@@ -234,7 +234,7 @@ class Session(Core):
 		self.focus = None
 		self.frame = -1 # Necessary for first reframe(0)
 		self.frames = []
-		self.frames_restored = False
+		self.frames_restored = None
 		self.sources = Directory()
 		self.local_modifiers = ''
 		self.logfile = None
@@ -836,6 +836,7 @@ class Session(Core):
 		yield retention.sequence(sf)
 
 	def load(self):
+		self.frames_restored = False
 		with open(self.origin.ref_identity) as f:
 			ri = retention.structure(f.read())
 			stitle, slines = next(ri)
