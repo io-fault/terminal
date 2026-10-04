@@ -4272,3 +4272,96 @@ class Frame(Core):
 			image = 'visible'
 
 		return itype, image, ri + offset
+
+	@classmethod
+	def calculate_relative_dimensions(Class, border, lines, span, widths, heights):
+		"""
+		# Calculate the relative dimensions of &widths and &heights with respect to &area.
+
+		# Used by &scale_division_dimensions to identify the proportions
+		# to be used with the new area.
+		"""
+
+		span = span - (border * len(widths)) # Usable.
+
+		for i, v in enumerate(widths):
+			vwidth = v / span
+			# Section borders are part of the division content.
+			lines = lines - (border * len(heights[i]))
+
+			yield (vwidth, [h / lines for h in heights[i]])
+
+	def relative_dimensions(self):
+		"""
+		# Calculate the relative dimensions of the frame's divisions.
+		"""
+
+		return list(self.calculate_relative_dimensions(1,
+			self.area.lines, self.area.span,
+			[x[1][0] for x in self.structure.fm_verticals],
+			[[y[1][1] for y in x] for x in self.structure.fm_divisions.values()],
+		))
+
+	def scale_divisions(self, area):
+		"""
+		# Adjust the size of the divisions to fit within the new &area.
+		"""
+
+		rdims = self.relative_dimensions()
+		vv, dv = self.scale_division_dimensions(1, area.lines, area.span, rdims)
+		fmv = [((a.left_offset, a.top_offset), (a.span, a.lines)) for a in vv]
+		fmd = [
+			[((a.left_offset, a.top_offset), (a.span, a.lines), d[-1]) for a, d in zip(na, vd)]
+			for na, vd in zip(dv, self.structure.fm_divisions.values())
+		]
+
+		self.structure.fm_verticals = fmv
+		self.structure.fm_divisions = fmd
+		for i in range(len(fmv)):
+			self.structure.update_inner_intersections(i)
+
+	@classmethod
+	def scale_division_dimensions(Class, border, lines, span, rdims):
+		"""
+		# Adjust the dimensions and positions of the frame's divisions to
+		# scale into the new &area.
+		"""
+
+		ndivs = []
+		nverts = []
+		xoffset = 0
+		rspan = span - (border * (len(rdims) + 1))
+		vlines = lines - (border * 2)
+
+		for rv, rh_v in rdims:
+			xoffset += border
+			vertical = Area(border, xoffset, vlines, round(rv * rspan))
+			nverts.append(vertical)
+			xoffset += vertical.span
+
+		# Inherit any remainder(+/-).
+		nspan = sum(v.span for v in nverts)
+		if nspan != rspan:
+			a = nverts[-1]
+			nverts[-1] = Area(a.top_offset, a.left_offset, a.lines, a.span + (rspan - nspan))
+
+		for i, (rv, rh_v) in enumerate(rdims):
+			yoffset = border
+			v = nverts[i]
+			xoffset = v.left_offset
+			rlines = v.lines - (border * (len(rh_v) - 1))
+
+			div = []
+			for rh in rh_v:
+				h = round(rh * rlines)
+				diva = Area(yoffset, xoffset, h, v.span)
+				yoffset += h + 1
+				div.append(diva)
+
+			# Inherit any remainder(+/-).
+			nlines = sum(d.lines for d in div)
+			if nlines != rlines:
+				a = div[-1]
+				div[-1] = Area(a.top_offset, a.left_offset, a.lines + (rlines - nlines), a.span)
+			ndivs.append(div)
+		return nverts, ndivs
