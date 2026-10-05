@@ -802,7 +802,7 @@ class Session(Core):
 	def snapshot(self):
 		"""
 		# Construct a snapshot of the session suitable for sequencing with
-		# &.session.sequence_frames.
+		# &.retention.sequence_frames.
 		"""
 
 		for f in self.frames:
