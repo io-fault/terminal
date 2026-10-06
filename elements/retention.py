@@ -70,19 +70,17 @@ def structure_frames(frames):
 	"""
 
 	for frame_id, lines in frames:
-		layout = []
+		divcount = 0
+		verticals = []
+		divisions = []
 		lstatus = lines[0]
 
-		for i, s in enumerate(lstatus.split()):
-			if '*' in s:
-				x, width = map(int, s.split('*'))
-			else:
-				x = int(s)
-				width = 1
+		for vf in lstatus.split():
+			vspan, divs = vf.split('x', 1)
+			verticals.append(int(vspan))
+			divisions.append(list(map(int, divs.split('/'))))
+			divcount += len(divisions[-1])
 
-			layout.append((x, width))
-
-		divcount = sum(x[0] for x in layout)
 		stacks = [[]]
 
 		# Last two lines are focus status of the frame.
@@ -113,23 +111,15 @@ def structure_frames(frames):
 		if dlevels > 0:
 			slv.extend([0] * dlevels)
 
-		yield (frame_id.strip() or None, vi, di, divcount, layout, stacks, slv)
+		yield (frame_id.strip() or None, vi, di, divcount, (verticals, divisions), stacks, slv)
 
-def frame_layout_string(layout):
+def frame_layout_strings(layout):
 	"""
 	# Yield the string that represents the given &layout.
 	"""
 
-	prefix = ''
-	for vertical in layout:
-		yield prefix
-		divcount, width = vertical
-
-		if width is not None and width != 1:
-			yield str(divcount) + '*' + str(width)
-		else:
-			yield str(divcount)
-		prefix = ' '
+	for vertical, divisions in layout:
+		yield str(vertical.span) + 'x' + '/'.join(str(x.lines) for x in divisions)
 
 def sequence_stacks(vertical, division, levels, stacks):
 	for resources, level in zip(stacks, levels):
@@ -146,7 +136,7 @@ def sequence_frames(session):
 
 	yield from (
 		(frame_id or '', [
-				''.join(frame_layout_string(layout))
+				' '.join(frame_layout_strings(layout))
 			] + list(sequence_stacks(vi, di, levels, stacks))
 		)
 		for (frame_id, vi, di, layout, stacks, levels) in session

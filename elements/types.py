@@ -635,6 +635,67 @@ class Status(object):
 		)
 		return self.__class__(*p, *d)
 
+@tools.record()
+class Layout(object):
+	"""
+	# The relative vertical and division areas within a frame.
+	"""
+
+	verticals: Sequence[Area]
+	divisions: Sequence[Sequence[Area]]
+
+	def __iter__(self):
+		return zip(self.verticals, self.divisions)
+
+	def indexes(self, vertical=None):
+		if vertical is None:
+			l = len(self.verticals)
+		else:
+			l = len(self.verticals[vertical])
+		return range(l)
+
+	@classmethod
+	def fill(Class, border, lines, span, widths, heights):
+		"""
+		# Construct a layout using verticals widths and division heights.
+		"""
+
+		ndivs = []
+		nverts = []
+		xoffset = 0
+		rspan = span - (border * (len(widths) + 1))
+		vlines = lines - (border * 2)
+
+		for v in widths:
+			xoffset += border
+			vertical = Area(border, xoffset, vlines, v)
+			nverts.append(vertical)
+			xoffset += vertical.span
+
+		for i, d in enumerate(heights):
+			yoffset = border
+			v = nverts[i]
+			xoffset = v.left_offset
+			rlines = v.lines - (border * (len(d) - 1))
+
+			div = []
+			for dl in d:
+				diva = Area(yoffset, xoffset, dl, v.span)
+				yoffset += dl + 1
+				div.append(diva)
+
+			ndivs.append(div)
+
+		return Class(nverts, ndivs)
+
+	def export(self):
+		fmv = [((a.left_offset, a.top_offset), (a.span, a.lines)) for a in self.verticals]
+		fmd = [
+			[((a.left_offset, a.top_offset), (a.span, a.lines), (2, 0)) for a in d]
+			for d in self.divisions
+		]
+		return fmv, fmd
+
 class Model(object):
 	"""
 	# The visual model defining the positions of divisions.

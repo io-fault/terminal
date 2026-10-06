@@ -15,7 +15,8 @@ from . import storage
 
 from .types import Core, Annotation, Position, Status, Model, System
 from .types import Reference, Reformulations, Line, Prompting
-from .types import Area, Cell, Screen, Image, Phrase, Words, Glyph, LineStyle
+from .types import Layout, Area
+from .types import Cell, Screen, Image, Phrase, Words, Glyph, LineStyle
 from .types import Work, Procedure, Composition, Instruction
 
 class CellMatrix(Core):
@@ -371,7 +372,8 @@ class Refraction(CellMatrix):
 
 		lo, co, \
 		lrstart, loffset, lrstop, \
-		crstart, coffset, crstop = addressing
+		crstart, coffset, crstop, \
+		*ignored = addressing
 
 		self.focus[0].restore((lrstart, loffset, lrstop))
 		self.focus[1].restore((crstart, coffset, crstop))
@@ -2654,6 +2656,10 @@ class Structure(object):
 	def refractions(self):
 		return (self.location, self.content, self.prompt)
 
+	def snapshot(self):
+		yield from self.content.snapshot()
+		yield from (self.location.area.lines, self.prompt.area.lines)
+
 	def areas(self):
 		return (self.location.area, self.content.area, self.prompt.area)
 
@@ -2768,6 +2774,19 @@ class Frame(Core):
 	areas: Sequence[Area]
 	views: Sequence[Structure]
 	stacks: Sequence[Sequence[Structure]]
+
+	@property
+	def layout(self):
+		return Layout(
+			[Area(vp[1], vp[0], vd[1], vd[0]) for (vp, vd) in self.structure.fm_verticals],
+			[
+				[Area(vp[1], vp[0], vd[1], vd[0]) for (vp, vd, vm) in div]
+				for div in [
+					self.structure.fm_divisions[i]
+					for i in range(len(self.structure.fm_divisions))
+				]
+			]
+		)
 
 	@property
 	def focus_path(self):
@@ -3147,21 +3166,23 @@ class Frame(Core):
 		size = self.structure.fm_divisions[v][h][1][1] + quantity
 		self.f_set_div_height_value(dpath, size)
 
-	def remodel(self, area=None, divisions=None):
+	def restore(self, area, widths, heights):
 		"""
-		# Update the model in response to changes in the size or layout of the frame.
+		# Restore the frame's layout.
 		"""
 
-		# Default to existing configuration.
-		da, dd = self.structure.configuration
-		if area is None:
-			area = da
-		if divisions is None:
-			divisions = dd
+		l = Layout.fill(1, area.lines, area.span, widths, heights)
+		fmv, fmd = l.export()
 
-		self.structure.configure(area, divisions)
+		self.structure.fm_context = area
+		self.structure.fm_verticals = fmv
+		self.structure.fm_divisions = fmd
+		for i in l.indexes():
+			self.structure.update_inner_intersections(i)
+
 		self.update_divisions()
-		self.stacks = [list() for x in range(len(self.areas))]
+		if not self.stacks:
+			self.stacks = [list() for x in range(len(self.areas))]
 
 	def reconfigure(self):
 		"""
@@ -3199,10 +3220,9 @@ class Frame(Core):
 		# Window size changed; remodel and render the new frame.
 		"""
 
+		self.scale_divisions(area)
 		self.area = area
-		stacks = self.stacks
-		self.remodel(area)
-		self.stacks = stacks
+		self.update_divisions()
 		self.reconfigure()
 
 	def resize_footer(self, dpath, height):

@@ -526,7 +526,7 @@ class Session(Core):
 
 		return self.host.reference(self.lookup_type(path), path)
 
-	def allocate_prompt(self):
+	def allocate_prompt(self, lines=0):
 		ref = Reference(
 			self.process.identity,
 			'ivectors',
@@ -539,13 +539,14 @@ class Session(Core):
 		src = Resource(ref, self.load_type('ivectors'))
 
 		rf = Refraction(src)
+		rf.area = rf.area.resize(lines, 0)
 		rf.forms = self.pg_forms(src)
 		rf.keyboard = self.keyboard
 		rf.monitor_images = self.monitor_images
 
 		return rf
 
-	def allocate_location(self, reference):
+	def allocate_location(self, reference, lines=2):
 		ref = Reference(
 			self.process.identity,
 			'location',
@@ -559,6 +560,7 @@ class Session(Core):
 		Frame.rl_update_path(src, reference)
 
 		rf = Refraction(src)
+		rf.area = rf.area.resize(lines, 0)
 		rf.forms = self.rl_forms(src, reference.ref_context)
 		rf.keyboard = self.keyboard
 		rf.monitor_images = self.monitor_images
@@ -613,10 +615,15 @@ class Session(Core):
 			system.load_resource(source, rf)
 
 		if addressing is not None:
-			rf.restore(addressing)
+			rf.restore(addressing[:-2])
+			location_section = addressing[-2]
+			prompt_section = addressing[-1]
+		else:
+			location_section = 2
+			prompt_section = 0
 
-		rl = self.allocate_location(source.origin)
-		pg = self.allocate_prompt()
+		rl = self.allocate_location(source.origin, location_section)
+		pg = self.allocate_prompt(prompt_section)
 
 		if rf.reporting(self.prompting):
 			pg.control_mode = 'insert'
@@ -713,34 +720,13 @@ class Session(Core):
 		self.device.update_frame_status(self.frame, last)
 		return True
 
-	def allocate_frame(self, layout=None, area=None, title=None):
+	def allocate_frame(self, area, widths, heights, title=None):
 		"""
 		# Allocate a new frame.
 
 		# [ Returns ]
 		# The index of the new frame.
 		"""
-
-		screen = self.device.screen
-
-		if area is None and layout is None:
-			if self.focus is not None:
-				area = self._focus['frame'].structure.configuration[0]
-				layout = self._focus['frame'].structure.fm_layout
-			else:
-				area = screen.area
-		else:
-			if area is None:
-				area = screen.area
-
-		if layout is None:
-			layout = []
-			v = area.span // 100
-			available = max(0, v-1)
-			for i in range(available):
-				layout.append((1, i))
-			layout.append((2, layout[-1][1] + 1))
-		divcount = sum(x[0] for x in layout)
 
 		f = Frame(
 			self.symbols,
@@ -753,7 +739,7 @@ class Session(Core):
 		)
 		self.frames.append(f)
 
-		f.remodel(area, layout)
+		f.restore(self.device.screen.area, widths, heights)
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 		return f.index
 
@@ -782,7 +768,7 @@ class Session(Core):
 
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 
-	def restore(self, frames, *, null=files.root@'/dev/null', smap=itertools.starmap):
+	def restore(self, area, frames, *, null=files.root@'/dev/null', smap=itertools.starmap):
 		"""
 		# Allocate and fill the &frames in order to restore a session.
 		"""
@@ -791,7 +777,7 @@ class Session(Core):
 			# Align the resources and returns with the layout.
 
 			# Allocate a new frame and attach refractions.
-			fi = self.allocate_frame(layout, title=frame_id or None)
+			fi = self.allocate_frame(area, *layout, title=frame_id or None)
 			f = self.frames[fi]
 			f.align_stacks(stacks, divcount, null)
 			f.stack_views(vi, di, levels, (smap(self.refract, stack) for stack in stacks))
@@ -811,7 +797,7 @@ class Session(Core):
 			di = f.division
 			stacks = [
 				[
-					(vs.content.source.origin.ref_path, vs.content.snapshot())
+					(vs.content.source.origin.ref_path, vs.snapshot())
 					for vs in stack
 				]
 				for stack in f.stacks
@@ -821,14 +807,19 @@ class Session(Core):
 				for vs, stack in zip(f.views, f.stacks)
 			]
 
-			yield (frame_id, vi, di, f.structure.layout, stacks, levels)
+			yield (frame_id, vi, di, f.layout, stacks, levels)
 
 	def sequence(self):
 		# Leading descriptor validating frame count and designating selection.
 		nframes = len(self.frames)
 		cframe = min(max(0, self.frame), nframes-1)
 
-		frame_synopsis = [str(cframe) + ' ' + str(nframes)]
+		# Width first for consistency with "verticalxdivision/..." frames.
+		screen_dims = 'x'.join((
+			str(self.device.screen.area.span),
+			str(self.device.screen.area.lines),
+		))
+		frame_synopsis = [screen_dims + ' ' + str(cframe) + ' ' + str(nframes)]
 		yield retention.sequence([(self.title, frame_synopsis)])
 
 		# Frame details.
@@ -843,11 +834,15 @@ class Session(Core):
 			fspecs = list(retention.structure_frames(ri))
 
 		self.title = stitle
-		fi, fcount = map(int, slines[0].split())
+		sdims, fi, fcount = slines[0].split()
+		sspan, slines = map(int, sdims.split('x'))
+		area = types.Area(0, 0, slines, sspan)
+		fi = int(fi)
+		fcount = int(fcount)
 
 		if self.frames:
 			self.frames = []
-		self.restore(fspecs)
+		self.restore(area, fspecs)
 		self.frames_restored = True
 
 		if len(self.frames) != fcount:
@@ -1248,7 +1243,8 @@ class Session(Core):
 	@comethod('screen', 'create/frame')
 	def s_create_frame(self):
 		null = self.host.fs_pwd()@'/dev/null'
-		fi = self.allocate_frame()
+		area = self.device.screen.area
+		fi = self.allocate_frame(area, [area.span - 2], [[area.lines - 2]])
 		f = self.frames[fi]
 
 		c = len(f.areas)
@@ -1260,7 +1256,9 @@ class Session(Core):
 
 	@comethod('screen', 'copy/frame')
 	def s_copy_frame(self, frame):
-		fi = self.allocate_frame()
+		l = frame.layout
+		divs = [[a.lines for a in d] for d in l.divisions]
+		fi = self.allocate_frame(frame.area, [a.span for a in l.verticals], divs)
 		f = self.frames[fi]
 
 		c = len(frame.stacks)
@@ -1568,14 +1566,15 @@ def main(inv:process.Invocation) -> process.Exit:
 		del session.frames[:]
 
 	if not session.frames:
-		layout, rfq = configure_frame(wd, path, config)
-		fi = session.allocate_frame(layout = layout)
+		a = session.device.screen.area
+		fi = session.allocate_frame(a, [a.span - 2], [[a.lines - 2]])
 		f = session.frames[fi]
-		stacks = [[session.refract(x)] for x in rfq]
+		stacks = [[session.refract(wd@filepath)] for filepath in ['/dev/null']]
 		levels = [0] * len(stacks)
 		f.stack_views(0, 0, levels, stacks)
 		f.f_refresh()
 		session.reframe(fi)
+		session.frames_restored = True
 
 	session.log("Host: " + str(session.host))
 	session.log("Factor: " + __name__)
