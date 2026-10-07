@@ -728,33 +728,14 @@ class Model(object):
 
 	def __init__(self, symbols, *, border=1, header=2, footer=0):
 		self.fm_symbols = symbols
-		self.fm_allocation = None
 		self.fm_context = None
 		self.fm_header_size = header
 		self.fm_footer_size = footer
 		self.fm_border_width = border
 		self.fm_verticals = []
-		self.fm_layout = []
 		self.fm_divisions = collections.defaultdict(list)
 		self.fm_deltas = {}
 		self.fm_intersections = dict()
-
-	def sole(self):
-		"""
-		# Initialize verticals and horizontals as a sole area.
-		"""
-
-		self.fm_verticals = [
-			((1, 1), (
-				area.width - (self.fm_border_width * 2),
-				area.height - (self.fm_border_width * 2),
-			))
-		]
-
-		self.fm_divisions[0] = [self.fm_verticals[0] + ((2, 0),)]
-		for k in self.fm_divisions:
-			del self.fm_divisions[k]
-		self.reset()
 
 	def reset(self):
 		"""
@@ -798,89 +779,6 @@ class Model(object):
 							s = 0
 
 						return v, i, s
-
-	@staticmethod
-	def distribute(span:int, allocation:int, separator:int=1):
-		"""
-		# Distribute the available range in &span so that each horizontal has at least the
-		# requested &allocation.
-		"""
-
-		# Identify how many segments the span has room for.
-		count = max(span // (allocation + separator), 1)
-
-		# Identify the segment size available for the count.
-		size = span // count
-
-		# The multiple used to calculate the position.
-		offset = size + separator
-
-		# The size available to the last segment.
-		last = span - (offset * (count-1))
-
-		# Calculate the positions of the first available unit(after the border).
-		return zip(
-			(x+1 for x in map(offset.__mul__, range(count))),
-			itertools.chain(
-				itertools.repeat(size, count - 1),
-				(last,)
-			)
-		)
-
-	def redistribute(self, verticals):
-		"""
-		# Distribute the available vertical area so that each page has at least the
-		# given &allocation.
-
-		# [ Parameters ]
-		# /verticals/
-			# Tuples designating the horizontal count and relative allocation width.
-		"""
-
-		height = self.fm_context.lines - (self.fm_border_width * 2)
-		width = self.fm_context.span - (self.fm_border_width * 2)
-		nverticals = len(verticals)
-		maxverticals = max(width // self.fm_allocation, 1)
-
-		# Fill the available space; excess goes to &inheritor.
-		ralloc = width // maxverticals
-		for i, va in enumerate(verticals):
-			if va[1] == 0:
-				# Override the vertical that receives the remaining space.
-				inheritor = i
-				break
-		else:
-			inheritor = nverticals - 1
-		verticals[inheritor] = (verticals[inheritor][0], 0)
-
-		self.fm_layout = verticals
-		self.fm_verticals = [
-			(
-				(None, 0 + self.fm_border_width),
-				(self.fm_allocation * x[1] + (max(x[1]-1, 0) * self.fm_border_width), height),
-			)
-			for x in verticals
-		]
-
-		uwidth = width - sum(x[1][0] for x in self.fm_verticals)
-		uwidth -= (nverticals - 1) * self.fm_border_width
-		vp, vd = self.fm_verticals[inheritor]
-		self.fm_verticals[inheritor] = (vp, (uwidth, vd[1]))
-
-		# Calculate horizontal offsets using the calculated widths.
-		offset = self.fm_border_width
-		for i, v in enumerate(self.fm_verticals):
-			self.fm_verticals[i] = ((offset, v[0][1]), v[1])
-			offset += v[1][0]
-			offset += self.fm_border_width
-
-		# Reconstruct last record with updated width.
-		for i, p in enumerate(self.fm_verticals):
-			if i not in self.fm_divisions:
-				self.fm_divisions[i] = [p + ((2, 0),)]
-			self.update_inner_intersections(i)
-
-		return len(self.fm_verticals)
 
 	def set_vertical_width(self, vertical, width):
 		"""
@@ -1028,43 +926,6 @@ class Model(object):
 		self.update_inner_intersections(vertical)
 
 		return size - current
-
-	def divide(self, vertical, count):
-		"""
-		# Split the &vertical &count times.
-		"""
-
-		pp, pd = self.fm_verticals[vertical]
-		self.fm_divisions[vertical] = [
-			((pp[0], p), (pd[0], height), (2, self.fm_deltas.get((vertical, di, 3), 0)))
-			for di, (p, height) in enumerate(self.distribute(pd[1], (pd[1] // count)-1))
-		]
-		self.update_inner_intersections(vertical)
-
-	def configure(self, area, verticals, allocation=100):
-		"""
-		# Configure the frame to have `len(verticals)` verticals where
-		# each element describes the number of horizontals within the vertical.
-		"""
-
-		self.fm_context = area
-		self.fm_allocation = allocation
-		self.redistribute(verticals)
-		for i, vd in enumerate(verticals):
-			self.divide(i, vd[0])
-		return self
-
-	@property
-	def configuration(self):
-		"""
-		# Return the configured area and verticals.
-		"""
-
-		return self.fm_context, self.layout
-
-	@property
-	def layout(self):
-		return self.fm_layout
 
 	def iterpanes(self):
 		"""
