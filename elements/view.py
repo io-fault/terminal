@@ -3232,8 +3232,7 @@ class Frame(Core):
 
 		vi = self.paths[dpath]
 		l, rf, p = self.views[vi].refractions()
-
-		d = self.structure.set_margin_size(dpath[0], dpath[1], 3, height)
+		d = self.structure.set_margin_size(dpath[0], dpath[1], 3, p.area.lines, height)
 		p.area = p.area.resize(d, 0)
 
 		# Initial opening needs to include the border size.
@@ -3297,7 +3296,8 @@ class Frame(Core):
 
 		if vs.prompt.area.lines != cs.prompt.area.lines:
 			# Update layout structure if the footers differ.
-			self.structure.set_margin_size(dpath[0], dpath[1], 3, vs.prompt.area.lines)
+			current = cs.prompt.area.lines
+			self.structure.set_margin_size(dpath[0], dpath[1], 3, current, vs.prompt.area.lines)
 		self.areas[division] = vs.areas()
 		vs.shown()
 

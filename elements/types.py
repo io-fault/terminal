@@ -705,11 +705,6 @@ class Model(object):
 
 	# Much of the functionality here could be isolated, but maintain the positioning
 	# on the class for convenience and option for overloading.
-
-	# [ Properties ]
-	# /fm_deltas/
-		# Mapping designating the size of a header, footer, or margin for a particular
-		# division. Keyed with the vertical-division index pair.
 	"""
 
 	def verticals(self):
@@ -734,7 +729,6 @@ class Model(object):
 		self.fm_border_width = border
 		self.fm_verticals = []
 		self.fm_divisions = collections.defaultdict(list)
-		self.fm_deltas = {}
 		self.fm_intersections = dict()
 
 	def reset(self):
@@ -905,16 +899,13 @@ class Model(object):
 		v[horizontal] = dd
 		self.update_inner_intersections(vertical)
 
-	def set_margin_size(self, vertical, horizontal, section, size):
+	def set_margin_size(self, vertical, horizontal, section, current, size):
 		"""
 		# Change the size of the header, footer, or left and right margins
 		# for the horizontal identified by &vertical and &horizontal.
 		"""
 
 		key = (vertical, horizontal, section)
-		current = self.fm_deltas.get(key, 0)
-
-		self.fm_deltas[key] = size
 		vp, vd, vm = self.fm_divisions[vertical][horizontal]
 		if section == 1:
 			h = size
