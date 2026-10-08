@@ -730,8 +730,7 @@ class Model(object):
 
 		return len(self.fm_divisions[vertical])
 
-	def __init__(self, symbols):
-		self.fm_symbols = symbols
+	def __init__(self):
 		self.fm_context = None
 		self.fm_verticals = []
 		self.fm_divisions = collections.defaultdict(list)

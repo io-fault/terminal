@@ -2847,7 +2847,7 @@ class Frame(Core):
 		self.index = index
 		self.title = title
 		self.intersections = {}
-		self.structure = Model(symbols)
+		self.structure = Model()
 
 		self.vertical = 0
 		self.division = 0
