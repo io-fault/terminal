@@ -3135,14 +3135,14 @@ class Frame(Core):
 		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
 
 		self.areas = list(zip(
-			itertools.starmap(Area, self.structure.itercontexts(section=1)), # location
-			itertools.starmap(Area, self.structure.itercontexts()), # content
-			itertools.starmap(Area, self.structure.itercontexts(section=3)), # prompt
+			itertools.starmap(Area, self.itercontexts(section=1)), # location
+			itertools.starmap(Area, self.itercontexts()), # content
+			itertools.starmap(Area, self.itercontexts(section=3)), # prompt
 		))
 
 	@comethod('frame', 'set/vertical/width')
 	def f_set_vertical_width_value(self, dpath, quantity=0):
-		vi = self.structure.set_vertical_width(dpath[0], quantity)
+		vi = self.set_vertical_width(dpath[0], quantity)
 		self.update_intersections(vi)
 		self.update_intersections(dpath[0])
 		self.update_divisions()
@@ -3156,7 +3156,7 @@ class Frame(Core):
 
 	@comethod('frame', 'set/division/height')
 	def f_set_div_height_value(self, dpath, quantity=0):
-		self.structure.set_horizontal_height(*dpath, quantity)
+		self.set_horizontal_height(*dpath, quantity)
 		self.update_intersections(dpath[0])
 		self.update_divisions()
 		self.reconfigure()
@@ -3176,7 +3176,6 @@ class Frame(Core):
 		l = Layout.fill(1, area.lines, area.span, widths, heights)
 		fmv, fmd = l.export()
 
-		self.structure.fm_context = area
 		self.structure.fm_verticals = fmv
 		self.structure.fm_divisions = fmd
 		for i in l.indexes():
@@ -3234,7 +3233,7 @@ class Frame(Core):
 
 		vi = self.paths[dpath]
 		l, rf, p = self.views[vi].refractions()
-		d = self.structure.set_margin_size(dpath[0], dpath[1], 3, p.area.lines, height)
+		d = self.set_margin_size(dpath[0], dpath[1], 3, p.area.lines, height)
 		self.update_intersections(dpath[0])
 		p.area = p.area.resize(d, 0)
 
@@ -3300,7 +3299,7 @@ class Frame(Core):
 		if vs.prompt.area.lines != cs.prompt.area.lines:
 			# Update layout structure if the footers differ.
 			current = cs.prompt.area.lines
-			self.structure.set_margin_size(dpath[0], dpath[1], 3, current, vs.prompt.area.lines)
+			self.set_margin_size(dpath[0], dpath[1], 3, current, vs.prompt.area.lines)
 			self.update_intersections(dpath[0])
 		self.areas[division] = vs.areas()
 		vs.shown()
@@ -4203,7 +4202,7 @@ class Frame(Core):
 
 		# [ Parameters ]
 		# /position/
-			# The &fm_context relative position of the division.
+			# The &area relative position of the division.
 		# /dimensions/
 			# The width and height of the division.
 		# /horizontal/
@@ -4485,3 +4484,202 @@ class Frame(Core):
 							s = 0
 
 						return v, i, s
+
+	def set_vertical_width(self, vertical, width):
+		"""
+		# Change the width of the &vertical to &width.
+		"""
+
+		nv = len(self.structure.fm_divisions)
+		if nv == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		last = (vertical + 1) == nv
+		dv = self.structure.fm_verticals[vertical]
+		d = width - dv[1][0]
+
+		if last:
+			# Change the preceding vertical's width to make room.
+			fi = vertical - 1
+
+			dv = (
+				(dv[0][0] - d, dv[0][1]),
+				(dv[1][0] + d, dv[1][1]),
+			)
+			dvd = [
+				((dv[0][0], vp[1]), (dv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.structure.fm_divisions[vertical]
+			]
+
+			fv = self.structure.fm_verticals[fi]
+			fv = (
+				fv[0],
+				(fv[1][0] - d, fv[1][1]),
+			)
+			fvd = [
+				(vp, (fv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.structure.fm_divisions[fi]
+			]
+		else:
+			# Change the following vertical's width to make room.
+			fi = vertical + 1
+
+			dv = (
+				dv[0],
+				(dv[1][0] + d, dv[1][1]),
+			)
+			dvd = [
+				(vp, (dv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.structure.fm_divisions[vertical]
+			]
+
+			fv = self.structure.fm_verticals[fi]
+			fv = (
+				(fv[0][0] + d, fv[0][1]),
+				(fv[1][0] - d, fv[1][1]),
+			)
+			fvd = [
+				((fv[0][0], vp[1]), (fv[1][0], vd[1]), vm)
+				for vp, vd, vm in self.structure.fm_divisions[fi]
+			]
+
+		for vd in (dv[1], fv[1]):
+			width = vd[0]
+			if width < 0 or width >= self.area.span:
+				bounds = "0 -> " + str(self.area.span)
+				errstr = f"vertical width ({width}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		for vp in (dv[0], fv[0]):
+			left = vp[0]
+			if left < 0 or left >= self.area.span:
+				bounds = "0 -> " + str(self.area.span)
+				errstr = f"vertical offset ({left}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		self.structure.fm_verticals[fi] = fv
+		self.structure.fm_divisions[fi] = fvd
+		self.structure.fm_verticals[vertical] = dv
+		self.structure.fm_divisions[vertical] = dvd
+		return fi
+
+	def set_horizontal_height(self, vertical, horizontal, height):
+		"""
+		# Change the height of the &horizontal in the &vertical to &height.
+		"""
+
+		v = self.structure.fm_divisions[vertical]
+		if len(v) == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		vp, vd, vm = v[horizontal]
+		last = (horizontal + 1) == len(v)
+		d = height - vd[1]
+
+		if last:
+			# Shrink the preceding division's height to make room.
+			fi = horizontal - 1
+			fvp, fvd, fvm = v[fi]
+			fd = (fvp, (fvd[0], fvd[1] - d), fvm)
+			dd = ((vp[0], vp[1] - d), (vd[0], vd[1] + d), vm)
+		else:
+			# Shrink the following division's height to make room.
+			fi = horizontal + 1
+			fvp, fvd, fvm = v[fi]
+			fd = ((fvp[0], fvp[1] + d), (fvd[0], fvd[1] - d), fvm)
+			dd = (vp, (vd[0], height), vm)
+
+		for vd in (dd[1], fd[1]):
+			height = vd[1]
+			if height < 7 or height >= self.area.lines:
+				bounds = "7 -> " + str(self.area.lines)
+				errstr = f"division height ({height}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		for vp in (dd[0], fd[0]):
+			top = vp[1]
+			if top < 0 or top >= self.area.lines:
+				bounds = "0 -> " + str(self.area.lines)
+				errstr = f"divsion offset ({top}) outside of bounds: {bounds}"
+				raise ValueError(errstr)
+
+		v[fi] = fd
+		v[horizontal] = dd
+
+	def set_margin_size(self, vertical, horizontal, section, current, size):
+		"""
+		# Change the size of the header, footer, or left and right margins
+		# for the horizontal identified by &vertical and &horizontal.
+		"""
+
+		key = (vertical, horizontal, section)
+		vp, vd, vm = self.structure.fm_divisions[vertical][horizontal]
+		if section == 1:
+			h = size
+			f = vm[1]
+		elif section == 3:
+			h = vm[0]
+			f = size
+		self.structure.fm_divisions[vertical][horizontal] = (vp, vd, (h, f))
+
+		return size - current
+
+	def itercontexts(self, *, section=0):
+		"""
+		# Construct (area) contexts for the configured set of divisions
+		# in left-to-right and top-to-bottom order.
+
+		# [ Parameters ]
+		# /section/
+			# The portion of the division to select.
+			# Defaults to zero selecting the body.
+		"""
+
+		ry = self.area.top_offset
+		rx = self.area.left_offset
+		hborder = 1
+		vborder = 1
+		dt = 0
+		db = 0
+		dl = 0
+		dr = 0
+		alloc = (lambda CP, CD: (CP[1], CP[0], CD[1], CD[0]))
+
+		# Clockwise: top, right, bottom, left
+		if section == 0:
+			# Body.
+			position = (lambda: (rx+left+dl, ry+top+dt))
+			dimensions = (lambda: (width-(dl+dr), height-(dt+db)))
+		elif section == 1:
+			# Header, priority over margins.
+			# Left and right margins stop short of header.
+			position = (lambda: (rx+left, ry+top))
+			dimensions = (lambda: (width-dl-dr, dt-vborder))
+		elif section == 2:
+			# Right Margin.
+			position = (lambda: (rx+left+width-dr+hborder, ry+top+dt))
+			dimensions = (lambda: (dr-hborder, height-dt-db))
+		elif section == 3:
+			# Footer, priority over margins.
+			# Left and right margins stop short of footer.
+			position = (lambda: (rx+left, ry+top+height-(db-vborder)))
+			dimensions = (lambda: (width, max(0, db-vborder)))
+		elif section == 4:
+			# Left Margin
+			position = (lambda: (rx+left, ry+top+dt))
+			dimensions = (lambda: (dl-hborder, height-dt-db))
+		else:
+			raise ValueError("five sections available in a division, 0-4")
+
+		for v in range(len(self.structure.fm_verticals)):
+			for cp, cd, cx in self.structure.fm_divisions[v]:
+				left, top = cp
+				width, height = cd
+
+				# Zeros unless a section is allocated.
+				dt = cx[0] + vborder if cx[0] else 0
+				db = cx[1] + vborder if cx[1] else 0
+
+				yield alloc(position(), dimensions())
