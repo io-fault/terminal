@@ -2854,7 +2854,6 @@ class Frame(Core):
 		self.focus = None
 
 		self.paths = {} # (vertical, division) -> element-index
-		self.panes = []
 		self.views = []
 		self.stacks = []
 
@@ -3133,8 +3132,7 @@ class Frame(Core):
 		"""
 
 		# Rebuild division path indexes.
-		self.panes = list(self.structure.iterpanes())
-		self.paths = {p: i for i, p in enumerate(self.panes)}
+		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
 
 		self.areas = list(zip(
 			itertools.starmap(Area, self.structure.itercontexts(section=1)), # location

@@ -696,6 +696,15 @@ class Layout(object):
 		]
 		return fmv, fmd
 
+	def division_paths(self):
+		"""
+		# Identify the paths used to reach a given division.
+		"""
+
+		for v in range(len(self.verticals)):
+			for d in range(len(self.divisions[v])):
+				yield (v, d)
+
 class Model(object):
 	"""
 	# The visual model defining the positions of divisions.
@@ -867,15 +876,6 @@ class Model(object):
 		self.fm_divisions[vertical][horizontal] = (vp, vd, (h, f))
 
 		return size - current
-
-	def iterpanes(self):
-		"""
-		# Identify the paths used to reach a given division.
-		"""
-
-		for v in range(len(self.fm_verticals)):
-			for d in range(len(self.fm_divisions[v])):
-				yield (v, d)
 
 	def itercontexts(self, *, section=0):
 		"""
