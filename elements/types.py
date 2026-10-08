@@ -727,34 +727,6 @@ class Model(object):
 		self.fm_verticals = []
 		self.fm_divisions = collections.defaultdict(list)
 
-	def address(self, x, y):
-		"""
-		# Identify the vertical and horizontals that contain the &x and &y coordinates.
-		"""
-
-		x -= self.fm_context.left_offset
-		y -= self.fm_context.top_offset
-
-		for v in range(len(self.fm_verticals)):
-			p, d = self.fm_verticals[v]
-			if x >= p[0] and x <= p[0] + d[0]:
-				# Matched vertical.
-				for i, (dp, dd, ds) in enumerate(self.fm_divisions[v]):
-					if y >= dp[1] and y <= dp[1] + dd[1]:
-						# Matched horizontal; identify section.
-						ry = y - dp[1]
-
-						if ds[0] and ry <= ds[0]:
-							# Header
-							s = 1
-						elif ds[1] and ry >= dd[1] - ds[1]:
-							# Footer
-							s = 3
-						else:
-							s = 0
-
-						return v, i, s
-
 	def set_vertical_width(self, vertical, width):
 		"""
 		# Change the width of the &vertical to &width.

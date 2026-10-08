@@ -3845,7 +3845,7 @@ class Frame(Core):
 		# # &Refraction
 		"""
 
-		v, d, s = self.structure.address(left, top)
+		v, d, s = self.identify_cell_division(left, top)
 		i = self.paths[(v, d)]
 
 		l, c, p = self.views[i].refractions()
@@ -4459,3 +4459,31 @@ class Frame(Core):
 		ixn = self.intersections
 		ixn.update((x, self.combine(li, ixn.get(x, li))) for x in lefts)
 		ixn.update((x, self.combine(ri, ixn.get(x, ri))) for x in rights)
+
+	def identify_cell_division(self, x, y):
+		"""
+		# Identify the vertical and horizontals that contain the &x and &y coordinates.
+		"""
+
+		x -= self.area.left_offset
+		y -= self.area.top_offset
+
+		for v in range(len(self.structure.fm_verticals)):
+			p, d = self.structure.fm_verticals[v]
+			if x >= p[0] and x <= p[0] + d[0]:
+				# Matched vertical.
+				for i, (dp, dd, ds) in enumerate(self.structure.fm_divisions[v]):
+					if y >= dp[1] and y <= dp[1] + dd[1]:
+						# Matched horizontal; identify section.
+						ry = y - dp[1]
+
+						if ds[0] and ry <= ds[0]:
+							# Header
+							s = 1
+						elif ds[1] and ry >= dd[1] - ds[1]:
+							# Footer
+							s = 3
+						else:
+							s = 0
+
+						return v, i, s
