@@ -716,20 +716,6 @@ class Model(object):
 	# on the class for convenience and option for overloading.
 	"""
 
-	def verticals(self):
-		"""
-		# Get the number of verticals.
-		"""
-
-		return len(self.fm_verticals)
-
-	def horizontals(self, vertical):
-		"""
-		# Get the number of horizontals in the &vertical.
-		"""
-
-		return len(self.fm_divisions[vertical])
-
 	def __init__(self):
 		self.fm_context = None
 		self.fm_verticals = []

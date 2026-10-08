@@ -3383,8 +3383,8 @@ class Frame(Core):
 			if dpath[1] < 0:
 				v = dpath[0] - 1
 				if v < 0:
-					v += self.structure.verticals()
-				dpath = (v, self.structure.horizontals(v)-1)
+					v += len(self.layout.verticals)
+				dpath = (v, len(self.layout.divisions[v])-1)
 			else:
 				dpath = (dpath[0]+1, 0)
 				if dpath not in self.paths:
