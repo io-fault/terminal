@@ -103,13 +103,37 @@ static PyObj
 area_get_volume(PyObj self, void *ctx)
 {
 	AreaObject ao = (AreaObject) self;
-	long v = ao->area.lines * ao->area.span;
-	return(PyLong_FromLong(v));
+	long v = ao->area.lines;
+
+	v *= ao->area.span;
+	return(Py_NEW_VALUE(v));
+}
+
+static PyObj
+area_get_right_offset(PyObj self, void *ctx)
+{
+	AreaObject ao = (AreaObject) self;
+	long v = ao->area.left_offset;
+
+	v += ao->area.span;
+	return(Py_NEW_VALUE(v));
+}
+
+static PyObj
+area_get_bottom_offset(PyObj self, void *ctx)
+{
+	AreaObject ao = (AreaObject) self;
+	long v = ao->area.top_offset;
+
+	v += ao->area.lines;
+	return(Py_NEW_VALUE(v));
 }
 
 static PyGetSetDef
 area_getset[] = {
 	{"volume", area_get_volume, NULL,},
+	{"right_offset", area_get_right_offset, NULL,},
+	{"bottom_offset", area_get_bottom_offset, NULL,},
 	{NULL,},
 };
 

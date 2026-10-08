@@ -60,6 +60,16 @@ def test_Area_instances(test):
 	test/inc.lines == 3
 	test/inc.span == 4
 
+def test_Area_offsets(test):
+	"""
+	# - &module.Area.right_offset
+	# - &module.Area.bottom_offset
+	"""
+	v = module.Area(5, 5, 10, 15)
+
+	test/v.right_offset == 20
+	test/v.bottom_offset == 15
+
 def test_Area_move(test):
 	"""
 	# - &module.Area.move
