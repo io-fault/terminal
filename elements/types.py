@@ -726,22 +726,6 @@ class Model(object):
 		self.fm_context = None
 		self.fm_verticals = []
 		self.fm_divisions = collections.defaultdict(list)
-		self.fm_intersections = dict()
-
-	def reset(self):
-		"""
-		# Reset caches derived from the grid's configuration.
-		"""
-
-		ss = self.fm_symbols['frame']
-		self.fm_intersections[:] = {
-			(0, 0): ss['top-left'],
-			(0, 3): ss['left'],
-			(self.fm_context.span-1, 3): ss['right'],
-			(self.fm_context.span-1, 0): ss['top-right'],
-			(0, self.fm_context.lines-1): ss['bottom-left'],
-			(self.fm_context.span-1, self.fm_context.lines-1): ss['bottom-right'],
-		}
 
 	def address(self, x, y):
 		"""
@@ -848,8 +832,7 @@ class Model(object):
 		self.fm_divisions[fi] = fvd
 		self.fm_verticals[vertical] = dv
 		self.fm_divisions[vertical] = dvd
-		self.update_inner_intersections(fi)
-		self.update_inner_intersections(vertical)
+		return fi
 
 	def set_horizontal_height(self, vertical, horizontal, height):
 		"""
@@ -894,7 +877,6 @@ class Model(object):
 
 		v[fi] = fd
 		v[horizontal] = dd
-		self.update_inner_intersections(vertical)
 
 	def set_margin_size(self, vertical, horizontal, section, current, size):
 		"""
@@ -911,7 +893,6 @@ class Model(object):
 			h = vm[0]
 			f = size
 		self.fm_divisions[vertical][horizontal] = (vp, vd, (h, f))
-		self.update_inner_intersections(vertical)
 
 		return size - current
 
@@ -981,58 +962,6 @@ class Model(object):
 				db = cx[1] + vborder if cx[1] else 0
 
 				yield alloc(position(), dimensions())
-
-	@staticmethod
-	def combine(f, l):
-		"""
-		# Combine box drawing characters to form intersections based on the glyph.
-		"""
-
-		match (f, l):
-			# Left
-			case ('│', '├') \
-				| ('├', '│'):
-				return '├'
-			# Right
-			case ('│', '┤') \
-				| ('┤', '│'):
-				return '┤'
-			# Full
-			case ('│', '─') \
-				| ('├', '┤') \
-				| ('┤', '├') \
-				| ('┬', '┴') \
-				| ('┴', '┬'):
-				return '┼'
-
-			# Select latter; handles (literal) corner cases.
-			case (_):
-				return l
-
-	def update_inner_intersections(self, page):
-		"""
-		# Process the crossbars that divide a vertical.
-		"""
-
-		pp, pd = self.fm_verticals[page]
-		li = '├'
-		ri = '┤'
-
-		# Collect the intersections using the divisions of the vertical.
-		lefts = [(pp[0]-1, x[0][1]-1) for x in self.fm_divisions[page]]
-
-		# Adjust for header. The intersections on the top are in the same position,
-		# but are only half-down. The top and bottom are intentionally skipped
-		# to be handled by another function.
-		lefts[0] = (lefts[0][0], lefts[0][1] + 3) # Header
-
-		# Adjust for right side.
-		rights = [(x[0]+pd[0]+1, x[1]) for x in lefts]
-
-		# Bottom is naturally skipped as only the start position of a division is considered.
-		ixn = self.fm_intersections
-		ixn.update((x, self.combine(li, ixn.get(x, li))) for x in lefts)
-		ixn.update((x, self.combine(ri, ixn.get(x, ri))) for x in rights)
 
 @tools.struct()
 class System(object):

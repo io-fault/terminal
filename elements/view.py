@@ -2846,6 +2846,7 @@ class Frame(Core):
 		self.area = area
 		self.index = index
 		self.title = title
+		self.intersections = {}
 		self.structure = Model(symbols)
 
 		self.vertical = 0
@@ -3143,7 +3144,9 @@ class Frame(Core):
 
 	@comethod('frame', 'set/vertical/width')
 	def f_set_vertical_width_value(self, dpath, quantity=0):
-		self.structure.set_vertical_width(dpath[0], quantity)
+		vi = self.structure.set_vertical_width(dpath[0], quantity)
+		self.update_intersections(vi)
+		self.update_intersections(dpath[0])
 		self.update_divisions()
 		self.reconfigure()
 		self.f_refresh()
@@ -3156,6 +3159,7 @@ class Frame(Core):
 	@comethod('frame', 'set/division/height')
 	def f_set_div_height_value(self, dpath, quantity=0):
 		self.structure.set_horizontal_height(*dpath, quantity)
+		self.update_intersections(dpath[0])
 		self.update_divisions()
 		self.reconfigure()
 		self.f_refresh()
@@ -3178,7 +3182,7 @@ class Frame(Core):
 		self.structure.fm_verticals = fmv
 		self.structure.fm_divisions = fmd
 		for i in l.indexes():
-			self.structure.update_inner_intersections(i)
+			self.update_intersections(i)
 
 		self.update_divisions()
 		if not self.stacks:
@@ -3233,6 +3237,7 @@ class Frame(Core):
 		vi = self.paths[dpath]
 		l, rf, p = self.views[vi].refractions()
 		d = self.structure.set_margin_size(dpath[0], dpath[1], 3, p.area.lines, height)
+		self.update_intersections(dpath[0])
 		p.area = p.area.resize(d, 0)
 
 		# Initial opening needs to include the border size.
@@ -3298,6 +3303,7 @@ class Frame(Core):
 			# Update layout structure if the footers differ.
 			current = cs.prompt.area.lines
 			self.structure.set_margin_size(dpath[0], dpath[1], 3, current, vs.prompt.area.lines)
+			self.update_intersections(dpath[0])
 		self.areas[division] = vs.areas()
 		vs.shown()
 
@@ -3311,7 +3317,7 @@ class Frame(Core):
 			self.deltas.extend(
 				self.fill_areas(
 					self.r_patch_footer(self.symbols, 1,
-						self.structure.fm_intersections,
+						self.intersections,
 						self.structure.fm_divisions, dpath[0], dpath[1]
 					)
 				)
@@ -3337,7 +3343,7 @@ class Frame(Core):
 		yield from self.fill_areas(self.r_enclose(self.symbols, 1, aw, ah))
 		yield from self.fill_areas(
 			self.r_divide(self.symbols, 1,
-				self.structure.fm_intersections,
+				self.intersections,
 				self.structure.fm_verticals,
 				self.structure.fm_divisions, aw, ah)
 		)
@@ -3357,7 +3363,7 @@ class Frame(Core):
 		yield from self.fill_areas(self.r_enclose(self.symbols, 1, aw, ah))
 		yield from self.fill_areas(
 			self.r_divide(self.symbols, 1,
-				self.structure.fm_intersections,
+				self.intersections,
 				self.structure.fm_verticals,
 				self.structure.fm_divisions, aw, ah)
 		)
@@ -3576,7 +3582,7 @@ class Frame(Core):
 			self.deltas.extend(
 				self.fill_areas(
 					self.r_patch_footer(self.symbols, 1,
-						self.structure.fm_intersections,
+						self.intersections,
 						self.structure.fm_divisions, dpath[0], dpath[1]
 					)
 				)
@@ -3876,7 +3882,7 @@ class Frame(Core):
 			vstat.v_cell_offset, vstat.v_line_offset,
 		))
 
-		for pi in self.r_indicators(self.symbols, self.structure.fm_intersections, si):
+		for pi in self.r_indicators(self.symbols, self.intersections, si):
 			(x, y), itype, ic, bc = pi
 			ccell = self.theme['cursor-' + itype]
 			picell = Glyph(textcolor=ccell.cellcolor, codepoint=ord(ic))
@@ -4338,7 +4344,7 @@ class Frame(Core):
 		self.structure.fm_verticals = fmv
 		self.structure.fm_divisions = fmd
 		for i in range(len(fmv)):
-			self.structure.update_inner_intersections(i)
+			self.update_intersections(i)
 
 	@classmethod
 	def scale_division_dimensions(Class, border, lines, span, rdims):
@@ -4385,3 +4391,71 @@ class Frame(Core):
 				div[-1] = Area(a.top_offset, a.left_offset, a.lines + (rlines - nlines), a.span)
 			ndivs.append(div)
 		return nverts, ndivs
+
+	def reset_intersections(self):
+		"""
+		# Reset &intersections to contain only the outermost border.
+		"""
+
+		s = self.symbols['frame']
+		a = self.area
+		self.intersections[:] = {
+			(0, 0): s['top-left'],
+			(0, 3): s['left'],
+			(a.span-1, 3): s['right'],
+			(a.span-1, 0): s['top-right'],
+			(0, a.lines-1): s['bottom-left'],
+			(a.span-1, a.lines-1): s['bottom-right'],
+		}
+
+	@staticmethod
+	def combine(f, l):
+		"""
+		# Combine box drawing characters to form intersections based on the glyph.
+		"""
+
+		match (f, l):
+			# Left
+			case ('│', '├') \
+				| ('├', '│'):
+				return '├'
+			# Right
+			case ('│', '┤') \
+				| ('┤', '│'):
+				return '┤'
+			# Full
+			case ('│', '─') \
+				| ('├', '┤') \
+				| ('┤', '├') \
+				| ('┬', '┴') \
+				| ('┴', '┬'):
+				return '┼'
+
+			# Select latter; handles (literal) corner cases.
+			case (_):
+				return l
+
+	def update_intersections(self, vertical):
+		"""
+		# Update &intersections of the &vertical.
+		"""
+
+		pp, pd = self.structure.fm_verticals[vertical]
+		li = '├'
+		ri = '┤'
+
+		# Collect the intersections using the divisions of the vertical.
+		lefts = [(pp[0]-1, x[0][1]-1) for x in self.structure.fm_divisions[vertical]]
+
+		# Adjust for header. The intersections on the top are in the same position,
+		# but are only half-down. The top and bottom are intentionally skipped
+		# to be handled by another function.
+		lefts[0] = (lefts[0][0], lefts[0][1] + 3) # Header
+
+		# Adjust for right side.
+		rights = [(x[0]+pd[0]+1, x[1]) for x in lefts]
+
+		# Bottom is naturally skipped as only the start position of a division is considered.
+		ixn = self.intersections
+		ixn.update((x, self.combine(li, ixn.get(x, li))) for x in lefts)
+		ixn.update((x, self.combine(ri, ixn.get(x, ri))) for x in rights)
