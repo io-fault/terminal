@@ -3238,10 +3238,10 @@ class Frame(Core):
 		# Initial opening needs to include the border size.
 		if height - d == 0:
 			# height was zero. Pad with border width.
-			d += self.structure.fm_border_width
+			d += 1
 		elif height == 0 and d != 0:
 			# height set to zero. Compensate for border.
-			d -= self.structure.fm_border_width
+			d -= 1
 
 		rf.configure(rf.deltas, rf.define, rf.area.resize(-d, 0))
 		rf.v_compensate()

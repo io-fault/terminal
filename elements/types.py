@@ -721,12 +721,9 @@ class Model(object):
 
 		return len(self.fm_divisions[vertical])
 
-	def __init__(self, symbols, *, border=1, header=2, footer=0):
+	def __init__(self, symbols):
 		self.fm_symbols = symbols
 		self.fm_context = None
-		self.fm_header_size = header
-		self.fm_footer_size = footer
-		self.fm_border_width = border
 		self.fm_verticals = []
 		self.fm_divisions = collections.defaultdict(list)
 		self.fm_intersections = dict()
