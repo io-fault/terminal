@@ -4427,12 +4427,14 @@ class Frame(Core):
 		# Update &intersections of the &vertical.
 		"""
 
-		pp, pd = self.structure.fm_verticals[vertical]
+		va = self.layout.verticals[vertical]
+		dav = self.layout.divisions[vertical]
 		li = '├'
 		ri = '┤'
 
 		# Collect the intersections using the divisions of the vertical.
-		lefts = [(pp[0]-1, x[0][1]-1) for x in self.structure.fm_divisions[vertical]]
+		vleft = va.left_offset - 1
+		lefts = [(vleft, x.top_offset - 1) for x in dav]
 
 		# Adjust for header. The intersections on the top are in the same position,
 		# but are only half-down. The top and bottom are intentionally skipped
@@ -4440,7 +4442,8 @@ class Frame(Core):
 		lefts[0] = (lefts[0][0], lefts[0][1] + 3) # Header
 
 		# Adjust for right side.
-		rights = [(x[0]+pd[0]+1, x[1]) for x in lefts]
+		vright = va.right_offset
+		rights = [(vright, x[1]) for x in lefts]
 
 		# Bottom is naturally skipped as only the start position of a division is considered.
 		ixn = self.intersections
