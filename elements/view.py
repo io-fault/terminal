@@ -3124,11 +3124,20 @@ class Frame(Core):
 		# Rebuild division path indexes.
 		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
 
-		self.areas = list(zip(
-			itertools.starmap(Area, self.itercontexts(section=1)), # location
-			itertools.starmap(Area, self.itercontexts()), # content
-			itertools.starmap(Area, self.itercontexts(section=3)), # prompt
-		))
+		ry = self.area.top_offset
+		rx = self.area.left_offset
+		hb = 1
+		dp = 2
+		dl = 2
+		self.areas = list(itertools.chain.from_iterable([
+			[
+				(rl := Area(d.top_offset, v.left_offset, dl, v.span),
+				co := Area(rl.bottom_offset + hb, v.left_offset, d.lines - (rl.lines + hb), v.span),
+				Area(co.bottom_offset + hb, v.left_offset, 0, v.span))
+				for d in dv
+			]
+			for v, dv in self.layout])
+		)
 
 	@comethod('frame', 'set/vertical/width')
 	def f_set_vertical_width_value(self, dpath, quantity=0):
@@ -4628,61 +4637,3 @@ class Frame(Core):
 		self.structure.fm_divisions[vertical][horizontal] = (vp, vd, (h, f))
 
 		return size - current
-
-	def itercontexts(self, *, section=0):
-		"""
-		# Construct (area) contexts for the configured set of divisions
-		# in left-to-right and top-to-bottom order.
-
-		# [ Parameters ]
-		# /section/
-			# The portion of the division to select.
-			# Defaults to zero selecting the body.
-		"""
-
-		ry = self.area.top_offset
-		rx = self.area.left_offset
-		hborder = 1
-		vborder = 1
-		dt = 0
-		db = 0
-		dl = 0
-		dr = 0
-		alloc = (lambda CP, CD: (CP[1], CP[0], CD[1], CD[0]))
-
-		# Clockwise: top, right, bottom, left
-		if section == 0:
-			# Body.
-			position = (lambda: (rx+left+dl, ry+top+dt))
-			dimensions = (lambda: (width-(dl+dr), height-(dt+db)))
-		elif section == 1:
-			# Header, priority over margins.
-			# Left and right margins stop short of header.
-			position = (lambda: (rx+left, ry+top))
-			dimensions = (lambda: (width-dl-dr, dt-vborder))
-		elif section == 2:
-			# Right Margin.
-			position = (lambda: (rx+left+width-dr+hborder, ry+top+dt))
-			dimensions = (lambda: (dr-hborder, height-dt-db))
-		elif section == 3:
-			# Footer, priority over margins.
-			# Left and right margins stop short of footer.
-			position = (lambda: (rx+left, ry+top+height-(db-vborder)))
-			dimensions = (lambda: (width, max(0, db-vborder)))
-		elif section == 4:
-			# Left Margin
-			position = (lambda: (rx+left, ry+top+dt))
-			dimensions = (lambda: (dl-hborder, height-dt-db))
-		else:
-			raise ValueError("five sections available in a division, 0-4")
-
-		for v in range(len(self.structure.fm_verticals)):
-			for cp, cd, cx in self.structure.fm_divisions[v]:
-				left, top = cp
-				width, height = cd
-
-				# Zeros unless a section is allocated.
-				dt = cx[0] + vborder if cx[0] else 0
-				db = cx[1] + vborder if cx[1] else 0
-
-				yield alloc(position(), dimensions())
