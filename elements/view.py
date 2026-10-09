@@ -4455,28 +4455,38 @@ class Frame(Core):
 		# Identify the vertical and horizontals that contain the &x and &y coordinates.
 		"""
 
-		x -= self.area.left_offset
-		y -= self.area.top_offset
+		rx = x - self.area.left_offset
+		ry = y - self.area.top_offset
+		vi = 0
+		di = 0
 
-		for v in range(len(self.structure.fm_verticals)):
-			p, d = self.structure.fm_verticals[v]
-			if x >= p[0] and x <= p[0] + d[0]:
-				# Matched vertical.
-				for i, (dp, dd, ds) in enumerate(self.structure.fm_divisions[v]):
-					if y >= dp[1] and y <= dp[1] + dd[1]:
-						# Matched horizontal; identify section.
-						ry = y - dp[1]
+		for v, dv in self.layout:
+			if rx < v.left_offset or rx > v.right_offset:
+				vi += 1
+				continue
 
-						if ds[0] and ry <= ds[0]:
-							# Header
-							s = 1
-						elif ds[1] and ry >= dd[1] - ds[1]:
-							# Footer
-							s = 3
-						else:
-							s = 0
+			# Matched vertical.
+			for d in dv:
+				if ry < d.top_offset or ry > d.bottom_offset:
+					di += 1
+					continue
 
-						return v, i, s
+				# Matched horizontal; identify section.
+
+				ca = self.views[self.paths[(vi, di)]].content.area
+				if y > ca.bottom_offset:
+					# Footer
+					s = 3
+				elif y < ca.top_offset:
+					# Header
+					s = 1
+				else:
+					s = 0
+
+				return vi, di, s
+
+		# Border cell.
+		return None
 
 	def set_vertical_width(self, vertical, width):
 		"""
