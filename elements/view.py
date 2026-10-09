@@ -2741,6 +2741,8 @@ class Frame(Core):
 		# Session inherited prompt behavior.
 	# /area/
 		# The location and size of the frame on the screen.
+	# /layout/
+		# The &area relative arrangement of divisions and verticals of the frame.
 	# /index/
 		# The position of the frame in the session's frame set.
 	# /title/
@@ -2774,19 +2776,6 @@ class Frame(Core):
 	areas: Sequence[Area]
 	views: Sequence[Structure]
 	stacks: Sequence[Sequence[Structure]]
-
-	@property
-	def layout(self):
-		return Layout(
-			[Area(vp[1], vp[0], vd[1], vd[0]) for (vp, vd) in self.structure.fm_verticals],
-			[
-				[Area(vp[1], vp[0], vd[1], vd[0]) for (vp, vd, vm) in div]
-				for div in [
-					self.structure.fm_divisions[i]
-					for i in range(len(self.structure.fm_divisions))
-				]
-			]
-		)
 
 	@property
 	def focus_path(self):
@@ -2844,6 +2833,7 @@ class Frame(Core):
 		self.filesystem = fs
 		self.keyboard = keyboard
 		self.area = area
+		self.layout = Layout([], [])
 		self.index = index
 		self.title = title
 		self.intersections = {}
@@ -3173,12 +3163,11 @@ class Frame(Core):
 		# Restore the frame's layout.
 		"""
 
-		l = Layout.fill(1, area.lines, area.span, widths, heights)
-		fmv, fmd = l.export()
-
+		self.layout = Layout.fill(1, area.lines, area.span, widths, heights)
+		fmv, fmd = self.layout.export()
 		self.structure.fm_verticals = fmv
 		self.structure.fm_divisions = fmd
-		for i in l.indexes():
+		for i in self.layout.indexes():
 			self.update_intersections(i)
 
 		self.update_divisions()
@@ -4338,6 +4327,7 @@ class Frame(Core):
 			for na, vd in zip(dv, self.structure.fm_divisions.values())
 		]
 
+		self.layout = Layout(vv, dv)
 		self.structure.fm_verticals = fmv
 		self.structure.fm_divisions = fmd
 		for i in range(len(fmv)):
