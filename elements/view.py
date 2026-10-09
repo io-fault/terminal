@@ -3231,9 +3231,8 @@ class Frame(Core):
 
 		vi = self.paths[dpath]
 		l, rf, p = self.views[vi].refractions()
-		d = self.set_margin_size(dpath[0], dpath[1], 3, p.area.lines, height)
 		self.update_intersections(dpath[0])
-		p.area = p.area.resize(d, 0)
+		d = height - p.area.lines
 
 		# Initial opening needs to include the border size.
 		if height - d == 0:
@@ -3246,7 +3245,8 @@ class Frame(Core):
 		rf.configure(rf.deltas, rf.define, rf.area.resize(-d, 0))
 		rf.v_compensate()
 
-		p.area = p.area.move(-d, 0)
+		a = Area(rf.area.bottom_offset + 1, rf.area.left_offset, height, rf.area.span)
+		p.configure(p.deltas, p.define, a)
 		# &render will emit the entire image, so make sure the footer is trimmed.
 		p.v_compensate()
 
@@ -3294,12 +3294,11 @@ class Frame(Core):
 			if v == division:
 				break
 
+		self.areas[division] = vs.areas()
 		if vs.prompt.area.lines != cs.prompt.area.lines:
 			# Update layout structure if the footers differ.
 			current = cs.prompt.area.lines
-			self.set_margin_size(dpath[0], dpath[1], 3, current, vs.prompt.area.lines)
 			self.update_intersections(dpath[0])
-		self.areas[division] = vs.areas()
 		vs.shown()
 
 		# Focus was in &cs, which is now hidden, so switch to update focus.
@@ -3311,9 +3310,8 @@ class Frame(Core):
 		if vs.prompt.area.lines > 0:
 			self.deltas.extend(
 				self.fill_areas(
-					self.r_patch_footer(self.symbols, 1,
-						self.intersections,
-						self.structure.fm_divisions, dpath[0], dpath[1]
+					self.r_patch_footer(self.symbols,
+						self.intersections, vs.prompt.area,
 					)
 				)
 			)
@@ -3576,9 +3574,8 @@ class Frame(Core):
 			self.resize_footer(dpath, pg_allocation)
 			self.deltas.extend(
 				self.fill_areas(
-					self.r_patch_footer(self.symbols, 1,
-						self.intersections,
-						self.structure.fm_divisions, dpath[0], dpath[1]
+					self.r_patch_footer(self.symbols,
+						self.intersections, pg.area
 					)
 				)
 			)
@@ -4110,21 +4107,15 @@ class Frame(Core):
 		yield (position[1], position[0] + 1 + size, 1, 1), ri
 
 	@classmethod
-	def r_patch_footer(Class, symbols, border, ixn, divisions, vertical, horizontal):
+	def r_patch_footer(Class, symbols, ixn, area):
 		"""
 		# Render the dividing line used to separate the &section from the body.
 
 		# Used when opening a prompt in an already drawn frame.
 		"""
 
-		vp, vd, vx = divisions[vertical][horizontal]
-		header, footer = vx
-
-		h = vp[0] - border
-		v = vp[1]
-
 		yield from Class.r_divide_horizontals(symbols['frame'], ixn, False,
-			(h, v + vd[1] - footer - border), vd[0])
+			(area.left_offset - 1, area.top_offset - 1), area.span)
 
 	@classmethod
 	def r_divide(Class, symbols, border, ixn, verticals, divisions, width, height):
@@ -4619,21 +4610,3 @@ class Frame(Core):
 
 		v[fi] = fd
 		v[horizontal] = dd
-
-	def set_margin_size(self, vertical, horizontal, section, current, size):
-		"""
-		# Change the size of the header, footer, or left and right margins
-		# for the horizontal identified by &vertical and &horizontal.
-		"""
-
-		key = (vertical, horizontal, section)
-		vp, vd, vm = self.structure.fm_divisions[vertical][horizontal]
-		if section == 1:
-			h = size
-			f = vm[1]
-		elif section == 3:
-			h = vm[0]
-			f = size
-		self.structure.fm_divisions[vertical][horizontal] = (vp, vd, (h, f))
-
-		return size - current
