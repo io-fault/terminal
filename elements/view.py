@@ -2837,6 +2837,7 @@ class Frame(Core):
 		self.index = index
 		self.title = title
 		self.intersections = {}
+		self.reset_intersections()
 		self.structure = Model()
 
 		self.vertical = 0
@@ -3333,13 +3334,17 @@ class Frame(Core):
 
 		aw = self.area.span
 		ah = self.area.lines
-		yield from self.fill_areas(self.r_enclose(self.symbols, 1, aw, ah))
-		yield from self.fill_areas(
-			self.r_divide(self.symbols, 1,
-				self.intersections,
-				self.structure.fm_verticals,
-				self.structure.fm_divisions, aw, ah)
-		)
+		ixn = self.intersections
+		sym = self.symbols
+
+		yield from self.fill_areas(self.r_enclose(sym, 1, aw, ah))
+		yield from self.fill_areas(self.r_divide(sym, 1, ixn, self.layout, aw, ah))
+
+		for vs in self.views:
+			if vs.location.area.lines:
+				yield from self.fill_areas(self.r_patch_header(sym, ixn, vs.location.area))
+			if vs.prompt.area.lines:
+				yield from self.fill_areas(self.r_patch_footer(sym, ixn, vs.prompt.area))
 
 	def render(self, *, ichain=itertools.chain.from_iterable):
 		"""
@@ -3349,17 +3354,7 @@ class Frame(Core):
 		for v in ichain(vs.refractions() for vs in self.views):
 			yield from v.v_render(slice(0, v.area.lines))
 
-		aw = self.area.span
-		ah = self.area.lines
-
-		# Give the frame boundaries higher (display) precedence by rendering last.
-		yield from self.fill_areas(self.r_enclose(self.symbols, 1, aw, ah))
-		yield from self.fill_areas(
-			self.r_divide(self.symbols, 1,
-				self.intersections,
-				self.structure.fm_verticals,
-				self.structure.fm_divisions, aw, ah)
-		)
+		yield from self.render_layout()
 
 	def select(self, dpath):
 		"""
@@ -4107,18 +4102,25 @@ class Frame(Core):
 		yield (position[1], position[0] + 1 + size, 1, 1), ri
 
 	@classmethod
+	def r_patch_header(Class, symbols, ixn, area):
+		"""
+		# Draw the dividing line between the division's heading and content.
+		"""
+
+		yield from Class.r_divide_horizontals(symbols['frame'], ixn, False,
+			(area.left_offset - 1, area.bottom_offset), area.span)
+
+	@classmethod
 	def r_patch_footer(Class, symbols, ixn, area):
 		"""
-		# Render the dividing line used to separate the &section from the body.
-
-		# Used when opening a prompt in an already drawn frame.
+		# Draw the dividing line between the division's content and footer.
 		"""
 
 		yield from Class.r_divide_horizontals(symbols['frame'], ixn, False,
 			(area.left_offset - 1, area.top_offset - 1), area.span)
 
 	@classmethod
-	def r_divide(Class, symbols, border, ixn, verticals, divisions, width, height):
+	def r_divide(Class, symbols, border, ixn, layout, width, height):
 		"""
 		# Render all the divisions necessary to represent the model's configuration.
 
@@ -4127,24 +4129,13 @@ class Frame(Core):
 		"""
 
 		symbols = symbols['frame']
-		for vp, vd in verticals[1:]:
-			yield from Class.r_divide_verticals(symbols, (vp[0]-1, vp[1]-1), height)
+		for va in layout.verticals:
+			yield from Class.r_divide_verticals(symbols, (va.left_offset-1, va.top_offset-1), height)
 
-		for i, v in enumerate(verticals):
-			for vp, vd, vx in divisions[i][1:]:
-				yield from Class.r_divide_horizontals(symbols, ixn, True, (vp[0]-1, vp[1]-1), vd[0])
-
-			for vp, vd, vx in divisions[i]:
-				header, footer = vx
-				h = vp[0] - border
-				v = vp[1]
-
-				if header:
-					yield from Class.r_divide_horizontals(symbols, ixn, False,
-						(h, v + header), vd[0])
-				if footer:
-					yield from Class.r_divide_horizontals(symbols, ixn, False,
-						(h, v + vd[1] - footer - border), vd[0])
+		for i, v in enumerate(layout.verticals):
+			for da in layout.divisions[i][1:]:
+				yield from Class.r_divide_horizontals(symbols, ixn, True,
+					(da.left_offset - 1, da.top_offset - 1), da.span)
 
 	@classmethod
 	def r_indicators(Class, symbols, ixn, scaled, *, rtypes={}):
