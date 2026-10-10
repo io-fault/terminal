@@ -705,6 +705,37 @@ class Layout(object):
 			for d in range(len(self.divisions[v])):
 				yield (v, d)
 
+	def resize_vertical_width(self, vertical, width):
+		"""
+		# Reconstruct the layout adjusting the &vertical's span to &width.
+		"""
+
+		last = (vertical + 1) == len(self.verticals)
+		d = self.verticals[vertical].span - width
+
+		if last:
+			li = vertical - 1
+			ri = vertical
+			d = -d
+		else:
+			li = vertical
+			ri = vertical + 1
+
+		lva = self.verticals[li].resize(0, -d)
+		lda = [a.resize(0, -d) for a in self.divisions[li]]
+
+		rva = self.verticals[ri].move(0, -d).resize(0, d)
+		rda = [a.move(0, -d).resize(0, d) for a in self.divisions[ri]]
+
+		rv = list(self.verticals)
+		rd = list(self.divisions)
+
+		rv[li] = lva
+		rd[li] = lda
+		rv[ri] = rva
+		rd[ri] = rda
+		return self.__class__(rv, rd)
+
 class Model(object):
 	"""
 	# The visual model defining the positions of divisions.

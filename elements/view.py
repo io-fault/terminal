@@ -3140,18 +3140,70 @@ class Frame(Core):
 			for v, dv in self.layout])
 		)
 
+	def resize_vertical_width(self, vertical, width):
+		"""
+		# Resize the &vertical's span to &width.
+
+		# The change is reflected to &layout, &areas, and all divisions
+		# in the corresponding &stacks.
+		"""
+
+		l = self.layout
+		nv = len(l.verticals)
+		if nv == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		last = (vertical + 1) == nv
+		d = l.verticals[vertical].span - width
+
+		if last:
+			li = vertical - 1
+			ri = vertical
+			d = -d
+		else:
+			li = vertical
+			ri = vertical + 1
+
+		i = self.paths[(li, 0)]
+		lir = slice(i, i + len(l.divisions[li]))
+		i = self.paths[(ri, 0)]
+		rir = slice(self.paths[(ri, 0)], i + len(l.divisions[ri]))
+
+		self.areas[lir] = [
+			(la.resize(0, -d), ca.resize(0, -d), pa.resize(0, -d))
+			for la, ca, pa in list(self.areas[lir])
+		]
+		self.areas[rir] = [
+			(
+				la.move(0, -d).resize(0, d),
+				ca.move(0, -d).resize(0, d),
+				pa.move(0, -d).resize(0, d)
+			)
+			for la, ca, pa in list(self.areas[rir])
+		]
+
+		# Forward area changes to all divisions.
+		for s in (lir, rir):
+			for vv, av in zip(self.stacks[s], self.areas[s]):
+				la, ca, pa = av
+				for vs in vv:
+					vs.location.area = la
+					vs.content.area = ca
+					vs.prompt.area = pa
+
+		self.layout = self.layout.resize_vertical_width(vertical, width)
+
 	@comethod('frame', 'set/vertical/width')
 	def f_set_vertical_width_value(self, dpath, quantity=0):
-		vi = self.set_vertical_width(dpath[0], quantity)
-		self.update_intersections(vi)
-		self.update_intersections(dpath[0])
-		self.update_divisions()
-		self.reconfigure()
+		self.resize_vertical_width(dpath[0], quantity)
+		for i in range(dpath[0]-1, dpath[0]+1):
+			self.update_intersections(i)
 		self.f_refresh()
 
 	@comethod('frame', 'set/vertical/width/delta')
 	def f_set_vertical_width_delta(self, dpath, quantity=0):
-		size = self.structure.fm_divisions[dpath[0]][0][1][0] + quantity
+		size = self.layout.verticals[dpath[0]].span + quantity
 		self.f_set_vertical_width_value(dpath, size)
 
 	@comethod('frame', 'set/division/height')
@@ -4078,7 +4130,7 @@ class Frame(Core):
 		"""
 
 		yield (position[1], position[0], 1, 1), symbols['top']
-		yield (position[1] + 1, position[0], size-2, 1), symbols['vertical']
+		yield (position[1] + 1, position[0], size - 2, 1), symbols['vertical']
 		yield (position[1] + size - 1, position[0], 1, 1), symbols['bottom']
 
 	@classmethod
@@ -4478,85 +4530,6 @@ class Frame(Core):
 
 		# Border cell.
 		return None
-
-	def set_vertical_width(self, vertical, width):
-		"""
-		# Change the width of the &vertical to &width.
-		"""
-
-		nv = len(self.structure.fm_divisions)
-		if nv == 1:
-			# Cannot resize over or under the frame's bounds.
-			return
-
-		last = (vertical + 1) == nv
-		dv = self.structure.fm_verticals[vertical]
-		d = width - dv[1][0]
-
-		if last:
-			# Change the preceding vertical's width to make room.
-			fi = vertical - 1
-
-			dv = (
-				(dv[0][0] - d, dv[0][1]),
-				(dv[1][0] + d, dv[1][1]),
-			)
-			dvd = [
-				((dv[0][0], vp[1]), (dv[1][0], vd[1]), vm)
-				for vp, vd, vm in self.structure.fm_divisions[vertical]
-			]
-
-			fv = self.structure.fm_verticals[fi]
-			fv = (
-				fv[0],
-				(fv[1][0] - d, fv[1][1]),
-			)
-			fvd = [
-				(vp, (fv[1][0], vd[1]), vm)
-				for vp, vd, vm in self.structure.fm_divisions[fi]
-			]
-		else:
-			# Change the following vertical's width to make room.
-			fi = vertical + 1
-
-			dv = (
-				dv[0],
-				(dv[1][0] + d, dv[1][1]),
-			)
-			dvd = [
-				(vp, (dv[1][0], vd[1]), vm)
-				for vp, vd, vm in self.structure.fm_divisions[vertical]
-			]
-
-			fv = self.structure.fm_verticals[fi]
-			fv = (
-				(fv[0][0] + d, fv[0][1]),
-				(fv[1][0] - d, fv[1][1]),
-			)
-			fvd = [
-				((fv[0][0], vp[1]), (fv[1][0], vd[1]), vm)
-				for vp, vd, vm in self.structure.fm_divisions[fi]
-			]
-
-		for vd in (dv[1], fv[1]):
-			width = vd[0]
-			if width < 0 or width >= self.area.span:
-				bounds = "0 -> " + str(self.area.span)
-				errstr = f"vertical width ({width}) outside of bounds: {bounds}"
-				raise ValueError(errstr)
-
-		for vp in (dv[0], fv[0]):
-			left = vp[0]
-			if left < 0 or left >= self.area.span:
-				bounds = "0 -> " + str(self.area.span)
-				errstr = f"vertical offset ({left}) outside of bounds: {bounds}"
-				raise ValueError(errstr)
-
-		self.structure.fm_verticals[fi] = fv
-		self.structure.fm_divisions[fi] = fvd
-		self.structure.fm_verticals[vertical] = dv
-		self.structure.fm_divisions[vertical] = dvd
-		return fi
 
 	def set_horizontal_height(self, vertical, horizontal, height):
 		"""
