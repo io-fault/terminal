@@ -764,21 +764,6 @@ class Layout(object):
 		rd[vertical] = rdv
 		return self.__class__(list(self.verticals), rd)
 
-class Model(object):
-	"""
-	# The visual model defining the positions of divisions.
-	# Provides state for defining how a frame's divisions are positioned in an area,
-	# methods for controlling position indicators, and rendering tools for
-	# preparing drawing instructions.
-
-	# Much of the functionality here could be isolated, but maintain the positioning
-	# on the class for convenience and option for overloading.
-	"""
-
-	def __init__(self):
-		self.fm_verticals = []
-		self.fm_divisions = collections.defaultdict(list)
-
 @tools.struct()
 class System(object):
 	"""

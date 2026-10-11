@@ -13,7 +13,7 @@ from ..cells import alignment
 from . import annotations
 from . import storage
 
-from .types import Core, Annotation, Position, Status, Model, System
+from .types import Core, Annotation, Position, Status, System
 from .types import Reference, Reformulations, Line, Prompting
 from .types import Layout, Area
 from .types import Cell, Screen, Image, Phrase, Words, Glyph, LineStyle
@@ -2838,7 +2838,6 @@ class Frame(Core):
 		self.title = title
 		self.intersections = {}
 		self.reset_intersections()
-		self.structure = Model()
 
 		self.vertical = 0
 		self.division = 0
@@ -3276,9 +3275,6 @@ class Frame(Core):
 		"""
 
 		self.layout = Layout.fill(1, area.lines, area.span, widths, heights)
-		fmv, fmd = self.layout.export()
-		self.structure.fm_verticals = fmv
-		self.structure.fm_divisions = fmd
 		for i in self.layout.indexes():
 			self.update_intersections(i)
 
@@ -4403,8 +4399,8 @@ class Frame(Core):
 
 		return list(self.calculate_relative_dimensions(1,
 			self.area.lines, self.area.span,
-			[x[1][0] for x in self.structure.fm_verticals],
-			[[y[1][1] for y in x] for x in self.structure.fm_divisions.values()],
+			[x.span for x in self.layout.verticals],
+			[[y.lines for y in x] for x in self.layout.divisions],
 		))
 
 	def scale_divisions(self, area):
@@ -4414,15 +4410,7 @@ class Frame(Core):
 
 		rdims = self.relative_dimensions()
 		vv, dv = self.scale_division_dimensions(1, area.lines, area.span, rdims)
-		fmv = [((a.left_offset, a.top_offset), (a.span, a.lines)) for a in vv]
-		fmd = [
-			[((a.left_offset, a.top_offset), (a.span, a.lines), d[-1]) for a, d in zip(na, vd)]
-			for na, vd in zip(dv, self.structure.fm_divisions.values())
-		]
-
 		self.layout = Layout(vv, dv)
-		self.structure.fm_verticals = fmv
-		self.structure.fm_divisions = fmd
 		for i in range(len(fmv)):
 			self.update_intersections(i)
 
