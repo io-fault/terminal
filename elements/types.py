@@ -736,6 +736,34 @@ class Layout(object):
 		rd[ri] = rda
 		return self.__class__(rv, rd)
 
+	def resize_horizontal_height(self, vertical, horizontal, height):
+		"""
+		# Reconstruct the layout adjusting the height, &Area.lines, of the &horizontal
+		# in &vertical to &height.
+		"""
+
+		dv = self.divisions[vertical]
+		last = (horizontal + 1) == len(dv)
+		d = height - dv[horizontal].lines
+
+		if last:
+			ti = horizontal - 1
+			bi = horizontal
+			d = -d
+		else:
+			ti = horizontal
+			bi = horizontal + 1
+
+		tda = dv[ti].resize(d, 0)
+		bda = dv[bi].move(d, 0).resize(-d, 0)
+
+		rdv = list(dv)
+		rdv[ti] = tda
+		rdv[bi] = bda
+		rd = list(self.divisions)
+		rd[vertical] = rdv
+		return self.__class__(list(self.verticals), rd)
+
 class Model(object):
 	"""
 	# The visual model defining the positions of divisions.

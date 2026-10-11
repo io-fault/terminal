@@ -3206,18 +3206,68 @@ class Frame(Core):
 		size = self.layout.verticals[dpath[0]].span + quantity
 		self.f_set_vertical_width_value(dpath, size)
 
+	def resize_horizontal_height(self, vertical, horizontal, height):
+		"""
+		# Resize the &horizontal's lines to &height.
+
+		# The change is reflected to &layout, &areas, and all divisions
+		# in the corresponding &stacks.
+		"""
+
+		l = self.layout
+		nd = len(l.divisions[vertical])
+		if nd == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		dv = l.divisions[vertical]
+		last = (horizontal + 1) == len(dv)
+		d = height - dv[horizontal].lines
+
+		if last:
+			ti = horizontal - 1
+			bi = horizontal
+			d = -d
+		else:
+			ti = horizontal
+			bi = horizontal + 1
+
+		tdi = self.paths[(vertical, ti)]
+		bdi = self.paths[(vertical, bi)]
+
+		la, ca, pa = self.areas[tdi]
+		self.areas[tdi] = (la, ca.resize(d, 0), pa.move(d, 0))
+		for vs in self.stacks[tdi]:
+			ca = vs.content.area
+			pa = vs.prompt.area
+			vs.content.area = ca.resize(d, 0)
+			vs.prompt.area = pa.move(d, 0)
+
+		la, ca, pa = self.areas[bdi]
+		self.areas[bdi] = (
+			la.move(d, 0),
+			ca.move(d, 0).resize(-d, 0),
+			pa,
+		)
+		for vs in self.stacks[bdi]:
+			la = vs.location.area
+			ca = vs.content.area
+			vs.location.area = la.move(d, 0)
+			vs.content.area = ca.move(d, 0).resize(-d, 0)
+
+		self.layout = self.layout.resize_horizontal_height(vertical, horizontal, height)
+
 	@comethod('frame', 'set/division/height')
 	def f_set_div_height_value(self, dpath, quantity=0):
-		self.set_horizontal_height(*dpath, quantity)
-		self.update_intersections(dpath[0])
-		self.update_divisions()
-		self.reconfigure()
+		self.resize_horizontal_height(*dpath, quantity)
+		for i in range(dpath[0]-1, dpath[0]+1):
+			self.update_intersections(i)
 		self.f_refresh()
 
 	@comethod('frame', 'set/division/height/delta')
 	def f_set_div_height_delta(self, dpath, quantity=0):
 		v, h = dpath
-		size = self.structure.fm_divisions[v][h][1][1] + quantity
+		size = self.layout.divisions[v][h].lines + quantity
 		self.f_set_div_height_value(dpath, size)
 
 	def restore(self, area, widths, heights):
@@ -4530,47 +4580,3 @@ class Frame(Core):
 
 		# Border cell.
 		return None
-
-	def set_horizontal_height(self, vertical, horizontal, height):
-		"""
-		# Change the height of the &horizontal in the &vertical to &height.
-		"""
-
-		v = self.structure.fm_divisions[vertical]
-		if len(v) == 1:
-			# Cannot resize over or under the frame's bounds.
-			return
-
-		vp, vd, vm = v[horizontal]
-		last = (horizontal + 1) == len(v)
-		d = height - vd[1]
-
-		if last:
-			# Shrink the preceding division's height to make room.
-			fi = horizontal - 1
-			fvp, fvd, fvm = v[fi]
-			fd = (fvp, (fvd[0], fvd[1] - d), fvm)
-			dd = ((vp[0], vp[1] - d), (vd[0], vd[1] + d), vm)
-		else:
-			# Shrink the following division's height to make room.
-			fi = horizontal + 1
-			fvp, fvd, fvm = v[fi]
-			fd = ((fvp[0], fvp[1] + d), (fvd[0], fvd[1] - d), fvm)
-			dd = (vp, (vd[0], height), vm)
-
-		for vd in (dd[1], fd[1]):
-			height = vd[1]
-			if height < 7 or height >= self.area.lines:
-				bounds = "7 -> " + str(self.area.lines)
-				errstr = f"division height ({height}) outside of bounds: {bounds}"
-				raise ValueError(errstr)
-
-		for vp in (dd[0], fd[0]):
-			top = vp[1]
-			if top < 0 or top >= self.area.lines:
-				bounds = "0 -> " + str(self.area.lines)
-				errstr = f"divsion offset ({top}) outside of bounds: {bounds}"
-				raise ValueError(errstr)
-
-		v[fi] = fd
-		v[horizontal] = dd
