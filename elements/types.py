@@ -635,737 +635,134 @@ class Status(object):
 		)
 		return self.__class__(*p, *d)
 
-class Model(object):
+@tools.record()
+class Layout(object):
 	"""
-	# The visual model defining the positions of divisions.
-	# Provides state for defining how a frame's divisions are positioned in an area,
-	# methods for controlling position indicators, and rendering tools for
-	# preparing drawing instructions.
-
-	# Much of the functionality here could be isolated, but maintain the positioning
-	# on the class for convenience and option for overloading.
-
-	# [ Patterns ]
-	# - `r_` prefixed methods generate instructions for performing rendering.
-	# - `fm_`, Frame Model, prefixes usually refer to instance state or context.
-
-	# [ Properties ]
-	# /fm_deltas/
-		# Mapping designating the size of a header, footer, or margin for a particular
-		# division. Keyed with the vertical-division index pair.
+	# The relative vertical and division areas within a frame.
 	"""
 
-	def verticals(self):
-		"""
-		# Get the number of verticals.
-		"""
+	verticals: Sequence[Area]
+	divisions: Sequence[Sequence[Area]]
 
-		return len(self.fm_verticals)
+	def __iter__(self):
+		return zip(self.verticals, self.divisions)
 
-	def horizontals(self, vertical):
-		"""
-		# Get the number of horizontals in the &vertical.
-		"""
-
-		return len(self.fm_divisions[vertical])
-
-	def __init__(self, symbols, *, border=1, header=2, footer=0):
-		self.fm_symbols = symbols
-		self.fm_allocation = None
-		self.fm_context = None
-		self.fm_header_size = header
-		self.fm_footer_size = footer
-		self.fm_border_width = border
-		self.fm_verticals = []
-		self.fm_layout = []
-		self.fm_divisions = collections.defaultdict(list)
-		self.fm_deltas = {}
-		self.fm_intersections = dict()
-
-	def sole(self):
-		"""
-		# Initialize verticals and horizontals as a sole area.
-		"""
-
-		self.fm_verticals = [
-			((1, 1), (
-				area.width - (self.fm_border_width * 2),
-				area.height - (self.fm_border_width * 2),
-			))
-		]
-
-		self.fm_divisions[0] = [self.fm_verticals[0] + ((2, 0),)]
-		for k in self.fm_divisions:
-			del self.fm_divisions[k]
-		self.reset()
-
-	def reset(self):
-		"""
-		# Reset caches derived from the grid's configuration.
-		"""
-
-		ss = self.fm_symbols['frame']
-		self.fm_intersections[:] = {
-			(0, 0): ss['top-left'],
-			(0, 3): ss['left'],
-			(self.fm_context.span-1, 3): ss['right'],
-			(self.fm_context.span-1, 0): ss['top-right'],
-			(0, self.fm_context.lines-1): ss['bottom-left'],
-			(self.fm_context.span-1, self.fm_context.lines-1): ss['bottom-right'],
-		}
-
-	def address(self, x, y):
-		"""
-		# Identify the vertical and horizontals that contain the &x and &y coordinates.
-		"""
-
-		x -= self.fm_context.left_offset
-		y -= self.fm_context.top_offset
-
-		for v in range(len(self.fm_verticals)):
-			p, d = self.fm_verticals[v]
-			if x >= p[0] and x <= p[0] + d[0]:
-				# Matched vertical.
-				for i, (dp, dd, ds) in enumerate(self.fm_divisions[v]):
-					if y >= dp[1] and y <= dp[1] + dd[1]:
-						# Matched horizontal; identify section.
-						ry = y - dp[1]
-
-						if ds[0] and ry <= ds[0]:
-							# Header
-							s = 1
-						elif ds[1] and ry >= dd[1] - ds[1]:
-							# Footer
-							s = 3
-						else:
-							s = 0
-
-						return v, i, s
-
-	@staticmethod
-	def distribute(span:int, allocation:int, separator:int=1):
-		"""
-		# Distribute the available range in &span so that each horizontal has at least the
-		# requested &allocation.
-		"""
-
-		# Identify how many segments the span has room for.
-		count = max(span // (allocation + separator), 1)
-
-		# Identify the segment size available for the count.
-		size = span // count
-
-		# The multiple used to calculate the position.
-		offset = size + separator
-
-		# The size available to the last segment.
-		last = span - (offset * (count-1))
-
-		# Calculate the positions of the first available unit(after the border).
-		return zip(
-			(x+1 for x in map(offset.__mul__, range(count))),
-			itertools.chain(
-				itertools.repeat(size, count - 1),
-				(last,)
-			)
-		)
-
-	def redistribute(self, verticals):
-		"""
-		# Distribute the available vertical area so that each page has at least the
-		# given &allocation.
-
-		# [ Parameters ]
-		# /verticals/
-			# Tuples designating the horizontal count and relative allocation width.
-		"""
-
-		height = self.fm_context.lines - (self.fm_border_width * 2)
-		width = self.fm_context.span - (self.fm_border_width * 2)
-		nverticals = len(verticals)
-		maxverticals = max(width // self.fm_allocation, 1)
-
-		# Fill the available space; excess goes to &inheritor.
-		ralloc = width // maxverticals
-		for i, va in enumerate(verticals):
-			if va[1] == 0:
-				# Override the vertical that receives the remaining space.
-				inheritor = i
-				break
+	def indexes(self, vertical=None):
+		if vertical is None:
+			l = len(self.verticals)
 		else:
-			inheritor = nverticals - 1
-		verticals[inheritor] = (verticals[inheritor][0], 0)
+			l = len(self.verticals[vertical])
+		return range(l)
 
-		self.fm_layout = verticals
-		self.fm_verticals = [
-			(
-				(None, 0 + self.fm_border_width),
-				(self.fm_allocation * x[1] + (max(x[1]-1, 0) * self.fm_border_width), height),
-			)
-			for x in verticals
+	@classmethod
+	def fill(Class, border, lines, span, widths, heights):
+		"""
+		# Construct a layout using verticals widths and division heights.
+		"""
+
+		ndivs = []
+		nverts = []
+		xoffset = 0
+		rspan = span - (border * (len(widths) + 1))
+		vlines = lines - (border * 2)
+
+		for v in widths:
+			xoffset += border
+			vertical = Area(border, xoffset, vlines, v)
+			nverts.append(vertical)
+			xoffset += vertical.span
+
+		for i, d in enumerate(heights):
+			yoffset = border
+			v = nverts[i]
+			xoffset = v.left_offset
+			rlines = v.lines - (border * (len(d) - 1))
+
+			div = []
+			for dl in d:
+				diva = Area(yoffset, xoffset, dl, v.span)
+				yoffset += dl + 1
+				div.append(diva)
+
+			ndivs.append(div)
+
+		return Class(nverts, ndivs)
+
+	def export(self):
+		fmv = [((a.left_offset, a.top_offset), (a.span, a.lines)) for a in self.verticals]
+		fmd = [
+			[((a.left_offset, a.top_offset), (a.span, a.lines), (2, 0)) for a in d]
+			for d in self.divisions
 		]
+		return fmv, fmd
 
-		uwidth = width - sum(x[1][0] for x in self.fm_verticals)
-		uwidth -= (nverticals - 1) * self.fm_border_width
-		vp, vd = self.fm_verticals[inheritor]
-		self.fm_verticals[inheritor] = (vp, (uwidth, vd[1]))
-
-		# Calculate horizontal offsets using the calculated widths.
-		offset = self.fm_border_width
-		for i, v in enumerate(self.fm_verticals):
-			self.fm_verticals[i] = ((offset, v[0][1]), v[1])
-			offset += v[1][0]
-			offset += self.fm_border_width
-
-		# Reconstruct last record with updated width.
-		for i, p in enumerate(self.fm_verticals):
-			if i not in self.fm_divisions:
-				self.fm_divisions[i] = [p + ((2, 0),)]
-			self.update_inner_intersections(i)
-
-		return len(self.fm_verticals)
-
-	def set_vertical_width(self, vertical, width):
-		"""
-		# Change the width of the &vertical to &width.
-		"""
-
-		nv = len(self.fm_divisions)
-		if nv == 1:
-			# Cannot resize over or under the frame's bounds.
-			return
-
-		last = (vertical + 1) == nv
-		dv = self.fm_verticals[vertical]
-		d = width - dv[1][0]
-
-		if last:
-			# Change the preceding vertical's width to make room.
-			fi = vertical - 1
-
-			dv = (
-				(dv[0][0] - d, dv[0][1]),
-				(dv[1][0] + d, dv[1][1]),
-			)
-			dvd = [
-				((dv[0][0], vp[1]), (dv[1][0], vd[1]), vm)
-				for vp, vd, vm in self.fm_divisions[vertical]
-			]
-
-			fv = self.fm_verticals[fi]
-			fv = (
-				fv[0],
-				(fv[1][0] - d, fv[1][1]),
-			)
-			fvd = [
-				(vp, (fv[1][0], vd[1]), vm)
-				for vp, vd, vm in self.fm_divisions[fi]
-			]
-		else:
-			# Change the following vertical's width to make room.
-			fi = vertical + 1
-
-			dv = (
-				dv[0],
-				(dv[1][0] + d, dv[1][1]),
-			)
-			dvd = [
-				(vp, (dv[1][0], vd[1]), vm)
-				for vp, vd, vm in self.fm_divisions[vertical]
-			]
-
-			fv = self.fm_verticals[fi]
-			fv = (
-				(fv[0][0] + d, fv[0][1]),
-				(fv[1][0] - d, fv[1][1]),
-			)
-			fvd = [
-				((fv[0][0], vp[1]), (fv[1][0], vd[1]), vm)
-				for vp, vd, vm in self.fm_divisions[fi]
-			]
-
-		for vd in (dv[1], fv[1]):
-			width = vd[0]
-			if width < 0 or width >= self.fm_context.span:
-				bounds = "0 -> " + str(self.fm_context.span)
-				errstr = f"vertical width ({width}) outside of bounds: {bounds}"
-				raise ValueError(errstr)
-
-		for vp in (dv[0], fv[0]):
-			left = vp[0]
-			if left < 0 or left >= self.fm_context.span:
-				bounds = "0 -> " + str(self.fm_context.span)
-				errstr = f"vertical offset ({left}) outside of bounds: {bounds}"
-				raise ValueError(errstr)
-
-		self.fm_verticals[fi] = fv
-		self.fm_divisions[fi] = fvd
-		self.fm_verticals[vertical] = dv
-		self.fm_divisions[vertical] = dvd
-		self.update_inner_intersections(fi)
-		self.update_inner_intersections(vertical)
-
-	def set_horizontal_height(self, vertical, horizontal, height):
-		"""
-		# Change the height of the &horizontal in the &vertical to &height.
-		"""
-
-		v = self.fm_divisions[vertical]
-		if len(v) == 1:
-			# Cannot resize over or under the frame's bounds.
-			return
-
-		vp, vd, vm = v[horizontal]
-		last = (horizontal + 1) == len(v)
-		d = height - vd[1]
-
-		if last:
-			# Shrink the preceding division's height to make room.
-			fi = horizontal - 1
-			fvp, fvd, fvm = v[fi]
-			fd = (fvp, (fvd[0], fvd[1] - d), fvm)
-			dd = ((vp[0], vp[1] - d), (vd[0], vd[1] + d), vm)
-		else:
-			# Shrink the following division's height to make room.
-			fi = horizontal + 1
-			fvp, fvd, fvm = v[fi]
-			fd = ((fvp[0], fvp[1] + d), (fvd[0], fvd[1] - d), fvm)
-			dd = (vp, (vd[0], height), vm)
-
-		for vd in (dd[1], fd[1]):
-			height = vd[1]
-			if height < 7 or height >= self.fm_context.lines:
-				bounds = "7 -> " + str(self.fm_context.lines)
-				errstr = f"division height ({height}) outside of bounds: {bounds}"
-				raise ValueError(errstr)
-
-		for vp in (dd[0], fd[0]):
-			top = vp[1]
-			if top < 0 or top >= self.fm_context.lines:
-				bounds = "0 -> " + str(self.fm_context.lines)
-				errstr = f"divsion offset ({top}) outside of bounds: {bounds}"
-				raise ValueError(errstr)
-
-		v[fi] = fd
-		v[horizontal] = dd
-		self.update_inner_intersections(vertical)
-
-	def set_margin_size(self, vertical, horizontal, section, size):
-		"""
-		# Change the size of the header, footer, or left and right margins
-		# for the horizontal identified by &vertical and &horizontal.
-		"""
-
-		key = (vertical, horizontal, section)
-		current = self.fm_deltas.get(key, 0)
-
-		self.fm_deltas[key] = size
-		vp, vd, vm = self.fm_divisions[vertical][horizontal]
-		if section == 1:
-			h = size
-			f = vm[1]
-		elif section == 3:
-			h = vm[0]
-			f = size
-		self.fm_divisions[vertical][horizontal] = (vp, vd, (h, f))
-		self.update_inner_intersections(vertical)
-
-		return size - current
-
-	def divide(self, vertical, count):
-		"""
-		# Split the &vertical &count times.
-		"""
-
-		pp, pd = self.fm_verticals[vertical]
-		self.fm_divisions[vertical] = [
-			((pp[0], p), (pd[0], height), (2, self.fm_deltas.get((vertical, di, 3), 0)))
-			for di, (p, height) in enumerate(self.distribute(pd[1], (pd[1] // count)-1))
-		]
-		self.update_inner_intersections(vertical)
-
-	def configure(self, area, verticals, allocation=100):
-		"""
-		# Configure the frame to have `len(verticals)` verticals where
-		# each element describes the number of horizontals within the vertical.
-		"""
-
-		self.fm_context = area
-		self.fm_allocation = allocation
-		self.redistribute(verticals)
-		for i, vd in enumerate(verticals):
-			self.divide(i, vd[0])
-		return self
-
-	@property
-	def configuration(self):
-		"""
-		# Return the configured area and verticals.
-		"""
-
-		return self.fm_context, self.layout
-
-	@property
-	def layout(self):
-		return self.fm_layout
-
-	def iterpanes(self):
+	def division_paths(self):
 		"""
 		# Identify the paths used to reach a given division.
 		"""
 
-		for v in range(len(self.fm_verticals)):
-			for d in range(len(self.fm_divisions[v])):
+		for v in range(len(self.verticals)):
+			for d in range(len(self.divisions[v])):
 				yield (v, d)
 
-	def itercontexts(self, *, section=0):
+	def resize_vertical_width(self, vertical, width):
 		"""
-		# Construct (area) contexts for the configured set of divisions
-		# in left-to-right and top-to-bottom order.
-
-		# [ Parameters ]
-		# /section/
-			# The portion of the division to select.
-			# Defaults to zero selecting the body.
+		# Reconstruct the layout adjusting the &vertical's span to &width.
 		"""
 
-		ry = self.fm_context.top_offset
-		rx = self.fm_context.left_offset
-		hborder = 1
-		vborder = 1
-		dt = 0
-		db = 0
-		dl = 0
-		dr = 0
-		alloc = (lambda CP, CD: (CP[1], CP[0], CD[1], CD[0]))
+		last = (vertical + 1) == len(self.verticals)
+		d = self.verticals[vertical].span - width
 
-		# Clockwise: top, right, bottom, left
-		if section == 0:
-			# Body.
-			position = (lambda: (rx+left+dl, ry+top+dt))
-			dimensions = (lambda: (width-(dl+dr), height-(dt+db)))
-		elif section == 1:
-			# Header, priority over margins.
-			# Left and right margins stop short of header.
-			position = (lambda: (rx+left, ry+top))
-			dimensions = (lambda: (width-dl-dr, dt-vborder))
-		elif section == 2:
-			# Right Margin.
-			position = (lambda: (rx+left+width-dr+hborder, ry+top+dt))
-			dimensions = (lambda: (dr-hborder, height-dt-db))
-		elif section == 3:
-			# Footer, priority over margins.
-			# Left and right margins stop short of footer.
-			position = (lambda: (rx+left, ry+top+height-(db-vborder)))
-			dimensions = (lambda: (width, max(0, db-vborder)))
-		elif section == 4:
-			# Left Margin
-			position = (lambda: (rx+left, ry+top+dt))
-			dimensions = (lambda: (dl-hborder, height-dt-db))
+		if last:
+			li = vertical - 1
+			ri = vertical
+			d = -d
 		else:
-			raise ValueError("five sections available in a division, 0-4")
+			li = vertical
+			ri = vertical + 1
 
-		for v in range(len(self.fm_verticals)):
-			for cp, cd, cx in self.fm_divisions[v]:
-				left, top = cp
-				width, height = cd
+		lva = self.verticals[li].resize(0, -d)
+		lda = [a.resize(0, -d) for a in self.divisions[li]]
 
-				# Zeros unless a section is allocated.
-				dt = cx[0] + vborder if cx[0] else 0
-				db = cx[1] + vborder if cx[1] else 0
+		rva = self.verticals[ri].move(0, -d).resize(0, d)
+		rda = [a.move(0, -d).resize(0, d) for a in self.divisions[ri]]
 
-				yield alloc(position(), dimensions())
+		rv = list(self.verticals)
+		rd = list(self.divisions)
 
-	@staticmethod
-	def combine(f, l):
+		rv[li] = lva
+		rd[li] = lda
+		rv[ri] = rva
+		rd[ri] = rda
+		return self.__class__(rv, rd)
+
+	def resize_horizontal_height(self, vertical, horizontal, height):
 		"""
-		# Combine box drawing characters to form intersections based on the glyph.
-		"""
-
-		match (f, l):
-			# Left
-			case ('│', '├') \
-				| ('├', '│'):
-				return '├'
-			# Right
-			case ('│', '┤') \
-				| ('┤', '│'):
-				return '┤'
-			# Full
-			case ('│', '─') \
-				| ('├', '┤') \
-				| ('┤', '├') \
-				| ('┬', '┴') \
-				| ('┴', '┬'):
-				return '┼'
-
-			# Select latter; handles (literal) corner cases.
-			case (_):
-				return l
-
-	def update_inner_intersections(self, page):
-		"""
-		# Process the crossbars that divide a vertical.
+		# Reconstruct the layout adjusting the height, &Area.lines, of the &horizontal
+		# in &vertical to &height.
 		"""
 
-		pp, pd = self.fm_verticals[page]
-		li = '├'
-		ri = '┤'
+		dv = self.divisions[vertical]
+		last = (horizontal + 1) == len(dv)
+		d = height - dv[horizontal].lines
 
-		# Collect the intersections using the divisions of the vertical.
-		lefts = [(pp[0]-1, x[0][1]-1) for x in self.fm_divisions[page]]
-
-		# Adjust for header. The intersections on the top are in the same position,
-		# but are only half-down. The top and bottom are intentionally skipped
-		# to be handled by another function.
-		lefts[0] = (lefts[0][0], lefts[0][1] + 3) # Header
-
-		# Adjust for right side.
-		rights = [(x[0]+pd[0]+1, x[1]) for x in lefts]
-
-		# Bottom is naturally skipped as only the start position of a division is considered.
-		ixn = self.fm_intersections
-		ixn.update((x, self.combine(li, ixn.get(x, li))) for x in lefts)
-		ixn.update((x, self.combine(ri, ixn.get(x, ri))) for x in rights)
-
-	def r_enclose(self, width, height):
-		"""
-		# Draw the surrounding border of the frame.
-		"""
-
-		symbols = self.fm_symbols['frame']
-		hlength = width - (self.fm_border_width * 2)
-		vlength = height - (self.fm_border_width * 2)
-
-		horiz = symbols['horizontal']
-		vert = symbols['vertical']
-
-		# Horizontal top.
-		yoffset = 0
-		yield (yoffset, 0, 1, 1), symbols['top-left']
-		yield (yoffset, 1, 1, hlength), horiz
-		yield (yoffset, width - 1, 1, 1), symbols['top-right']
-
-		# Horizontal bottom.
-		yoffset = height - 1
-		yield (yoffset, 0, 1, 1), symbols['bottom-left']
-		yield (yoffset, 1, 1, hlength), horiz
-		yield (yoffset, width - 1, 1, 1), symbols['bottom-right']
-
-		# Verticals
-		yield (1, 0, vlength, 1), vert
-		yield (1, width-1, vlength, 1), vert
-
-	def r_divide_verticals(self, position, size):
-		"""
-		# Render the divisions for the verticals.
-		"""
-
-		symbols = self.fm_symbols['frame']
-		yield (position[1], position[0], 1, 1), symbols['top']
-		yield (position[1] + 1, position[0], size-2, 1), symbols['vertical']
-		yield (position[1] + size - 1, position[0], 1, 1), symbols['bottom']
-
-	def r_divide_horizontals(self, solid, position, size):
-		"""
-		# Render the divisions for the horizontals.
-		"""
-
-		symbols = self.fm_symbols['frame']
-		end = (position[0] + size + 1, position[1])
-
-		if solid:
-			hl = symbols['horizontal']
-			li = self.fm_intersections.get(position, symbols['left'])
-			ri = self.fm_intersections.get(end, symbols['right'])
+		if last:
+			ti = horizontal - 1
+			bi = horizontal
+			d = -d
 		else:
-			hl = symbols['horizontal-weak']
-			ri = li = symbols['vertical']
+			ti = horizontal
+			bi = horizontal + 1
 
-		yield (position[1], position[0], 1, 1), li
-		yield (position[1], position[0] + 1, 1, size), hl
-		yield (position[1], position[0] + 1 + size, 1, 1), ri
+		tda = dv[ti].resize(d, 0)
+		bda = dv[bi].move(d, 0).resize(-d, 0)
 
-	def r_patch_footer(self, vertical, horizontal):
-		"""
-		# Render the dividing line used to separate the &section from the body.
-
-		# Used when opening a prompt in an already drawn frame.
-		"""
-
-		vp, vd, vx = self.fm_divisions[vertical][horizontal]
-		header, footer = vx
-
-		h = vp[0] - self.fm_border_width
-		v = vp[1]
-
-		yield from self.r_divide_horizontals(False,
-			(h, v + vd[1] - footer - self.fm_border_width), vd[0])
-
-	def r_divide(self, width, height):
-		"""
-		# Render all the divisions necessary to represent the model's configuration.
-
-		# Performs the necessary &r_divide_verticals and &r_divide_horizontals
-		# to represent the configured &fm_verticals and &fm_divisions.
-		"""
-
-		for vp, vd in self.fm_verticals[1:]:
-			yield from self.r_divide_verticals((vp[0]-1, vp[1]-1), height)
-
-		for i, v in enumerate(self.fm_verticals):
-			for vp, vd, vx in self.fm_divisions[i][1:]:
-				yield from self.r_divide_horizontals(True, (vp[0]-1, vp[1]-1), vd[0])
-
-			for vp, vd, vx in self.fm_divisions[i]:
-				header, footer = vx
-				h = vp[0] - self.fm_border_width
-				v = vp[1]
-
-				if header:
-					yield from self.r_divide_horizontals(False,
-						(h, v + header), vd[0])
-				if footer:
-					yield from self.r_divide_horizontals(False,
-						(h, v + vd[1] - footer - self.fm_border_width), vd[0])
-
-	@staticmethod
-	def indicate(itype, last, limit, offset, d, i):
-		"""
-		# Configure a position indicator using the given parameters to identify
-		# the relative position that it should use, the indicator's type for color
-		# selection, and the relative symbol name that should be used.
-		"""
-
-		# Color indicator for adjacency.
-		if i == last and itype in {'offset-active'}:
-			itype = 'stop-inclusive'
-
-		# Apply delta, constrain range, and identify image reference.
-		ri = i - d
-		if ri < 0:
-			# Minimum
-			image = 'leading'
-			ri = 0
-		elif ri >= limit:
-			# Maximum
-			image = 'following'
-			ri = limit - 1
-		else:
-			# Default color and symbol.
-			image = 'visible'
-
-		return itype, image, ri + offset
-
-	@staticmethod
-	def scale_ipositions(
-			indicate,
-			position, dimensions,
-			horizontal, vertical, # Cursor Vectors
-			dx, dy, # Cursor adjustments.
-			*,
-			borders=(1, 1),
-			itypes=(
-				'start-inclusive',
-				'offset-active',
-				'stop-exclusive',
-			),
-			zip=zip, R=itertools.repeat,
-			chain=itertools.chain, rev=reversed,
-		):
-		"""
-		# Annotate and scale the indicator positions in preparation for rendering.
-
-		# [ Parameters ]
-		# /position/
-			# The &fm_context relative position of the division.
-		# /dimensions/
-			# The width and height of the division.
-		# /horizontal/
-			# The horizontal cursor positions to indicate.
-		# /vertical/
-			# The vertical cursor positions to indicate.
-		# /dx/
-			# The difference to apply to horizontals to adjust
-			# for the view's positioning.
-		# /dy/
-			# The difference to apply to verticals to compensate
-			# for the view's positioning.
-
-		# [ Returns ]
-		# #
-			# - (control/type)`string`
-			# - `top`
-			# - `right`
-			# - `bottom`
-			# - `left`
-		# # Cross Offset
-		# # (type)&indicate
-		"""
-
-		borderx, bordery = borders
-		h_offset = position[0] - borderx
-		v_offset = position[1] - bordery
-
-		h_limit = dimensions[0]
-		v_limit = dimensions[1]
-
-		# End of range, inclusive. Used to identify inclusive edge.
-		h_last = horizontal[-1] - 1
-		v_last = vertical[-1] - 1
-
-		# Order is reversed on the opposing sides.
-		# By changing the order, stacked indicators will have different
-		# colors on each side allowing recognition of the intersection.
-
-		v_context = R((v_last, v_limit, v_offset + bordery, dy))
-		h_context = R((h_last, h_limit, h_offset + borderx, dx))
-
-		# Left
-		loffset = h_offset
-		lpositions = zip(R('left'), R(loffset), v_context, rev(vertical), rev(itypes))
-
-		# Right
-		roffset = h_offset + borderx + h_limit
-		rpositions = zip(R('right'), R(roffset), v_context, vertical, itypes)
-
-		# Top
-		toffset = v_offset
-		tpositions = zip(R('top'), R(toffset), h_context, horizontal, itypes)
-
-		# Bottom
-		boffset = v_offset + bordery + v_limit
-		bpositions = zip(R('bottom'), R(boffset), h_context, rev(horizontal), rev(itypes))
-
-		# Dilate and transform.
-		ip = chain(lpositions, rpositions, tpositions, bpositions)
-		for (pv, coffset, i_context, xy, itype) in ip:
-			if xy is None:
-				continue
-			yield pv, coffset, indicate(itype, *i_context, xy)
-
-	def r_indicators(self, scaled, *, rtypes={}):
-		"""
-		# Render indicators from scaled positions.
-		"""
-
-		for pv, coffset, (itype, iimage, offset) in scaled:
-			iis = self.fm_symbols[pv]
-			ii = iis[iimage]
-
-			match pv:
-				case 'top' | 'bottom':
-					position = (offset, coffset)
-				case 'left' | 'right':
-					position = (coffset, offset)
-
-			if position in self.fm_intersections:
-				re = self.fm_intersections[position]
-			else:
-				# Default horizontal or vertical. Dotted (weak) or solid.
-				re = iis['reset-'+rtypes.get(pv, 'solid')]
-
-			yield (position, itype, ii, re)
+		rdv = list(dv)
+		rdv[ti] = tda
+		rdv[bi] = bda
+		rd = list(self.divisions)
+		rd[vertical] = rdv
+		return self.__class__(list(self.verticals), rd)
 
 @tools.struct()
 class System(object):

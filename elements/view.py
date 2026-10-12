@@ -13,9 +13,10 @@ from ..cells import alignment
 from . import annotations
 from . import storage
 
-from .types import Core, Annotation, Position, Status, Model, System
+from .types import Core, Annotation, Position, Status, System
 from .types import Reference, Reformulations, Line, Prompting
-from .types import Area, Cell, Screen, Image, Phrase, Words, Glyph, LineStyle
+from .types import Layout, Area
+from .types import Cell, Screen, Image, Phrase, Words, Glyph, LineStyle
 from .types import Work, Procedure, Composition, Instruction
 
 class CellMatrix(Core):
@@ -371,7 +372,8 @@ class Refraction(CellMatrix):
 
 		lo, co, \
 		lrstart, loffset, lrstop, \
-		crstart, coffset, crstop = addressing
+		crstart, coffset, crstop, \
+		*ignored = addressing
 
 		self.focus[0].restore((lrstart, loffset, lrstop))
 		self.focus[1].restore((crstart, coffset, crstop))
@@ -2654,6 +2656,10 @@ class Structure(object):
 	def refractions(self):
 		return (self.location, self.content, self.prompt)
 
+	def snapshot(self):
+		yield from self.content.snapshot()
+		yield from (self.location.area.lines, self.prompt.area.lines)
+
 	def areas(self):
 		return (self.location.area, self.content.area, self.prompt.area)
 
@@ -2735,6 +2741,8 @@ class Frame(Core):
 		# Session inherited prompt behavior.
 	# /area/
 		# The location and size of the frame on the screen.
+	# /layout/
+		# The &area relative arrangement of divisions and verticals of the frame.
 	# /index/
 		# The position of the frame in the session's frame set.
 	# /title/
@@ -2817,6 +2825,7 @@ class Frame(Core):
 		return ds, fe
 
 	def __init__(self, symbols, prompting, define, theme, fs, keyboard, area, index=None, title=None):
+		self.symbols = symbols
 		self.prompting = prompting
 		self.define = define
 		self.theme = theme
@@ -2824,16 +2833,17 @@ class Frame(Core):
 		self.filesystem = fs
 		self.keyboard = keyboard
 		self.area = area
+		self.layout = Layout([], [])
 		self.index = index
 		self.title = title
-		self.structure = Model(symbols)
+		self.intersections = {}
+		self.reset_intersections()
 
 		self.vertical = 0
 		self.division = 0
 		self.focus = None
 
 		self.paths = {} # (vertical, division) -> element-index
-		self.panes = []
 		self.views = []
 		self.stacks = []
 
@@ -3112,55 +3122,175 @@ class Frame(Core):
 		"""
 
 		# Rebuild division path indexes.
-		self.panes = list(self.structure.iterpanes())
-		self.paths = {p: i for i, p in enumerate(self.panes)}
+		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
 
-		self.areas = list(zip(
-			itertools.starmap(Area, self.structure.itercontexts(section=1)), # location
-			itertools.starmap(Area, self.structure.itercontexts()), # content
-			itertools.starmap(Area, self.structure.itercontexts(section=3)), # prompt
-		))
+		ry = self.area.top_offset
+		rx = self.area.left_offset
+		hb = 1
+		dp = 2
+		dl = 2
+		self.areas = list(itertools.chain.from_iterable([
+			[
+				(rl := Area(d.top_offset, v.left_offset, dl, v.span),
+				co := Area(rl.bottom_offset + hb, v.left_offset, d.lines - (rl.lines + hb), v.span),
+				Area(co.bottom_offset + hb, v.left_offset, 0, v.span))
+				for d in dv
+			]
+			for v, dv in self.layout])
+		)
+
+	def resize_vertical_width(self, vertical, width):
+		"""
+		# Resize the &vertical's span to &width.
+
+		# The change is reflected to &layout, &areas, and all divisions
+		# in the corresponding &stacks.
+		"""
+
+		l = self.layout
+		nv = len(l.verticals)
+		if nv == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		last = (vertical + 1) == nv
+		d = l.verticals[vertical].span - width
+
+		if last:
+			li = vertical - 1
+			ri = vertical
+			d = -d
+		else:
+			li = vertical
+			ri = vertical + 1
+
+		i = self.paths[(li, 0)]
+		lir = slice(i, i + len(l.divisions[li]))
+		i = self.paths[(ri, 0)]
+		rir = slice(self.paths[(ri, 0)], i + len(l.divisions[ri]))
+
+		self.areas[lir] = [
+			(la.resize(0, -d), ca.resize(0, -d), pa.resize(0, -d))
+			for la, ca, pa in list(self.areas[lir])
+		]
+		for i in range(lir.start, lir.stop):
+			for vs in self.stacks[i]:
+				la = vs.location.area
+				ca = vs.content.area
+				pa = vs.prompt.area
+
+				vs.location.area = la.resize(0, -d)
+				vs.content.area = ca.resize(0, -d)
+				vs.prompt.area = pa.resize(0, -d)
+
+		self.areas[rir] = [
+			(
+				la.move(0, -d).resize(0, d),
+				ca.move(0, -d).resize(0, d),
+				pa.move(0, -d).resize(0, d)
+			)
+			for la, ca, pa in list(self.areas[rir])
+		]
+		for i in range(rir.start, rir.stop):
+			for vs in self.stacks[i]:
+				la = vs.location.area
+				ca = vs.content.area
+				pa = vs.prompt.area
+
+				vs.location.area = la.move(0, -d).resize(0, d)
+				vs.content.area = ca.move(0, -d).resize(0, d)
+				vs.prompt.area = pa.move(0, -d).resize(0, d)
+
+		self.layout = self.layout.resize_vertical_width(vertical, width)
 
 	@comethod('frame', 'set/vertical/width')
 	def f_set_vertical_width_value(self, dpath, quantity=0):
-		self.structure.set_vertical_width(dpath[0], quantity)
-		self.update_divisions()
-		self.reconfigure()
+		self.resize_vertical_width(dpath[0], quantity)
+		for i in range(dpath[0]-1, dpath[0]+1):
+			self.update_intersections(i)
 		self.f_refresh()
 
 	@comethod('frame', 'set/vertical/width/delta')
 	def f_set_vertical_width_delta(self, dpath, quantity=0):
-		size = self.structure.fm_divisions[dpath[0]][0][1][0] + quantity
+		size = self.layout.verticals[dpath[0]].span + quantity
 		self.f_set_vertical_width_value(dpath, size)
+
+	def resize_horizontal_height(self, vertical, horizontal, height):
+		"""
+		# Resize the &horizontal's lines to &height.
+
+		# The change is reflected to &layout, &areas, and all divisions
+		# in the corresponding &stacks.
+		"""
+
+		l = self.layout
+		nd = len(l.divisions[vertical])
+		if nd == 1:
+			# Cannot resize over or under the frame's bounds.
+			return
+
+		dv = l.divisions[vertical]
+		last = (horizontal + 1) == len(dv)
+		d = height - dv[horizontal].lines
+
+		if last:
+			ti = horizontal - 1
+			bi = horizontal
+			d = -d
+		else:
+			ti = horizontal
+			bi = horizontal + 1
+
+		tdi = self.paths[(vertical, ti)]
+		bdi = self.paths[(vertical, bi)]
+
+		la, ca, pa = self.areas[tdi]
+		self.areas[tdi] = (la, ca.resize(d, 0), pa.move(d, 0))
+		for vs in self.stacks[tdi]:
+			ca = vs.content.area
+			pa = vs.prompt.area
+			vs.content.area = ca.resize(d, 0)
+			vs.prompt.area = pa.move(d, 0)
+
+		la, ca, pa = self.areas[bdi]
+		self.areas[bdi] = (
+			la.move(d, 0),
+			ca.move(d, 0).resize(-d, 0),
+			pa,
+		)
+		for vs in self.stacks[bdi]:
+			la = vs.location.area
+			ca = vs.content.area
+			vs.location.area = la.move(d, 0)
+			vs.content.area = ca.move(d, 0).resize(-d, 0)
+
+		self.layout = self.layout.resize_horizontal_height(vertical, horizontal, height)
 
 	@comethod('frame', 'set/division/height')
 	def f_set_div_height_value(self, dpath, quantity=0):
-		self.structure.set_horizontal_height(*dpath, quantity)
-		self.update_divisions()
-		self.reconfigure()
+		self.resize_horizontal_height(*dpath, quantity)
+		for i in range(dpath[0]-1, dpath[0]+1):
+			self.update_intersections(i)
 		self.f_refresh()
 
 	@comethod('frame', 'set/division/height/delta')
 	def f_set_div_height_delta(self, dpath, quantity=0):
 		v, h = dpath
-		size = self.structure.fm_divisions[v][h][1][1] + quantity
+		size = self.layout.divisions[v][h].lines + quantity
 		self.f_set_div_height_value(dpath, size)
 
-	def remodel(self, area=None, divisions=None):
+	def restore(self, area, widths, heights):
 		"""
-		# Update the model in response to changes in the size or layout of the frame.
+		# Restore the frame's layout.
 		"""
 
-		# Default to existing configuration.
-		da, dd = self.structure.configuration
-		if area is None:
-			area = da
-		if divisions is None:
-			divisions = dd
+		self.layout = Layout.fill(1, area.lines, area.span, widths, heights)
+		for i in self.layout.indexes():
+			self.update_intersections(i)
 
-		self.structure.configure(area, divisions)
 		self.update_divisions()
-		self.stacks = [list() for x in range(len(self.areas))]
+		if not self.stacks:
+			self.stacks = [list() for x in range(len(self.areas))]
 
 	def reconfigure(self):
 		"""
@@ -3198,10 +3328,9 @@ class Frame(Core):
 		# Window size changed; remodel and render the new frame.
 		"""
 
+		self.scale_divisions(area)
 		self.area = area
-		stacks = self.stacks
-		self.remodel(area)
-		self.stacks = stacks
+		self.update_divisions()
 		self.reconfigure()
 
 	def resize_footer(self, dpath, height):
@@ -3211,22 +3340,22 @@ class Frame(Core):
 
 		vi = self.paths[dpath]
 		l, rf, p = self.views[vi].refractions()
-
-		d = self.structure.set_margin_size(dpath[0], dpath[1], 3, height)
-		p.area = p.area.resize(d, 0)
+		self.update_intersections(dpath[0])
+		d = height - p.area.lines
 
 		# Initial opening needs to include the border size.
 		if height - d == 0:
 			# height was zero. Pad with border width.
-			d += self.structure.fm_border_width
+			d += 1
 		elif height == 0 and d != 0:
 			# height set to zero. Compensate for border.
-			d -= self.structure.fm_border_width
+			d -= 1
 
 		rf.configure(rf.deltas, rf.define, rf.area.resize(-d, 0))
 		rf.v_compensate()
 
-		p.area = p.area.move(-d, 0)
+		a = Area(rf.area.bottom_offset + 1, rf.area.left_offset, height, rf.area.span)
+		p.configure(p.deltas, p.define, a)
 		# &render will emit the entire image, so make sure the footer is trimmed.
 		p.v_compensate()
 
@@ -3274,10 +3403,11 @@ class Frame(Core):
 			if v == division:
 				break
 
+		self.areas[division] = vs.areas()
 		if vs.prompt.area.lines != cs.prompt.area.lines:
 			# Update layout structure if the footers differ.
-			self.structure.set_margin_size(dpath[0], dpath[1], 3, vs.prompt.area.lines)
-		self.areas[division] = vs.areas()
+			current = cs.prompt.area.lines
+			self.update_intersections(dpath[0])
 		vs.shown()
 
 		# Focus was in &cs, which is now hidden, so switch to update focus.
@@ -3289,7 +3419,9 @@ class Frame(Core):
 		if vs.prompt.area.lines > 0:
 			self.deltas.extend(
 				self.fill_areas(
-					self.structure.r_patch_footer(dpath[0], dpath[1])
+					self.r_patch_footer(self.symbols,
+						self.intersections, vs.prompt.area,
+					)
 				)
 			)
 
@@ -3310,8 +3442,17 @@ class Frame(Core):
 
 		aw = self.area.span
 		ah = self.area.lines
-		yield from self.fill_areas(self.structure.r_enclose(aw, ah))
-		yield from self.fill_areas(self.structure.r_divide(aw, ah))
+		ixn = self.intersections
+		sym = self.symbols
+
+		yield from self.fill_areas(self.r_enclose(sym, 1, aw, ah))
+		yield from self.fill_areas(self.r_divide(sym, 1, ixn, self.layout, aw, ah))
+
+		for vs in self.views:
+			if vs.location.area.lines:
+				yield from self.fill_areas(self.r_patch_header(sym, ixn, vs.location.area))
+			if vs.prompt.area.lines:
+				yield from self.fill_areas(self.r_patch_footer(sym, ixn, vs.prompt.area))
 
 	def render(self, *, ichain=itertools.chain.from_iterable):
 		"""
@@ -3321,12 +3462,7 @@ class Frame(Core):
 		for v in ichain(vs.refractions() for vs in self.views):
 			yield from v.v_render(slice(0, v.area.lines))
 
-		aw = self.area.span
-		ah = self.area.lines
-
-		# Give the frame boundaries higher (display) precedence by rendering last.
-		yield from self.fill_areas(self.structure.r_enclose(aw, ah))
-		yield from self.fill_areas(self.structure.r_divide(aw, ah))
+		yield from self.render_layout()
 
 	def select(self, dpath):
 		"""
@@ -3345,8 +3481,8 @@ class Frame(Core):
 			if dpath[1] < 0:
 				v = dpath[0] - 1
 				if v < 0:
-					v += self.structure.verticals()
-				dpath = (v, self.structure.horizontals(v)-1)
+					v += len(self.layout.verticals)
+				dpath = (v, len(self.layout.divisions[v])-1)
 			else:
 				dpath = (dpath[0]+1, 0)
 				if dpath not in self.paths:
@@ -3541,7 +3677,9 @@ class Frame(Core):
 			self.resize_footer(dpath, pg_allocation)
 			self.deltas.extend(
 				self.fill_areas(
-					self.structure.r_patch_footer(dpath[0], dpath[1])
+					self.r_patch_footer(self.symbols,
+						self.intersections, pg.area
+					)
 				)
 			)
 			self.deltas.extend(pg.refresh(0))
@@ -3802,7 +3940,7 @@ class Frame(Core):
 		# # &Refraction
 		"""
 
-		v, d, s = self.structure.address(left, top)
+		v, d, s = self.identify_cell_division(left, top)
 		i = self.paths[(v, d)]
 
 		l, c, p = self.views[i].refractions()
@@ -3831,15 +3969,15 @@ class Frame(Core):
 			# Presume the reflected application can manage focus indication.
 			return
 
-		si = list(self.structure.scale_ipositions(
-			self.structure.indicate,
+		si = list(self.scale_ipositions(
+			self.indications,
 			(vstat.area.left_offset, vstat.area.top_offset),
 			(vstat.area.span, vstat.area.lines),
 			vstat.cell(), vstat.line(),
 			vstat.v_cell_offset, vstat.v_line_offset,
 		))
 
-		for pi in self.structure.r_indicators(si):
+		for pi in self.r_indicators(self.symbols, self.intersections, si):
 			(x, y), itype, ic, bc = pi
 			ccell = self.theme['cursor-' + itype]
 			picell = Glyph(textcolor=ccell.cellcolor, codepoint=ord(ic))
@@ -4011,3 +4149,432 @@ class Frame(Core):
 			trf.focus[1].set(h - li.ln_level)
 
 		self.focus = trf
+
+	@classmethod
+	def r_enclose(Class, symbols, border, width, height):
+		"""
+		# Draw the surrounding border of the frame.
+		"""
+
+		hlength = width - (border * 2)
+		vlength = height - (border * 2)
+
+		symbols = symbols['frame']
+		horiz = symbols['horizontal']
+		vert = symbols['vertical']
+
+		# Horizontal top.
+		yoffset = 0
+		yield (yoffset, 0, 1, 1), symbols['top-left']
+		yield (yoffset, 1, 1, hlength), horiz
+		yield (yoffset, width - 1, 1, 1), symbols['top-right']
+
+		# Horizontal bottom.
+		yoffset = height - 1
+		yield (yoffset, 0, 1, 1), symbols['bottom-left']
+		yield (yoffset, 1, 1, hlength), horiz
+		yield (yoffset, width - 1, 1, 1), symbols['bottom-right']
+
+		# Verticals
+		yield (1, 0, vlength, 1), vert
+		yield (1, width-1, vlength, 1), vert
+
+	@classmethod
+	def r_divide_verticals(Class, symbols, position, size):
+		"""
+		# Render the divisions for the verticals.
+		"""
+
+		yield (position[1], position[0], 1, 1), symbols['top']
+		yield (position[1] + 1, position[0], size - 2, 1), symbols['vertical']
+		yield (position[1] + size - 1, position[0], 1, 1), symbols['bottom']
+
+	@classmethod
+	def r_divide_horizontals(Class, symbols, ixn, solid, position, size):
+		"""
+		# Render the divisions for the horizontals.
+		"""
+
+		end = (position[0] + size + 1, position[1])
+
+		if solid:
+			hl = symbols['horizontal']
+			li = ixn.get(position, symbols['left'])
+			ri = ixn.get(end, symbols['right'])
+		else:
+			hl = symbols['horizontal-weak']
+			ri = li = symbols['vertical']
+
+		yield (position[1], position[0], 1, 1), li
+		yield (position[1], position[0] + 1, 1, size), hl
+		yield (position[1], position[0] + 1 + size, 1, 1), ri
+
+	@classmethod
+	def r_patch_header(Class, symbols, ixn, area):
+		"""
+		# Draw the dividing line between the division's heading and content.
+		"""
+
+		yield from Class.r_divide_horizontals(symbols['frame'], ixn, False,
+			(area.left_offset - 1, area.bottom_offset), area.span)
+
+	@classmethod
+	def r_patch_footer(Class, symbols, ixn, area):
+		"""
+		# Draw the dividing line between the division's content and footer.
+		"""
+
+		yield from Class.r_divide_horizontals(symbols['frame'], ixn, False,
+			(area.left_offset - 1, area.top_offset - 1), area.span)
+
+	@classmethod
+	def r_divide(Class, symbols, border, ixn, layout, width, height):
+		"""
+		# Render all the divisions necessary to represent the model's configuration.
+
+		# Performs the necessary &r_divide_verticals and &r_divide_horizontals
+		# to represent the configured &verticals and &divisions.
+		"""
+
+		symbols = symbols['frame']
+		for va in layout.verticals:
+			yield from Class.r_divide_verticals(symbols, (va.left_offset-1, va.top_offset-1), height)
+
+		for i, v in enumerate(layout.verticals):
+			for da in layout.divisions[i][1:]:
+				yield from Class.r_divide_horizontals(symbols, ixn, True,
+					(da.left_offset - 1, da.top_offset - 1), da.span)
+
+	@classmethod
+	def r_indicators(Class, symbols, ixn, scaled, *, rtypes={}):
+		"""
+		# Render indicators from scaled positions.
+		"""
+
+		for pv, coffset, (itype, iimage, offset) in scaled:
+			iis = symbols[pv]
+			ii = iis[iimage]
+
+			match pv:
+				case 'top' | 'bottom':
+					position = (offset, coffset)
+				case 'left' | 'right':
+					position = (coffset, offset)
+
+			if position in ixn:
+				re = ixn[position]
+			else:
+				# Default horizontal or vertical. Dotted (weak) or solid.
+				re = iis['reset-'+rtypes.get(pv, 'solid')]
+
+			yield (position, itype, ii, re)
+
+	@classmethod
+	def scale_ipositions(Class,
+			indicate,
+			position, dimensions,
+			horizontal, vertical, # Cursor Vectors
+			dx, dy, # Cursor adjustments.
+			*,
+			borders=(1, 1),
+			itypes=(
+				'start-inclusive',
+				'offset-active',
+				'stop-exclusive',
+			),
+			zip=zip, R=itertools.repeat,
+			chain=itertools.chain, rev=reversed,
+		):
+		"""
+		# Annotate and scale the indicator positions in preparation for rendering.
+
+		# [ Parameters ]
+		# /position/
+			# The &area relative position of the division.
+		# /dimensions/
+			# The width and height of the division.
+		# /horizontal/
+			# The horizontal cursor positions to indicate.
+		# /vertical/
+			# The vertical cursor positions to indicate.
+		# /dx/
+			# The difference to apply to horizontals to adjust
+			# for the view's positioning.
+		# /dy/
+			# The difference to apply to verticals to compensate
+			# for the view's positioning.
+
+		# [ Returns ]
+		# #
+			# - (control/type)`string`
+			# - `top`
+			# - `right`
+			# - `bottom`
+			# - `left`
+		# # Cross Offset
+		# # (type)&indicate
+		"""
+
+		borderx, bordery = borders
+		h_offset = position[0] - borderx
+		v_offset = position[1] - bordery
+
+		h_limit = dimensions[0]
+		v_limit = dimensions[1]
+
+		# End of range, inclusive. Used to identify inclusive edge.
+		h_last = horizontal[-1] - 1
+		v_last = vertical[-1] - 1
+
+		# Order is reversed on the opposing sides.
+		# By changing the order, stacked indicators will have different
+		# colors on each side allowing recognition of the intersection.
+
+		v_context = R((v_last, v_limit, v_offset + bordery, dy))
+		h_context = R((h_last, h_limit, h_offset + borderx, dx))
+
+		# Left
+		loffset = h_offset
+		lpositions = zip(R('left'), R(loffset), v_context, rev(vertical), rev(itypes))
+
+		# Right
+		roffset = h_offset + borderx + h_limit
+		rpositions = zip(R('right'), R(roffset), v_context, vertical, itypes)
+
+		# Top
+		toffset = v_offset
+		tpositions = zip(R('top'), R(toffset), h_context, horizontal, itypes)
+
+		# Bottom
+		boffset = v_offset + bordery + v_limit
+		bpositions = zip(R('bottom'), R(boffset), h_context, rev(horizontal), rev(itypes))
+
+		# Dilate and transform.
+		ip = chain(lpositions, rpositions, tpositions, bpositions)
+		for (pv, coffset, i_context, xy, itype) in ip:
+			if xy is None:
+				continue
+			yield pv, coffset, indicate(itype, *i_context, xy)
+
+	@classmethod
+	def indications(Class, itype, last, limit, offset, d, i):
+		"""
+		# Configure a position indicator using the given parameters to identify
+		# the relative position that it should use, the indicator's type for color
+		# selection, and the relative symbol name that should be used.
+		"""
+
+		# Color indicator for adjacency.
+		if i == last and itype in {'offset-active'}:
+			itype = 'stop-inclusive'
+
+		# Apply delta, constrain range, and identify image reference.
+		ri = i - d
+		if ri < 0:
+			# Minimum
+			image = 'leading'
+			ri = 0
+		elif ri >= limit:
+			# Maximum
+			image = 'following'
+			ri = limit - 1
+		else:
+			# Default color and symbol.
+			image = 'visible'
+
+		return itype, image, ri + offset
+
+	@classmethod
+	def calculate_relative_dimensions(Class, border, lines, span, widths, heights):
+		"""
+		# Calculate the relative dimensions of &widths and &heights with respect to &area.
+
+		# Used by &scale_division_dimensions to identify the proportions
+		# to be used with the new area.
+		"""
+
+		span = span - (border * len(widths)) # Usable.
+
+		for i, v in enumerate(widths):
+			vwidth = v / span
+			# Section borders are part of the division content.
+			lines = lines - (border * len(heights[i]))
+
+			yield (vwidth, [h / lines for h in heights[i]])
+
+	def relative_dimensions(self):
+		"""
+		# Calculate the relative dimensions of the frame's divisions.
+		"""
+
+		return list(self.calculate_relative_dimensions(1,
+			self.area.lines, self.area.span,
+			[x.span for x in self.layout.verticals],
+			[[y.lines for y in x] for x in self.layout.divisions],
+		))
+
+	def scale_divisions(self, area):
+		"""
+		# Adjust the size of the divisions to fit within the new &area.
+		"""
+
+		rdims = self.relative_dimensions()
+		vv, dv = self.scale_division_dimensions(1, area.lines, area.span, rdims)
+		self.layout = Layout(vv, dv)
+		for i in range(len(fmv)):
+			self.update_intersections(i)
+
+	@classmethod
+	def scale_division_dimensions(Class, border, lines, span, rdims):
+		"""
+		# Adjust the dimensions and positions of the frame's divisions to
+		# scale into the new &area.
+		"""
+
+		ndivs = []
+		nverts = []
+		xoffset = 0
+		rspan = span - (border * (len(rdims) + 1))
+		vlines = lines - (border * 2)
+
+		for rv, rh_v in rdims:
+			xoffset += border
+			vertical = Area(border, xoffset, vlines, round(rv * rspan))
+			nverts.append(vertical)
+			xoffset += vertical.span
+
+		# Inherit any remainder(+/-).
+		nspan = sum(v.span for v in nverts)
+		if nspan != rspan:
+			a = nverts[-1]
+			nverts[-1] = Area(a.top_offset, a.left_offset, a.lines, a.span + (rspan - nspan))
+
+		for i, (rv, rh_v) in enumerate(rdims):
+			yoffset = border
+			v = nverts[i]
+			xoffset = v.left_offset
+			rlines = v.lines - (border * (len(rh_v) - 1))
+
+			div = []
+			for rh in rh_v:
+				h = round(rh * rlines)
+				diva = Area(yoffset, xoffset, h, v.span)
+				yoffset += h + 1
+				div.append(diva)
+
+			# Inherit any remainder(+/-).
+			nlines = sum(d.lines for d in div)
+			if nlines != rlines:
+				a = div[-1]
+				div[-1] = Area(a.top_offset, a.left_offset, a.lines + (rlines - nlines), a.span)
+			ndivs.append(div)
+		return nverts, ndivs
+
+	def reset_intersections(self):
+		"""
+		# Reset &intersections to contain only the outermost border.
+		"""
+
+		s = self.symbols['frame']
+		a = self.area
+		self.intersections[:] = {
+			(0, 0): s['top-left'],
+			(0, 3): s['left'],
+			(a.span-1, 3): s['right'],
+			(a.span-1, 0): s['top-right'],
+			(0, a.lines-1): s['bottom-left'],
+			(a.span-1, a.lines-1): s['bottom-right'],
+		}
+
+	@staticmethod
+	def combine(f, l):
+		"""
+		# Combine box drawing characters to form intersections based on the glyph.
+		"""
+
+		match (f, l):
+			# Left
+			case ('│', '├') \
+				| ('├', '│'):
+				return '├'
+			# Right
+			case ('│', '┤') \
+				| ('┤', '│'):
+				return '┤'
+			# Full
+			case ('│', '─') \
+				| ('├', '┤') \
+				| ('┤', '├') \
+				| ('┬', '┴') \
+				| ('┴', '┬'):
+				return '┼'
+
+			# Select latter; handles (literal) corner cases.
+			case (_):
+				return l
+
+	def update_intersections(self, vertical):
+		"""
+		# Update &intersections of the &vertical.
+		"""
+
+		va = self.layout.verticals[vertical]
+		dav = self.layout.divisions[vertical]
+		li = '├'
+		ri = '┤'
+
+		# Collect the intersections using the divisions of the vertical.
+		vleft = va.left_offset - 1
+		lefts = [(vleft, x.top_offset - 1) for x in dav]
+
+		# Adjust for header. The intersections on the top are in the same position,
+		# but are only half-down. The top and bottom are intentionally skipped
+		# to be handled by another function.
+		lefts[0] = (lefts[0][0], lefts[0][1] + 3) # Header
+
+		# Adjust for right side.
+		vright = va.right_offset
+		rights = [(vright, x[1]) for x in lefts]
+
+		# Bottom is naturally skipped as only the start position of a division is considered.
+		ixn = self.intersections
+		ixn.update((x, self.combine(li, ixn.get(x, li))) for x in lefts)
+		ixn.update((x, self.combine(ri, ixn.get(x, ri))) for x in rights)
+
+	def identify_cell_division(self, x, y):
+		"""
+		# Identify the vertical and horizontals that contain the &x and &y coordinates.
+		"""
+
+		rx = x - self.area.left_offset
+		ry = y - self.area.top_offset
+		vi = 0
+		di = 0
+
+		for v, dv in self.layout:
+			if rx < v.left_offset or rx > v.right_offset:
+				vi += 1
+				continue
+
+			# Matched vertical.
+			for d in dv:
+				if ry < d.top_offset or ry > d.bottom_offset:
+					di += 1
+					continue
+
+				# Matched horizontal; identify section.
+
+				ca = self.views[self.paths[(vi, di)]].content.area
+				if y > ca.bottom_offset:
+					# Footer
+					s = 3
+				elif y < ca.top_offset:
+					# Header
+					s = 1
+				else:
+					s = 0
+
+				return vi, di, s
+
+		# Border cell.
+		return None
