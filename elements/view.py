@@ -3173,6 +3173,16 @@ class Frame(Core):
 			(la.resize(0, -d), ca.resize(0, -d), pa.resize(0, -d))
 			for la, ca, pa in list(self.areas[lir])
 		]
+		for i in range(lir.start, lir.stop):
+			for vs in self.stacks[i]:
+				la = vs.location.area
+				ca = vs.content.area
+				pa = vs.prompt.area
+
+				vs.location.area = la.resize(0, -d)
+				vs.content.area = ca.resize(0, -d)
+				vs.prompt.area = pa.resize(0, -d)
+
 		self.areas[rir] = [
 			(
 				la.move(0, -d).resize(0, d),
@@ -3181,15 +3191,15 @@ class Frame(Core):
 			)
 			for la, ca, pa in list(self.areas[rir])
 		]
+		for i in range(rir.start, rir.stop):
+			for vs in self.stacks[i]:
+				la = vs.location.area
+				ca = vs.content.area
+				pa = vs.prompt.area
 
-		# Forward area changes to all divisions.
-		for s in (lir, rir):
-			for vv, av in zip(self.stacks[s], self.areas[s]):
-				la, ca, pa = av
-				for vs in vv:
-					vs.location.area = la
-					vs.content.area = ca
-					vs.prompt.area = pa
+				vs.location.area = la.move(0, -d).resize(0, d)
+				vs.content.area = ca.move(0, -d).resize(0, d)
+				vs.prompt.area = pa.move(0, -d).resize(0, d)
 
 		self.layout = self.layout.resize_vertical_width(vertical, width)
 
