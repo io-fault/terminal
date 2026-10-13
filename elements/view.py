@@ -3198,6 +3198,73 @@ class Frame(Core):
 			self.update_intersections(i)
 		self.f_refresh()
 
+	def split_division(self, session, vertical, horizontal, divisions=1):
+		"""
+		# Replace the division identified by &vertical and &horizontal with &divisions
+		# additional divisions.
+
+		# [ Parameters ]
+		# /session/
+			# The session managing the frame, &self.
+		# /vertical/
+			# The vertical containing the &horizontal.
+		# /horizontal/
+			# The horizontal of the division to be split.
+		# /divisions/
+			# The number of divisions to initialize the vertical with.
+		"""
+
+		l = self.layout.split_horizontal(1, vertical, horizontal, divisions)
+		div_index = self.paths[(vertical, horizontal)]
+		ins_offset = slice(div_index+1, div_index+1)
+
+		vfdi = self.paths[(vertical, 0)] # First division in vertical.
+		vdc = len(self.layout.divisions[vertical])
+
+		# Insert new refractions.
+		null = session.host.fs_pwd()@'/dev/null'
+		new = [session.refract(null) for x in range(divisions)]
+		self.views[ins_offset] = new
+		self.stacks[ins_offset] = [[x] for x in new]
+
+		# Slice in the new divisions.
+		divmap = list(l.map_vertical_divisions(1, self.area, vertical, vertical+1))
+		vro = (div_index - vfdi) + 1
+		self.areas[ins_offset] = divmap[vro:vro+divisions]
+
+		la, ca, pa = self.areas[div_index]
+		d = self.layout.divisions[vertical][horizontal].lines \
+			- l.divisions[vertical][horizontal].lines
+		vs = self.views[div_index]
+		self.areas[div_index] = (la, ca.resize(-d, 0), pa.move(-d, 0))
+		vs.location.area, \
+		vs.content.area, \
+		vs.prompt.area = self.areas[div_index]
+
+		# New divisions indexes after insertion.
+		ndivs = slice(div_index + 1, div_index + divisions + 1)
+		for av, dv in zip(self.areas[ndivs], self.stacks[ndivs]):
+			for vs in dv:
+				vs.location.configure(self.deltas, self.define, av[0])
+				vs.content.configure(self.deltas, self.define, av[1])
+				vs.prompt.configure(self.deltas, self.define, av[2])
+				vs.shown()
+
+		self.layout = l
+		self.paths = {p: i for i, p in enumerate(l.division_paths())}
+
+	@comethod('frame', 'split/division')
+	def f_split_division(self, session, dpath, quantity=1):
+		if not quantity:
+			return
+
+		self.split_division(session, *dpath, divisions=quantity)
+
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
+			self.update_intersections(i)
+		self.f_refresh()
+
 	def resize_vertical_width(self, vertical, width):
 		"""
 		# Resize the &vertical's span to &width.

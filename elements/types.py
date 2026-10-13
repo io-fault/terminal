@@ -808,6 +808,27 @@ class Layout(object):
 		dv = self.divisions[:vertical] + [vdv, nvd] + self.divisions[vertical+1:]
 		return self.__class__(vv, dv)
 
+	def split_horizontal(self, border, vertical, horizontal, divisions=1):
+		"""
+		# Reconstruct the layout with a new divisions inserted after the one
+		# identified by &vertical and &horizontal.
+		"""
+
+		dv = self.divisions[vertical]
+		a = dv[horizontal]
+		q, r = divmod(a.lines, divisions + 1)
+
+		na = Area(a.top_offset, a.left_offset, q, a.span)
+		ndv = []
+		for i in range(divisions + 1):
+			ndv.append(na)
+			na = na.move(q + border, 0)
+		ndv[-1] = ndv[-1].resize(r - (divisions * border), 0)
+
+		divs = list(self.divisions)
+		divs[vertical] = dv[:horizontal] + ndv + dv[horizontal+1:]
+		return self.__class__(list(self.verticals), divs)
+
 @tools.struct()
 class System(object):
 	"""

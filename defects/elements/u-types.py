@@ -236,6 +236,29 @@ def test_Layout_split_vertical(test):
 	test/d3.lines == (q - 1)
 	test/d3.bottom_offset == l2.verticals[1].bottom_offset
 
+def test_Layout_split_horizontal(test):
+	"""
+	# - &module.Layout.split_horizontal
+	"""
+
+	l1 = module.Layout([module.Area(0, 0, 100, 100)], [[module.Area(0, 0, 100, 100)]])
+	l2 = l1.split_horizontal(1, 0, 0, 1)
+
+	test/len(l2.verticals) == 1
+	test/len(l1.divisions[0]) == 1
+	test/len(l2.divisions[0]) == 2 # split division once.
+
+	for d in l2.divisions[0]:
+		test/l2.verticals[0].left_offset == d.left_offset
+		test/l2.verticals[0].span == d.span
+
+	q, r = divmod(100, 2)
+	d1, d2 = l2.divisions[0]
+	test/d1.lines == q
+	test/d2.lines == q - 1 # border
+	test/d1.bottom_offset == d2.top_offset - 1
+	test/d2.bottom_offset == l2.verticals[0].bottom_offset
+
 def test_Position_insert(test):
 	"""
 	# - &module.Position.insert
