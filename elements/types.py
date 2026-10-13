@@ -688,6 +688,22 @@ class Layout(object):
 
 		return Class(nverts, ndivs)
 
+	def map_vertical_divisions(self, border, area, start, stop):
+		ry = area.top_offset
+		rx = area.left_offset
+		hb = border
+		dp = 2
+		dl = 2
+		return itertools.chain.from_iterable(
+			[
+				(rl := Area(d.top_offset, v.left_offset, dl, v.span),
+				co := Area(rl.bottom_offset + hb, v.left_offset, d.lines - (rl.lines + hb), v.span),
+				Area(co.bottom_offset + hb, v.left_offset, 0, v.span))
+				for d in self.divisions[i + start]
+			]
+			for i, v in enumerate(self.verticals[start:stop])
+		)
+
 	def export(self):
 		fmv = [((a.left_offset, a.top_offset), (a.span, a.lines)) for a in self.verticals]
 		fmd = [

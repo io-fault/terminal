@@ -3123,21 +3123,7 @@ class Frame(Core):
 
 		# Rebuild division path indexes.
 		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
-
-		ry = self.area.top_offset
-		rx = self.area.left_offset
-		hb = 1
-		dp = 2
-		dl = 2
-		self.areas = list(itertools.chain.from_iterable([
-			[
-				(rl := Area(d.top_offset, v.left_offset, dl, v.span),
-				co := Area(rl.bottom_offset + hb, v.left_offset, d.lines - (rl.lines + hb), v.span),
-				Area(co.bottom_offset + hb, v.left_offset, 0, v.span))
-				for d in dv
-			]
-			for v, dv in self.layout])
-		)
+		self.areas = list(self.layout.map_vertical_divisions(1, self.area, 0, None))
 
 	def resize_vertical_width(self, vertical, width):
 		"""
