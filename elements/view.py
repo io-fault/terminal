@@ -4237,7 +4237,7 @@ class Frame(Core):
 		"""
 
 		symbols = symbols['frame']
-		for va in layout.verticals:
+		for va in layout.verticals[1:]:
 			yield from Class.r_divide_verticals(symbols, (va.left_offset-1, va.top_offset-1), height)
 
 		for i, v in enumerate(layout.verticals):
