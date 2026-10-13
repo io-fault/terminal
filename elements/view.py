@@ -3125,6 +3125,79 @@ class Frame(Core):
 		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
 		self.areas = list(self.layout.map_vertical_divisions(1, self.area, 0, None))
 
+	def split_vertical(self, session, vertical, width=0.5, divisions=1):
+		"""
+		# Replace the &vertical with two. The &width is the fraction of cells
+		# that will be used when allocating space for the new vertical.
+
+		# [ Parameters ]
+		# /session/
+			# The session managing the frame, &self.
+		# /vertical/
+			# The vertical index after which to insert a new vertical.
+		# /width/
+			# The fraction of the &vertical width to take for the new.
+		# /divisions/
+			# The number of divisions to initialize the vertical with.
+		"""
+
+		l = self.layout.split_vertical(1, vertical, width, divisions)
+
+		divs = slice(
+			self.paths[(vertical, 0)],
+			self.paths[(vertical, len(self.layout.divisions[vertical])-1)] + 1
+		)
+		idx = slice(divs.stop, divs.stop)
+		nri = slice(idx.start, idx.start + divisions)
+
+		# Insert new stack.
+		null = session.host.fs_pwd()@'/dev/null'
+		self.stacks[idx] = [
+			[session.refract(null)]
+			for i in range(divisions)
+		]
+		self.views[idx] = [x[0] for x in self.stacks[nri]]
+		self.areas[idx] = l.map_vertical_divisions(1, self.area, vertical+1, vertical+2)
+		for av, dv in zip(self.areas[nri], self.stacks[nri]):
+			for vs in dv:
+				vs.location.configure(self.deltas, self.define, av[0])
+				vs.content.configure(self.deltas, self.define, av[1])
+				vs.prompt.configure(self.deltas, self.define, av[2])
+				vs.hidden()
+		for vs in self.views[nri]:
+			vs.shown()
+
+		d = self.layout.verticals[vertical].span - l.verticals[vertical].span
+		for vs in itertools.chain.from_iterable(self.stacks[divs]):
+			la = vs.location.area
+			ca = vs.content.area
+			pa = vs.prompt.area
+
+			vs.location.area = la.resize(0, -d)
+			vs.content.area = ca.resize(0, -d)
+			vs.prompt.area = pa.resize(0, -d)
+
+		# Reflect changes to &vertical in &areas.
+		self.areas[divs] = [
+			(vs.location.area, vs.content.area, vs.prompt.area)
+			for vs in self.views[divs]
+		]
+
+		self.layout = l
+		self.paths = {p: i for i, p in enumerate(l.division_paths())}
+
+	@comethod('frame', 'split/vertical')
+	def f_split_vertical(self, session, dpath, quantity=1):
+		if not quantity:
+			return
+
+		self.split_vertical(session, dpath[0], divisions=quantity)
+
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
+			self.update_intersections(i)
+		self.f_refresh()
+
 	def resize_vertical_width(self, vertical, width):
 		"""
 		# Resize the &vertical's span to &width.

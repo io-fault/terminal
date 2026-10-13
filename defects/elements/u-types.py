@@ -208,6 +208,34 @@ def test_Reformulations_fields(test):
 		('inclusion-identifier', "extension"),
 	]
 
+def test_Layout_split_vertical(test):
+	"""
+	# - &module.Layout.split_vertical
+	"""
+
+	l1 = module.Layout([module.Area(0, 0, 100, 100)], [[module.Area(0, 0, 100, 100)]])
+	l2 = l1.split_vertical(1, 0, 0.25, 3)
+
+	test/l2.verticals[0].span == 74 # -1 for the border.
+	test/l2.verticals[1].span == 25
+
+	dv = l2.divisions
+	test/l2.verticals[0] == l2.divisions[0][0]
+
+	for d in l2.divisions[1]:
+		test/l2.verticals[1].left_offset == d.left_offset
+		test/l2.verticals[1].span == d.span
+
+	d1, d2, d3 = l2.divisions[1]
+	q, r = divmod(100, 3)
+	test/d1.lines == q
+	test/d1.bottom_offset == d2.top_offset - 1
+
+	test/d2.lines == q
+	test/d2.bottom_offset == d3.top_offset - 1
+	test/d3.lines == (q - 1)
+	test/d3.bottom_offset == l2.verticals[1].bottom_offset
+
 def test_Position_insert(test):
 	"""
 	# - &module.Position.insert

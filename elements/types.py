@@ -780,6 +780,34 @@ class Layout(object):
 		rd[vertical] = rdv
 		return self.__class__(list(self.verticals), rd)
 
+	def split_vertical(self, border, vertical, width=0.5, divisions=1):
+		"""
+		# Reconstruct the layout with a new vertical inserted after &vertical whose
+		# span is &width multiplied by the &vertical's.
+		"""
+
+		a = self.verticals[vertical]
+		nvs = round(a.span * width)
+		na = a.resize(0, -nvs - border)
+		nv = Area(na.top_offset, na.right_offset + 1, na.lines, nvs)
+		d = a.span - na.span
+
+		# Rebuild divisions for the subject vertical.
+		vdv = [a.resize(0, -d) for a in self.divisions[vertical]]
+
+		# Distribute lines across the allocated divsions.
+		h, r = divmod(nv.lines, divisions)
+		da = Area(nv.top_offset, nv.left_offset, h, nv.span)
+		nvd = [da]
+		for i in range(divisions - 1):
+			da = da.move(h + border, 0)
+			nvd.append(da)
+		nvd[-1] = nvd[-1].resize(r - (divisions - 1) * border, 0)
+
+		vv = self.verticals[:vertical] + [na, nv] + self.verticals[vertical+1:]
+		dv = self.divisions[:vertical] + [vdv, nvd] + self.divisions[vertical+1:]
+		return self.__class__(vv, dv)
+
 @tools.struct()
 class System(object):
 	"""
