@@ -829,6 +829,27 @@ class Layout(object):
 		divs[vertical] = dv[:horizontal] + ndv + dv[horizontal+1:]
 		return self.__class__(list(self.verticals), divs)
 
+	def remove_vertical(self, vertical):
+		"""
+		# Reconstruct the layout with the identified vertical removed.
+		"""
+
+		l = self.__class__(list(self.verticals), list(self.divisions))
+		del l.verticals[vertical]
+		del l.divisions[vertical]
+		return l
+
+	def remove_horizontal(self, vertical, horizontal):
+		"""
+		# Reconstruct the layout with the identified division removed.
+		"""
+
+		divs = list(self.divisions)
+		divs[vertical] = list(divs[vertical])
+		l = self.__class__(list(self.verticals), divs)
+		del l.divisions[vertical][horizontal]
+		return l
+
 @tools.struct()
 class System(object):
 	"""

@@ -3265,6 +3265,64 @@ class Frame(Core):
 			self.update_intersections(i)
 		self.f_refresh()
 
+	@comethod('frame', 'close/horizontal')
+	def f_close_horizontal(self, dpath):
+		if dpath[1] == 0 and len(self.layout.divisions[dpath[0]]) == 1:
+			return self.f_close_vertical(dpath)
+
+		di = self.paths[dpath]
+		ds = slice(di, di + 1)
+
+		for vs in self.views[ds]:
+			vs.hidden()
+		for dstack in self.stacks[ds]:
+			for vs in dstack:
+				if isinstance(vs.content, Reflection):
+					vs.content.close()
+
+		self.resize_horizontal_height(*dpath, -1)
+		l = self.layout.remove_horizontal(*dpath)
+
+		self.paths = {p: i for i, p in enumerate(l.division_paths())}
+		self.layout = l
+		del self.areas[ds]
+		del self.views[ds]
+		del self.stacks[ds]
+
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
+			self.update_intersections(i)
+		self.refocus()
+		self.f_refresh()
+
+	@comethod('frame', 'close/vertical')
+	def f_close_vertical(self, dpath):
+		di = self.paths[(dpath[0], 0)]
+		dc = len(self.layout.divisions[dpath[0]])
+		ds = slice(di, di + dc)
+
+		for vs in self.views[ds]:
+			vs.hidden()
+		for dstack in self.stacks[ds]:
+			for vs in dstack:
+				if isinstance(vs.content, Reflection):
+					vs.content.close()
+
+		self.resize_vertical_width(dpath[0], -1)
+		l = self.layout.remove_vertical(dpath[0])
+
+		self.paths = {p: i for i, p in enumerate(l.division_paths())}
+		self.layout = l
+		del self.areas[ds]
+		del self.views[ds]
+		del self.stacks[ds]
+
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
+			self.update_intersections(i)
+		self.refocus()
+		self.f_refresh()
+
 	def resize_vertical_width(self, vertical, width):
 		"""
 		# Resize the &vertical's span to &width.
@@ -4013,10 +4071,18 @@ class Frame(Core):
 
 	@comethod('prompt', 'execute/close')
 	def pg_execute_close(self, dpath, session, prompt):
+		vs = self.select(dpath)
 		r = self.pg_execute(dpath, session)
 		if r:
 			self.pg_log_command(prompt)
-			self.pg_close(dpath)
+			try:
+				if self.select(dpath) != vs:
+					raise KeyError("layout changed")
+			except KeyError:
+				pass
+			else:
+				# Only when the prompt survived the command (close division).
+				self.pg_close(dpath)
 			session.keyboard.set('control')
 			return True
 		elif r is None:
