@@ -3198,10 +3198,10 @@ class Frame(Core):
 			self.update_intersections(i)
 		self.f_refresh()
 
-	def split_division(self, session, vertical, horizontal, divisions=1):
+	def split_horizontal(self, session, vertical, horizontal, divisions=1):
 		"""
-		# Replace the division identified by &vertical and &horizontal with &divisions
-		# additional divisions.
+		# Replace the horiztonal identified by &vertical and &horizontal with &divisions
+		# additional horizontal areas for containing division stacks.
 
 		# [ Parameters ]
 		# /session/
@@ -3211,7 +3211,7 @@ class Frame(Core):
 		# /horizontal/
 			# The horizontal of the division to be split.
 		# /divisions/
-			# The number of divisions to initialize the vertical with.
+			# The number horizontal spaces to add.
 		"""
 
 		l = self.layout.split_horizontal(1, vertical, horizontal, divisions)
@@ -3253,12 +3253,12 @@ class Frame(Core):
 		self.layout = l
 		self.paths = {p: i for i, p in enumerate(l.division_paths())}
 
-	@comethod('frame', 'split/division')
-	def f_split_division(self, session, dpath, quantity=1):
+	@comethod('frame', 'split/horizontal')
+	def f_split_horizontal(self, session, dpath, quantity=1):
 		if not quantity:
 			return
 
-		self.split_division(session, *dpath, divisions=quantity)
+		self.split_horizontal(session, *dpath, divisions=quantity)
 
 		self.reset_intersections()
 		for i in range(len(self.layout.verticals)):
@@ -3450,18 +3450,18 @@ class Frame(Core):
 
 		self.layout = self.layout.resize_horizontal_height(vertical, horizontal, height)
 
-	@comethod('frame', 'set/division/height')
-	def f_set_div_height_value(self, dpath, quantity=0):
+	@comethod('frame', 'set/horizontal/height')
+	def f_set_horizontal_height_value(self, dpath, quantity=0):
 		self.resize_horizontal_height(*dpath, quantity)
 		for i in range(dpath[0]-1, dpath[0]+1):
 			self.update_intersections(i)
 		self.f_refresh()
 
-	@comethod('frame', 'set/division/height/delta')
-	def f_set_div_height_delta(self, dpath, quantity=0):
+	@comethod('frame', 'set/horizontal/height/delta')
+	def f_set_horizontal_height_delta(self, dpath, quantity=0):
 		v, h = dpath
 		size = self.layout.divisions[v][h].lines + quantity
-		self.f_set_div_height_value(dpath, size)
+		self.f_set_horizontal_height_value(dpath, size)
 
 	def restore(self, area, widths, heights):
 		"""
