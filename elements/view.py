@@ -3123,21 +3123,205 @@ class Frame(Core):
 
 		# Rebuild division path indexes.
 		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
+		self.areas = list(self.layout.map_vertical_divisions(1, self.area, 0, None))
 
-		ry = self.area.top_offset
-		rx = self.area.left_offset
-		hb = 1
-		dp = 2
-		dl = 2
-		self.areas = list(itertools.chain.from_iterable([
-			[
-				(rl := Area(d.top_offset, v.left_offset, dl, v.span),
-				co := Area(rl.bottom_offset + hb, v.left_offset, d.lines - (rl.lines + hb), v.span),
-				Area(co.bottom_offset + hb, v.left_offset, 0, v.span))
-				for d in dv
-			]
-			for v, dv in self.layout])
+	def split_vertical(self, session, vertical, width=0.5, divisions=1):
+		"""
+		# Replace the &vertical with two. The &width is the fraction of cells
+		# that will be used when allocating space for the new vertical.
+
+		# [ Parameters ]
+		# /session/
+			# The session managing the frame, &self.
+		# /vertical/
+			# The vertical index after which to insert a new vertical.
+		# /width/
+			# The fraction of the &vertical width to take for the new.
+		# /divisions/
+			# The number of divisions to initialize the vertical with.
+		"""
+
+		l = self.layout.split_vertical(1, vertical, width, divisions)
+
+		divs = slice(
+			self.paths[(vertical, 0)],
+			self.paths[(vertical, len(self.layout.divisions[vertical])-1)] + 1
 		)
+		idx = slice(divs.stop, divs.stop)
+		nri = slice(idx.start, idx.start + divisions)
+
+		# Insert new stack.
+		null = session.host.fs_pwd()@'/dev/null'
+		self.stacks[idx] = [
+			[session.refract(null)]
+			for i in range(divisions)
+		]
+		self.views[idx] = [x[0] for x in self.stacks[nri]]
+		self.areas[idx] = l.map_vertical_divisions(1, self.area, vertical+1, vertical+2)
+		for av, dv in zip(self.areas[nri], self.stacks[nri]):
+			for vs in dv:
+				vs.location.configure(self.deltas, self.define, av[0])
+				vs.content.configure(self.deltas, self.define, av[1])
+				vs.prompt.configure(self.deltas, self.define, av[2])
+				vs.hidden()
+		for vs in self.views[nri]:
+			vs.shown()
+
+		d = self.layout.verticals[vertical].span - l.verticals[vertical].span
+		for vs in itertools.chain.from_iterable(self.stacks[divs]):
+			la = vs.location.area
+			ca = vs.content.area
+			pa = vs.prompt.area
+
+			vs.location.area = la.resize(0, -d)
+			vs.content.area = ca.resize(0, -d)
+			vs.prompt.area = pa.resize(0, -d)
+
+		# Reflect changes to &vertical in &areas.
+		self.areas[divs] = [
+			(vs.location.area, vs.content.area, vs.prompt.area)
+			for vs in self.views[divs]
+		]
+
+		self.layout = l
+		self.paths = {p: i for i, p in enumerate(l.division_paths())}
+
+	@comethod('frame', 'split/vertical')
+	def f_split_vertical(self, session, dpath, quantity=1):
+		if not quantity:
+			return
+
+		self.split_vertical(session, dpath[0], divisions=quantity)
+
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
+			self.update_intersections(i)
+		self.f_refresh()
+
+	def split_horizontal(self, session, vertical, horizontal, divisions=1):
+		"""
+		# Replace the horiztonal identified by &vertical and &horizontal with &divisions
+		# additional horizontal areas for containing division stacks.
+
+		# [ Parameters ]
+		# /session/
+			# The session managing the frame, &self.
+		# /vertical/
+			# The vertical containing the &horizontal.
+		# /horizontal/
+			# The horizontal of the division to be split.
+		# /divisions/
+			# The number horizontal spaces to add.
+		"""
+
+		l = self.layout.split_horizontal(1, vertical, horizontal, divisions)
+		div_index = self.paths[(vertical, horizontal)]
+		ins_offset = slice(div_index+1, div_index+1)
+
+		vfdi = self.paths[(vertical, 0)] # First division in vertical.
+		vdc = len(self.layout.divisions[vertical])
+
+		# Insert new refractions.
+		null = session.host.fs_pwd()@'/dev/null'
+		new = [session.refract(null) for x in range(divisions)]
+		self.views[ins_offset] = new
+		self.stacks[ins_offset] = [[x] for x in new]
+
+		# Slice in the new divisions.
+		divmap = list(l.map_vertical_divisions(1, self.area, vertical, vertical+1))
+		vro = (div_index - vfdi) + 1
+		self.areas[ins_offset] = divmap[vro:vro+divisions]
+
+		la, ca, pa = self.areas[div_index]
+		d = self.layout.divisions[vertical][horizontal].lines \
+			- l.divisions[vertical][horizontal].lines
+		vs = self.views[div_index]
+		self.areas[div_index] = (la, ca.resize(-d, 0), pa.move(-d, 0))
+		vs.location.area, \
+		vs.content.area, \
+		vs.prompt.area = self.areas[div_index]
+
+		# New divisions indexes after insertion.
+		ndivs = slice(div_index + 1, div_index + divisions + 1)
+		for av, dv in zip(self.areas[ndivs], self.stacks[ndivs]):
+			for vs in dv:
+				vs.location.configure(self.deltas, self.define, av[0])
+				vs.content.configure(self.deltas, self.define, av[1])
+				vs.prompt.configure(self.deltas, self.define, av[2])
+				vs.shown()
+
+		self.layout = l
+		self.paths = {p: i for i, p in enumerate(l.division_paths())}
+
+	@comethod('frame', 'split/horizontal')
+	def f_split_horizontal(self, session, dpath, quantity=1):
+		if not quantity:
+			return
+
+		self.split_horizontal(session, *dpath, divisions=quantity)
+
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
+			self.update_intersections(i)
+		self.f_refresh()
+
+	@comethod('frame', 'close/horizontal')
+	def f_close_horizontal(self, dpath):
+		if dpath[1] == 0 and len(self.layout.divisions[dpath[0]]) == 1:
+			return self.f_close_vertical(dpath)
+
+		di = self.paths[dpath]
+		ds = slice(di, di + 1)
+
+		for vs in self.views[ds]:
+			vs.hidden()
+		for dstack in self.stacks[ds]:
+			for vs in dstack:
+				if isinstance(vs.content, Reflection):
+					vs.content.close()
+
+		self.resize_horizontal_height(*dpath, -1)
+		l = self.layout.remove_horizontal(*dpath)
+
+		self.paths = {p: i for i, p in enumerate(l.division_paths())}
+		self.layout = l
+		del self.areas[ds]
+		del self.views[ds]
+		del self.stacks[ds]
+
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
+			self.update_intersections(i)
+		self.refocus()
+		self.f_refresh()
+
+	@comethod('frame', 'close/vertical')
+	def f_close_vertical(self, dpath):
+		di = self.paths[(dpath[0], 0)]
+		dc = len(self.layout.divisions[dpath[0]])
+		ds = slice(di, di + dc)
+
+		for vs in self.views[ds]:
+			vs.hidden()
+		for dstack in self.stacks[ds]:
+			for vs in dstack:
+				if isinstance(vs.content, Reflection):
+					vs.content.close()
+
+		self.resize_vertical_width(dpath[0], -1)
+		l = self.layout.remove_vertical(dpath[0])
+
+		self.paths = {p: i for i, p in enumerate(l.division_paths())}
+		self.layout = l
+		del self.areas[ds]
+		del self.views[ds]
+		del self.stacks[ds]
+
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
+			self.update_intersections(i)
+		self.refocus()
+		self.f_refresh()
 
 	def resize_vertical_width(self, vertical, width):
 		"""
@@ -3210,10 +3394,15 @@ class Frame(Core):
 			self.update_intersections(i)
 		self.f_refresh()
 
+	@comethod('frame', 'increase/vertical/width')
 	@comethod('frame', 'set/vertical/width/delta')
 	def f_set_vertical_width_delta(self, dpath, quantity=0):
 		size = self.layout.verticals[dpath[0]].span + quantity
 		self.f_set_vertical_width_value(dpath, size)
+
+	@comethod('frame', 'decrease/vertical/width')
+	def f_decrease_vertical_width(self, dpath, quantity=1):
+		return self.f_set_vertical_width_delta(dpath, -quantity)
 
 	def resize_horizontal_height(self, vertical, horizontal, height):
 		"""
@@ -3266,18 +3455,23 @@ class Frame(Core):
 
 		self.layout = self.layout.resize_horizontal_height(vertical, horizontal, height)
 
-	@comethod('frame', 'set/division/height')
-	def f_set_div_height_value(self, dpath, quantity=0):
+	@comethod('frame', 'set/horizontal/height')
+	def f_set_horizontal_height_value(self, dpath, quantity=0):
 		self.resize_horizontal_height(*dpath, quantity)
 		for i in range(dpath[0]-1, dpath[0]+1):
 			self.update_intersections(i)
 		self.f_refresh()
 
-	@comethod('frame', 'set/division/height/delta')
-	def f_set_div_height_delta(self, dpath, quantity=0):
+	@comethod('frame', 'increase/horizontal/height')
+	@comethod('frame', 'set/horizontal/height/delta')
+	def f_set_horizontal_height_delta(self, dpath, quantity=0):
 		v, h = dpath
 		size = self.layout.divisions[v][h].lines + quantity
-		self.f_set_div_height_value(dpath, size)
+		self.f_set_horizontal_height_value(dpath, size)
+
+	@comethod('frame', 'decrease/horizontal/height')
+	def f_decrease_horizontal_height(self, dpath, quantity=1):
+		return self.f_set_horizontal_height_delta(dpath, -quantity)
 
 	def restore(self, area, widths, heights):
 		"""
@@ -3887,10 +4081,18 @@ class Frame(Core):
 
 	@comethod('prompt', 'execute/close')
 	def pg_execute_close(self, dpath, session, prompt):
+		vs = self.select(dpath)
 		r = self.pg_execute(dpath, session)
 		if r:
 			self.pg_log_command(prompt)
-			self.pg_close(dpath)
+			try:
+				if self.select(dpath) != vs:
+					raise KeyError("layout changed")
+			except KeyError:
+				pass
+			else:
+				# Only when the prompt survived the command (close division).
+				self.pg_close(dpath)
 			session.keyboard.set('control')
 			return True
 		elif r is None:
@@ -4237,7 +4439,7 @@ class Frame(Core):
 		"""
 
 		symbols = symbols['frame']
-		for va in layout.verticals:
+		for va in layout.verticals[1:]:
 			yield from Class.r_divide_verticals(symbols, (va.left_offset-1, va.top_offset-1), height)
 
 		for i, v in enumerate(layout.verticals):

@@ -688,6 +688,22 @@ class Layout(object):
 
 		return Class(nverts, ndivs)
 
+	def map_vertical_divisions(self, border, area, start, stop):
+		ry = area.top_offset
+		rx = area.left_offset
+		hb = border
+		dp = 2
+		dl = 2
+		return itertools.chain.from_iterable(
+			[
+				(rl := Area(d.top_offset, v.left_offset, dl, v.span),
+				co := Area(rl.bottom_offset + hb, v.left_offset, d.lines - (rl.lines + hb), v.span),
+				Area(co.bottom_offset + hb, v.left_offset, 0, v.span))
+				for d in self.divisions[i + start]
+			]
+			for i, v in enumerate(self.verticals[start:stop])
+		)
+
 	def export(self):
 		fmv = [((a.left_offset, a.top_offset), (a.span, a.lines)) for a in self.verticals]
 		fmd = [
@@ -763,6 +779,76 @@ class Layout(object):
 		rd = list(self.divisions)
 		rd[vertical] = rdv
 		return self.__class__(list(self.verticals), rd)
+
+	def split_vertical(self, border, vertical, width=0.5, divisions=1):
+		"""
+		# Reconstruct the layout with a new vertical inserted after &vertical whose
+		# span is &width multiplied by the &vertical's.
+		"""
+
+		a = self.verticals[vertical]
+		nvs = round(a.span * width)
+		na = a.resize(0, -nvs - border)
+		nv = Area(na.top_offset, na.right_offset + 1, na.lines, nvs)
+		d = a.span - na.span
+
+		# Rebuild divisions for the subject vertical.
+		vdv = [a.resize(0, -d) for a in self.divisions[vertical]]
+
+		# Distribute lines across the allocated divsions.
+		h, r = divmod(nv.lines, divisions)
+		da = Area(nv.top_offset, nv.left_offset, h, nv.span)
+		nvd = [da]
+		for i in range(divisions - 1):
+			da = da.move(h + border, 0)
+			nvd.append(da)
+		nvd[-1] = nvd[-1].resize(r - (divisions - 1) * border, 0)
+
+		vv = self.verticals[:vertical] + [na, nv] + self.verticals[vertical+1:]
+		dv = self.divisions[:vertical] + [vdv, nvd] + self.divisions[vertical+1:]
+		return self.__class__(vv, dv)
+
+	def split_horizontal(self, border, vertical, horizontal, divisions=1):
+		"""
+		# Reconstruct the layout with a new divisions inserted after the one
+		# identified by &vertical and &horizontal.
+		"""
+
+		dv = self.divisions[vertical]
+		a = dv[horizontal]
+		q, r = divmod(a.lines, divisions + 1)
+
+		na = Area(a.top_offset, a.left_offset, q, a.span)
+		ndv = []
+		for i in range(divisions + 1):
+			ndv.append(na)
+			na = na.move(q + border, 0)
+		ndv[-1] = ndv[-1].resize(r - (divisions * border), 0)
+
+		divs = list(self.divisions)
+		divs[vertical] = dv[:horizontal] + ndv + dv[horizontal+1:]
+		return self.__class__(list(self.verticals), divs)
+
+	def remove_vertical(self, vertical):
+		"""
+		# Reconstruct the layout with the identified vertical removed.
+		"""
+
+		l = self.__class__(list(self.verticals), list(self.divisions))
+		del l.verticals[vertical]
+		del l.divisions[vertical]
+		return l
+
+	def remove_horizontal(self, vertical, horizontal):
+		"""
+		# Reconstruct the layout with the identified division removed.
+		"""
+
+		divs = list(self.divisions)
+		divs[vertical] = list(divs[vertical])
+		l = self.__class__(list(self.verticals), divs)
+		del l.divisions[vertical][horizontal]
+		return l
 
 @tools.struct()
 class System(object):
