@@ -334,4 +334,20 @@ if 'inserts':
 	a((0x2192), 'cursor/seek/character/next')
 	a((0x2193), 'cursor/seek/character/last')
 
+if 'layout-deltas':
+	mode = control
+
+	a(('x', km_meta, km_control), 'frame/close/vertical')
+	a(('x', km_meta), 'frame/close/horizontal')
+
+	a(('-', km_meta), 'frame/split/horizontal')
+	a(('|', km_meta), 'frame/split/vertical')
+	a(('\\', km_meta), 'frame/split/vertical')
+
+	a((0x2191, km_meta), 'frame/increase/horizontal/height')
+	a((0x2193, km_meta), 'frame/decrease/horizontal/height')
+
+	a((0x2192, km_meta), 'frame/increase/vertical/width')
+	a((0x2190, km_meta), 'frame/decrease/vertical/width')
+
 del a

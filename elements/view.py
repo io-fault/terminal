@@ -3394,10 +3394,15 @@ class Frame(Core):
 			self.update_intersections(i)
 		self.f_refresh()
 
+	@comethod('frame', 'increase/vertical/width')
 	@comethod('frame', 'set/vertical/width/delta')
 	def f_set_vertical_width_delta(self, dpath, quantity=0):
 		size = self.layout.verticals[dpath[0]].span + quantity
 		self.f_set_vertical_width_value(dpath, size)
+
+	@comethod('frame', 'decrease/vertical/width')
+	def f_decrease_vertical_width(self, dpath, quantity=1):
+		return self.f_set_vertical_width_delta(dpath, -quantity)
 
 	def resize_horizontal_height(self, vertical, horizontal, height):
 		"""
@@ -3457,11 +3462,16 @@ class Frame(Core):
 			self.update_intersections(i)
 		self.f_refresh()
 
+	@comethod('frame', 'increase/horizontal/height')
 	@comethod('frame', 'set/horizontal/height/delta')
 	def f_set_horizontal_height_delta(self, dpath, quantity=0):
 		v, h = dpath
 		size = self.layout.divisions[v][h].lines + quantity
 		self.f_set_horizontal_height_value(dpath, size)
+
+	@comethod('frame', 'decrease/horizontal/height')
+	def f_decrease_horizontal_height(self, dpath, quantity=1):
+		return self.f_set_horizontal_height_delta(dpath, -quantity)
 
 	def restore(self, area, widths, heights):
 		"""
