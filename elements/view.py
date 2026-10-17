@@ -4623,7 +4623,8 @@ class Frame(Core):
 		rdims = self.relative_dimensions()
 		vv, dv = self.scale_division_dimensions(1, area.lines, area.span, rdims)
 		self.layout = Layout(vv, dv)
-		for i in range(len(fmv)):
+		self.reset_intersections()
+		for i in range(len(vv)):
 			self.update_intersections(i)
 
 	@classmethod
