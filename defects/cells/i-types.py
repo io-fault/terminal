@@ -286,17 +286,7 @@ def test_Pixels_Cell(test):
 	test/pc.xtile == 21
 	test/pc.ytile == 31
 
-def test_Cell_compare(test):
-	"""
-	# - &module.Glyph.__richcmp__
-	# - &module.Pixels.__richcmp__
-	"""
-
-	G = module.Glyph
-	P = module.Pixels
-	test/G() != None
-	test/P() != None
-
+def cell_cmp_checks(test, G, P):
 	test/G(codepoint=10) == G(codepoint=10)
 	test/G(codepoint=10) != G(codepoint=90)
 	test/G(codepoint=10) != G(codepoint=10, textcolor=0xFF)
@@ -306,6 +296,30 @@ def test_Cell_compare(test):
 
 	test/P(identity=2002) == P(identity=2002)
 	test/P(identity=2002) != P(identity=2001)
+
+def test_Cell_hash(test):
+	"""
+	# - &module.Cell.__hash__
+	"""
+
+	def G(*args, **kw):
+		return hash(module.Glyph(*args, **kw))
+	def P(*args, **kw):
+		return hash(module.Pixels(*args, **kw))
+
+	return cell_cmp_checks(test, G, P) # Possible false positive when unlucky collision.
+
+def test_Cell_compare(test):
+	"""
+	# - &module.Glyph.__eq__
+	# - &module.Pixels.__eq__
+	"""
+
+	G = module.Glyph
+	P = module.Pixels
+	test/G() != None
+	test/P() != None
+	return cell_cmp_checks(test, G, P)
 
 def test_Screen_memory_requirements(test):
 	"""

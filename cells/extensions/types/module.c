@@ -632,6 +632,13 @@ cell_compare(PyObj self, PyObj operand, int op)
 	Py_RETURN_FALSE;
 }
 
+static Py_hash_t
+cell_hash(PyObj self)
+{
+	CellObject co = (CellObject) self;
+	return(Py_HashBuffer(&(co->cell), sizeof(co->cell)));
+}
+
 static PyTypeObject
 CellType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
@@ -640,6 +647,7 @@ CellType = {
 	.tp_basicsize = sizeof(struct CellObject),
 	.tp_flags = Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DEFAULT,
 	.tp_richcompare = cell_compare,
+	.tp_hash = cell_hash,
 };
 
 static PyTypeObject
