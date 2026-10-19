@@ -582,6 +582,56 @@ glyph_new(PyTypeObject *subtype, PyObj args, PyObj kw)
 	return(rob);
 }
 
+static PyObj
+cell_compare(PyObj self, PyObj operand, int op)
+{
+	CellObject co = (CellObject) self;
+	CellObject coperand;
+
+	if (!PyObject_IsInstance(operand, (PyObject *) Py_TYPE(self)))
+	{
+		switch (op)
+		{
+			case Py_NE:
+				Py_RETURN_TRUE;
+			break;
+
+			case Py_EQ:
+				Py_RETURN_FALSE;
+			break;
+
+			default:
+				return(Py_NotImplemented);
+			break;
+		}
+	}
+
+	coperand = (CellObject) operand;
+
+	switch (op)
+	{
+		case Py_NE:
+		{
+			if (memcmp(&(co->cell), &(coperand->cell), sizeof(co->cell)) != 0)
+				Py_RETURN_TRUE;
+		}
+		break;
+
+		case Py_EQ:
+		{
+			if (memcmp(&(co->cell), &(coperand->cell), sizeof(co->cell)) == 0)
+				Py_RETURN_TRUE;
+		}
+		break;
+
+		default:
+			return(Py_NotImplemented);
+		break;
+	}
+
+	Py_RETURN_FALSE;
+}
+
 static PyTypeObject
 CellType = {
 	PyVarObject_HEAD_INIT(NULL, 0)
@@ -589,6 +639,7 @@ CellType = {
 	.tp_name = PYTHON_MODULE_PATH("Cell"),
 	.tp_basicsize = sizeof(struct CellObject),
 	.tp_flags = Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DEFAULT,
+	.tp_richcompare = cell_compare,
 };
 
 static PyTypeObject
@@ -733,7 +784,8 @@ screen_rewrite(PyObj self, PyObj args)
 	ScreenObject so = (ScreenObject) self;
 	PyObj cell, iter;
 	AreaObject target;
-	struct CellArea selection;
+	struct CellArea selection, bounds;
+	struct CellArea *sa = &so->dimensions;
 
 	if (!PyArg_ParseTuple(args, "O!O", &AreaType, &target, &iter))
 		return(NULL);
@@ -746,38 +798,54 @@ screen_rewrite(PyObj self, PyObj args)
 	// Loop and copy cells.
 	// Stop at end of iterator or if the cursor traverses &edge.
 	{
-		const size_t lnd = so->dimensions.span - target->area.span;
-		const size_t lines = selection.lines;
-		const size_t span = selection.span;
+		const size_t lo = selection.left_offset;
+		const size_t ss = selection.span;
+		const size_t end = lo + ss;
+		const size_t limit = (end > sa->span ? sa->span - lo : ss);
+		const size_t right_edge = lo + limit;
+		const size_t skip = lo + (sa->span - right_edge < 0 ? 0 : sa->span - right_edge);
 
-		struct Cell const *edge = so->image + (so->dimensions.span * so->dimensions.lines);
+		struct Cell const *edge = so->image + (sa->span * sa->lines);
 		struct Cell *cursor = so->image
-			+ (so->dimensions.span * selection.top_offset)
-			+ selection.left_offset;
-		size_t offset = 0;
+			+ (sa->span * selection.top_offset) + lo;
+		size_t offset = lo;
 
 		PyLoop_ForEach(iter, &cell)
 		{
 			CellObject co = (CellObject) cell;
 
+			// Reading cursor is out of bounds?
+			if (offset >= right_edge)
+			{
+				++offset;
+				if (offset < end)
+				{
+					// Offset is currently out of bounds.
+					PyLoop_Continue(iter);
+				}
+
+				// Next line.
+				cursor += skip;
+				offset = lo;
+
+				if (offset >= right_edge)
+				{
+					PyLoop_Continue(iter);
+				}
+			}
+
 			if (!PyObject_IsInstance(cell, (PyObject *) &CellType))
 			{
 				PyErr_SetString(PyExc_ValueError, "rewrite requires cell instances");
-				break;
+				PyLoop_Break(iter);
 			}
 
-			// Write cell to screen.
-			*cursor = co->cell;
+			// Write cell to screen when in bounds. (handles out of bounds line case)
+			if (cursor < edge)
+				*cursor = co->cell;
 
 			++offset;
 			++cursor;
-			if (offset >= span)
-			{
-				cursor += lnd;
-				if (cursor >= edge)
-					break;
-				offset = 0;
-			}
 		}
 		PyLoop_CatchError(iter)
 		{

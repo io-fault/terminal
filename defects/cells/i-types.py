@@ -286,6 +286,27 @@ def test_Pixels_Cell(test):
 	test/pc.xtile == 21
 	test/pc.ytile == 31
 
+def test_Cell_compare(test):
+	"""
+	# - &module.Glyph.__richcmp__
+	# - &module.Pixels.__richcmp__
+	"""
+
+	G = module.Glyph
+	P = module.Pixels
+	test/G() != None
+	test/P() != None
+
+	test/G(codepoint=10) == G(codepoint=10)
+	test/G(codepoint=10) != G(codepoint=90)
+	test/G(codepoint=10) != G(codepoint=10, textcolor=0xFF)
+
+	test/P() != G()
+	test/P(identity=2002) != G(codepoint=1)
+
+	test/P(identity=2002) == P(identity=2002)
+	test/P(identity=2002) != P(identity=2001)
+
 def test_Screen_memory_requirements(test):
 	"""
 	# Validate that instances check that the available memory is enough
@@ -329,7 +350,7 @@ def test_Screen_empty(test):
 
 def test_Screen_rewrite(test):
 	"""
-	# Validate Screen.rewrite.
+	# - &module.screen.rewrite
 	"""
 
 	sd = module.Area(0, 0, 10, 10)
@@ -344,6 +365,47 @@ def test_Screen_rewrite(test):
 	s.rewrite(module.Area(9, 0, 1, 10), rewrites)
 	cells = s.select(module.Area(9, 0, 1, 10))
 	test/[x.codepoint for x in cells] == [c.codepoint for c in rewrites]
+
+def test_Screen_rewrite_oob(test):
+	"""
+	# - &module.screen.rewrite
+	"""
+
+	sd = module.Area(0, 0, 10, 10)
+	buf = bytearray([0]) * (module.Cell.size * 10 * 10)
+	s = module.Screen(sd, buf)
+	test/s.volume == 100
+	glyphs = [module.Glyph(codepoint=20+i) for i in range(16)]
+
+	# Completely out of bounds.
+	cv = s.select(module.Area(0, 0, 10, 10))
+	s.rewrite(module.Area(10, 10, 10, 10), glyphs)
+	test/cv == s.select(module.Area(0, 0, 10, 10))
+	s.rewrite(module.Area(0, 10, 10, 10), glyphs)
+	test/cv == s.select(module.Area(0, 0, 10, 10))
+
+	# Bottom right edge.
+	cell = s.select(module.Area(9, 9, 1, 1))
+	test/cell[0].codepoint == 0
+	s.rewrite(module.Area(9, 9, 4, 4), glyphs)
+	cell = s.select(module.Area(9, 9, 1, 1))
+	test/cell[0].codepoint == 20
+
+	# Bottom left edge.
+	cell = s.select(module.Area(9, 0, 2, 2))
+	test/[c.codepoint for c in cell] == [0, 0]
+	s.rewrite(module.Area(9, 0, 2, 2), glyphs)
+	cell = s.select(module.Area(9, 0, 1, 2))
+	test/[c.codepoint for c in cell] == [20, 21]
+
+	# Top right edge.
+	cell = s.select(module.Area(0, 8, 1, 2))
+	test/[c.codepoint for c in cell] == [0, 0]
+	s.rewrite(module.Area(0, 8, 1, 8), glyphs)
+	cell = s.select(module.Area(0, 8, 1, 4))
+	test/[c.codepoint for c in cell] == [20, 21]
+
+	# No negative areas, so no top left edge check.
 
 def Screen_select_tests(test, top, left, height, width):
 	"""
