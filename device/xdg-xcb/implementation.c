@@ -407,6 +407,7 @@ device_manage_terminal(const char *factor, TerminalApplication app)
 	cmd->xw = xcb_generate_id(cmd->xc);
 	values[0] = cmd->xs->black_pixel;
 	values[1] = (
+		XCB_EVENT_MASK_STRUCTURE_NOTIFY |
 		XCB_EVENT_MASK_EXPOSURE |
 		XCB_EVENT_MASK_KEY_PRESS |
 		XCB_EVENT_MASK_BUTTON_PRESS |

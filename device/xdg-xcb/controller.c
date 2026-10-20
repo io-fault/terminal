@@ -249,6 +249,32 @@ device_wait_event(struct CellMatrix *cmd)
 		}
 		break;
 
+		case XCB_CONFIGURE_NOTIFY:
+		{
+			xcb_configure_notify_event_t *cne = (xcb_configure_notify_event_t *) e;
+			struct Device_XDisplay *xi = &cmd->xi;
+			struct MatrixParameters *mp = cmd->xd.cmd_dimensions;
+			system_units_t sh = mp->y_screen_units;
+			system_units_t sw = mp->x_screen_units;
+			short ch = mp->y_cells;
+			short cw = mp->x_cells;
+
+			cellmatrix_calculate_dimensions(mp, cne->width, cne->height);
+			if (mp->y_cells == ch && mp->x_cells == cw)
+			{
+				free(e);
+				goto again;
+			}
+
+			cairo_xcb_surface_set_size(xi->output, mp->x_screen_units, mp->y_screen_units);
+			cairo_xcb_surface_set_size(xi->working, mp->x_screen_units, mp->y_screen_units);
+
+			ctl->st_dispatch = InstructionKey_Identifier(ai_screen_resize);
+			ctl->st_text_length = 0;
+			ctl->st_quantity = 0;
+		}
+		break;
+
 		case XCB_EXPOSE:
 		{
 			xcb_expose_event_t *xe = (xcb_expose_event_t *) e;
