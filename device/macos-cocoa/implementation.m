@@ -421,15 +421,49 @@ configureFont: (NSFont *) dfont withContext: (NSFontManager *) fontctx
 	[self updateFont: dfont withContext: fontctx];
 
 	fsize = size_monospace_font(DEFAULT_CELL_SAMPLE, self.font);
-	dispatch_async(self.render_queue, ^(void) {
-		ip->gi_cell_width = fsize.width;
-		ip->gi_cell_height = fsize.height;
+	ip->gi_cell_width = fsize.width;
+	ip->gi_cell_height = fsize.height;
+}
 
-		cellmatrix_configure_cells(mp, ip, self.window.backingScaleFactor);
-		cellmatrix_calculate_dimensions(mp, self.frame.size.width, self.frame.size.height);
-		[self centerBounds: self.frame.size];
-		[self configurePixelImage];
-		[self configureTileCache: 16];
+/**
+	// Resize the pixel image and the cell image taking care to lock
+	// the render queue while the transition is happening.
+*/
+- (void)
+resizeDisplay: (CGSize) fs
+{
+	NSLock *rqlock = [[NSLock alloc] init];
+	struct MatrixParameters *mp = [self matrixParameters];
+	struct GlyphInscriptionParameters *ip = &_inscription;
+
+	unsigned short sw = mp->x_cells, sh = mp->y_cells;
+	system_units_t cw = mp->x_cell_units, ch = mp->y_cell_units;
+
+	// Prepare lock and submit to render queue.
+	[rqlock lock];
+	dispatch_async(self.render_queue, ^(void) {
+		// Submit primary procedure back to main.
+		dispatch_async(dispatch_get_main_queue(), ^(void) {
+			[self resizeMatrix: fs];
+
+			if (cw != mp->x_cell_units || ch != mp->y_cell_units)
+			{
+				// Clear tile cache on font size change.
+				[self configureTileCache: 16];
+			}
+
+			if (sh != mp->y_cells || sw != mp->x_cells)
+			{
+				// Update bounds and pixel images when cell image dimensions change.
+				[self centerBounds: fs];
+				[self configurePixelImage];
+				dispatch_application_instruction(self, nil, 0, ai_screen_resize);
+			}
+			[rqlock unlock];
+		});
+
+		// Block render queue until the transitions are completed on main.
+		[rqlock lock];
 	});
 }
 
@@ -1088,6 +1122,7 @@ drawPixels: (struct CellArea) ca
 {
 	struct MatrixParameters *mp = [self matrixParameters];
 	struct Cell *image = CellMatrix_GetCellImage(self);
+	struct CellArea sd = *CellMatrix_GetCellArea(self);
 	CGFloat sf = mp->scale_factor;
 
 	unsigned char *dst = IOSurfaceGetBaseAddress(self.pixelImage);
@@ -1101,7 +1136,7 @@ drawPixels: (struct CellArea) ca
 	int tile_line = IOSurfaceGetBytesPerRow(self.cacheImages[0]);
 
 	// Copy pixels from the tile cache.
-	mforeach(CellMatrix_GetCellArea(self)->span, image, (&ca))
+	mforeach(sd.span, image, (&ca))
 	{
 		const cache_tile_t tile = *((cache_tile_t *)
 			cache_require(
@@ -1123,17 +1158,17 @@ drawPixels: (struct CellArea) ca
 		src += tile.tr_line * tile_line * height;
 		src += tile.tr_cell * bpp * width;
 
-		assert(dsty >= 0);
-		assert(dsty < maxrow);
-
-		for (int i = 0; i < height; ++i)
+		assert(dsty >= 0 && dsty < maxrow);
 		{
-			int row = i + dsty;
-			memcpy(
-				dst + (bpr * row) + dstoffset,
-				src + (i * tile_line),
-				cellpixels
-			);
+			for (int i = 0; i < height; ++i)
+			{
+				int row = i + dsty;
+				memcpy(
+					dst + (bpr * row) + dstoffset,
+					src + (i * tile_line),
+					cellpixels
+				);
+			}
 		}
 	}
 	mend(drawcells)
@@ -1497,6 +1532,14 @@ keyUp: (NSEvent *) ev
 		}
 		[self.event_read_lock unlock];
 	});
+}
+
+
+- (void)
+resizeWithOldSuperviewSize: (NSSize) oldSize
+{
+	[super resizeWithOldSuperviewSize: oldSize];
+	[self resizeDisplay: self.frame.size];
 }
 
 - (BOOL)

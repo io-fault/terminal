@@ -288,7 +288,7 @@ changeFont: (NSFontManager *) fontctx
 	CellMatrix *cm = self.root.contentView;
 	NSFont *dfont = [fontctx convertFont: cm.font];
 	[cm configureFont: dfont withContext: fontctx];
-	[self refreshPixels: nil];
+	[cm resizeDisplay: cm.frame.size];
 }
 
 - (void)
@@ -300,7 +300,7 @@ increaseFontSize: (id) sender
 		withContext: self.fonts
 	];
 	[self.fonts setSelectedFont: cm.font isMultiple: NO];
-	[self refreshPixels: nil];
+	[cm resizeDisplay: cm.frame.size];
 }
 
 - (void)
@@ -312,7 +312,7 @@ decreaseFontSize: (id) sender
 		withContext: self.fonts
 	];
 	[self.fonts setSelectedFont: cm.font isMultiple: NO];
-	[self refreshPixels: nil];
+	[cm resizeDisplay: cm.frame.size];
 }
 
 - (void)
@@ -410,7 +410,7 @@ captureScreen
 windowDidResize:(NSNotification *) notification
 {
 	NSWindow *window = [notification object];
-	CellMatrix *mv = window.contentView;
+	CellMatrix *cm = window.contentView;
 }
 
 - (NSArray <NSWindow *> *)
@@ -742,6 +742,8 @@ create_matrix_window(NSScreen *screen, NSFontManager *fontctx, NSFont *font)
 	[cm centerBounds: screen_size];
 	cm.event_text = nil;
 	[cm configureTileCache: 16];
+
+	[cm setAutoresizingMask: NSViewHeightSizable | NSViewWidthSizable];
 
 	return(root);
 }
