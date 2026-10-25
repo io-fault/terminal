@@ -21,38 +21,58 @@ def test_calculate_relative_dimensions(test):
 	test/d0[0][1] == [0.1, 0.1, 0.9]
 	test/d0[1][1][0] == 1.0
 
-def test_scale_division_dimensions(test):
+def test_redistribute_allocations(test):
 	"""
-	# - &module.Frame.scale_division_dimensions
+	# - &module.Frame.redistribute_allocations
 	"""
 
-	widths = [1, 2, 4]
-	heights = [[1, 2, 7], [5, 5], [10]]
-	d1 = list(module.Frame.calculate_relative_dimensions(1, 10 + 4, 10 + 4, widths, heights))
-	vv, dv = module.Frame.scale_division_dimensions(1, 24, 24, d1)
+	F = module.Frame.redistribute_allocations
 
-	for v in vv:
-		test/v.lines == 22
-		test/v.top_offset == 1
-	test/[v.left_offset for v in vv] == [1, 4, 9]
-	test/sum(v.span for v in vv) == 20
-	test/vv[0].span == 2
-	test/vv[1].span == 4
-	test/vv[2].span == 14
+	test/list(F(10, [0.5, 0.5])) == [5, 5]
+	test/list(F(10, [0.4, 0.6])) == [4, 6]
+	test/list(F(10, [0.6, 0.4])) == [6, 4]
+	test/list(F(10, [0.5, 0.1])) == [5+2, 1+2] # Distributing the difference.
 
-	d1 = dv[0]
-	for d in d1:
-		test/d.left_offset == 1
-		test/d.span == vv[0].span
-	test/[d.top_offset for d in d1] == [1, 4, 9]
-	test/[d.lines for d in d1] == [2, 4, 14]
+	test/list(F(10, [0.6, 0.4, 0.0])) == [6, 4, 0]
+	test/list(F(11, [0.4, 0.4, 0.0])) == [5, 5, 1] # Remainder inherited.
 
-	d2 = dv[1]
-	for d in d2:
-		test/d.left_offset == (d1[0].left_offset + d1[0].span + 1)
-		test/d.span == vv[1].span
-	test/[d.top_offset for d in d2] == [1, 14]
-	test/[d.lines for d in d2] == [12, 9] # Final division is truncated to fit.
+	test/list(F(10, [0.6, 0.4, 1.0])) == [2, 6, 6]
+	test/list(F(11, [0.6, 0.4, 1.0])) == [2, 0, 13]
 
-	# Single division vertical must be identical to vertical.
-	test/dv[2][0] == vv[2]
+def test_scale_vertical_spans(test):
+	"""
+	# - &module.Frame.scale_vertical_spans
+	"""
+
+	F = module.Frame.scale_vertical_spans
+	A = module.Area(1, 1, 0, 8)
+
+	for b in [1, 2]:
+		vv = F(b, A, [0.5, 0.5])
+		for v in vv:
+			# -2 for borders.
+			test/v.top_offset == 1
+			test/v.lines == 0
+
+		for l, r in zip(vv[0::2], vv[1::2]):
+			# Span is checked by redistribute_allocations.
+			test/l.left_offset + b + l.span == r.left_offset
+
+def test_scale_horizontal_lines(test):
+	"""
+	# - &module.Frame.scale_horizontal_lines
+	"""
+
+	F = module.Frame.scale_horizontal_lines
+	A = module.Area(0, 0, 100, 0)
+
+	for b in [1, 2]:
+		dv = F(b, A, [0.5, 0.5])
+		for d in dv:
+			# Inherits vertical area.
+			test/d.left_offset == A.left_offset
+			test/d.span == A.span
+
+		for td, bd in zip(dv[0::2], dv[1::2]):
+			# Lines is checked by redistribute_allocations.
+			test/td.top_offset + b + td.lines == bd.top_offset

@@ -4615,63 +4615,121 @@ class Frame(Core):
 			[[y.lines for y in x] for x in self.layout.divisions],
 		))
 
+	@staticmethod
+	def redistribute_allocations(total, fractions):
+		"""
+		# Given the &total size and the &fractions describing the allocations to be made,
+		# calculate the exact sizes of each area to be used taking care to rotate
+		# the remaining difference to each area when different &total's are given.
+
+		# Repeating the redistribution against the same &total may cause an area
+		# to shrink until an equilibrium is reached.
+		"""
+
+		# Floor to maximize the difference when distributing the remainder.
+		sizes = [int(x * total) for x in fractions]
+		count = len(sizes)
+		assert count >= 1
+		ntotal = sum(sizes)
+		dtotal = total - ntotal
+
+		# Evenly distribute the remaining space.
+		du, dr = divmod(dtotal, count)
+		if du != 0:
+			for i, v in enumerate(sizes):
+				# All receive the distribution unit.
+				sizes[i] = v + du
+
+		# Rotate the final area based on the total size.
+		if dr != 0 and count > 1:
+			# Revoke difference from the size.
+			sizes[total % count] -= (du - dr)
+
+		return sizes
+
+	@classmethod
+	def scale_vertical_spans(Class, border, area, fractions):
+		"""
+		# Calculate the spans (width) of the verticals using the given &fractions.
+
+		# [ Parameters ]
+		# /border/
+			# The size of the borders between the vertical spans.
+		# /area/
+			# Dimensions of the target area excluding any surrounding borders.
+		# /fractions/
+			# The percentages (0.0-1.0) of the vertical's spans.
+		"""
+
+		av = []
+		yoffset = area.top_offset
+		xoffset = area.left_offset
+		rspan = area.span - (border * (len(fractions) + 1))
+
+		for cc in Class.redistribute_allocations(rspan, fractions):
+			av.append(Area(yoffset, xoffset, area.lines, cc))
+			xoffset += cc + border
+
+		return av
+
+	@classmethod
+	def scale_horizontal_lines(Class, border, vertical, fractions):
+		"""
+		# Calculate the lines (height) of the divisions using the given &fractions.
+
+		# [ Parameters ]
+		# /border/
+			# The size of the borders between the horizontal lines.
+		# /vertical/
+			# The area that &fractions will be allocated in.
+		# /fractions/
+			# The percentages (0.0-1.0) of the divisions' heights.
+		"""
+
+		av = []
+		yoffset = vertical.top_offset
+		xoffset = vertical.left_offset
+		rlines = vertical.lines - (border * (len(fractions) - 1))
+
+		for cc in Class.redistribute_allocations(rlines, fractions):
+			av.append(Area(yoffset, xoffset, cc, vertical.span))
+			yoffset += cc + border
+
+		return av
+
 	def scale_divisions(self, area):
 		"""
 		# Adjust the size of the divisions to fit within the new &area.
 		"""
 
+		vv = self.layout.verticals
+		dv = self.layout.divisions
+		vchanged = False
 		rdims = self.relative_dimensions()
-		vv, dv = self.scale_division_dimensions(1, area.lines, area.span, rdims)
+
+		if area.span != self.area.span:
+			vv = self.scale_vertical_spans(1, area.resize(-1, -1).move(1, 1), [x[0] for x in rdims])
+			vchanged = True
+
+		if area.lines != self.area.lines:
+			if not vchanged:
+				vv = [a.resize(area.lines - self.area.lines, 0) for a in vv]
+
+			dv = [
+				self.scale_horizontal_lines(1, v, rd[1])
+				for v, rd in zip(vv, rdims)
+			]
+		elif vchanged:
+			# spans updated, move divisions.
+			dv = [
+				[Area(a.top_offset, v.left_offset, a.lines, v.span) for a in d]
+				for v, d in zip(vv, dv)
+			]
+
 		self.layout = Layout(vv, dv)
 		self.reset_intersections()
 		for i in range(len(vv)):
 			self.update_intersections(i)
-
-	@classmethod
-	def scale_division_dimensions(Class, border, lines, span, rdims):
-		"""
-		# Adjust the dimensions and positions of the frame's divisions to
-		# scale into the new &area.
-		"""
-
-		ndivs = []
-		nverts = []
-		xoffset = 0
-		rspan = span - (border * (len(rdims) + 1))
-		vlines = lines - (border * 2)
-
-		for rv, rh_v in rdims:
-			xoffset += border
-			vertical = Area(border, xoffset, vlines, round(rv * rspan))
-			nverts.append(vertical)
-			xoffset += vertical.span
-
-		# Inherit any remainder(+/-).
-		nspan = sum(v.span for v in nverts)
-		if nspan != rspan:
-			a = nverts[-1]
-			nverts[-1] = Area(a.top_offset, a.left_offset, a.lines, a.span + (rspan - nspan))
-
-		for i, (rv, rh_v) in enumerate(rdims):
-			yoffset = border
-			v = nverts[i]
-			xoffset = v.left_offset
-			rlines = v.lines - (border * (len(rh_v) - 1))
-
-			div = []
-			for rh in rh_v:
-				h = round(rh * rlines)
-				diva = Area(yoffset, xoffset, h, v.span)
-				yoffset += h + 1
-				div.append(diva)
-
-			# Inherit any remainder(+/-).
-			nlines = sum(d.lines for d in div)
-			if nlines != rlines:
-				a = div[-1]
-				div[-1] = Area(a.top_offset, a.left_offset, a.lines + (rlines - nlines), a.span)
-			ndivs.append(div)
-		return nverts, ndivs
 
 	def reset_intersections(self):
 		"""
