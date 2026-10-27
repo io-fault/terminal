@@ -212,13 +212,13 @@ class Reflection(CellMatrix):
 		absolute, source = self.area_mapping(self.area, self.image.area)
 		yield (absolute, list(self.image.select(source)))
 
-	def indicate(self, mode='control'):
+	def indicate(self, session, mode='control'):
 		pass
 
 	def annotate(self, obj):
 		pass
 
-	def v_status(self, mode):
+	def v_status(self, session, mode):
 		"""
 		# Construct the &Status describing the cursor and window positioning.
 		"""
@@ -467,13 +467,13 @@ class Refraction(CellMatrix):
 		self.image = Image()
 		resource.views.add(self)
 
-	def v_status(self, mode='control') -> Status:
+	def v_status(self, session, mode='control') -> Status:
 		"""
 		# Construct the &Status describing the cursor and window positioning.
 		"""
 
 		(lstart, lo, lstop) = self.focus[0].snapshot()
-		cs, rs, cursor_line = self.indicate(mode)
+		cs, rs, cursor_line = self.indicate(session, mode)
 
 		return Status(
 			self, self.area, mode,
@@ -1289,7 +1289,7 @@ class Refraction(CellMatrix):
 			# between first and last characters
 			return 'cursor-offset-active'
 
-	def indicate(self, mode='control', delimit=annotations.delimit):
+	def indicate(self, session, mode='control', delimit=annotations.delimit):
 		"""
 		# Render the cursor line.
 		"""
@@ -1325,14 +1325,17 @@ class Refraction(CellMatrix):
 			phc = lf.compose
 
 		# Prepare phrase and cells.
-		lfields = lf.lf_fields.partial()(li)
+		lfields = list(lf.lf_fields.partial()(li))
+		iphrase = phc(li, lfields, context=self.monitor_images)
 		if fai is not None:
-			lfields = list(lfields)
-			fai.update(li, lfields)
-			caf = phc(Line(ln, 0, ""), delimit(fai))
-			phrase = Phrase(itertools.chain(phc(li, lfields, context=self.monitor_images), caf))
-		else:
-			phrase = Phrase(phc(li, lfields, context=self.monitor_images))
+			try:
+				# Update annotation state and extend the phrase source.
+				fai.update(li, lfields)
+				iphrase = itertools.chain(iphrase, list(phc(Line(ln, 0, ""), delimit(fai))))
+			except Exception as anerror:
+				session.error('Annotation Failure', anerror)
+				del anerror
+		phrase = Phrase(iphrase)
 
 		# Translate codepoint offsets to cell offsets.
 		m_cell = phrase.m_cell

@@ -1100,14 +1100,14 @@ class Session(Core):
 			while self.frames:
 				last_frame = self.focus
 				last_view = last_frame.focus
-				lv_status = last_view.v_status(self.keyboard.mapping)
+				lv_status = last_view.v_status(self, self.keyboard.mapping)
 
 				for ds in self.cycle():
 					self.dispatch_delta(ds)
 
 				next_frame = self.focus
 				next_view = next_frame.focus
-				nv_status = next_view.v_status(self.keyboard.mapping)
+				nv_status = next_view.v_status(self, self.keyboard.mapping)
 
 				new = dict(next_frame.indicate(nv_status))
 				restore = [(area, self.device.screen.select(area)) for area in new]
