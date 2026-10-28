@@ -2746,6 +2746,9 @@ class Frame(Core):
 		# The location and size of the frame on the screen.
 	# /layout/
 		# The &area relative arrangement of divisions and verticals of the frame.
+	# /layout_fractions/
+		# The relative dimensions of the verticals and their horizontals.
+		# Cached when resize operations are performed to maintain consistent proportions.
 	# /index/
 		# The position of the frame in the session's frame set.
 	# /title/
@@ -2837,6 +2840,7 @@ class Frame(Core):
 		self.keyboard = keyboard
 		self.area = area
 		self.layout = Layout([], [])
+		self.layout_fractions = None
 		self.index = index
 		self.title = title
 		self.intersections = {}
@@ -3121,7 +3125,7 @@ class Frame(Core):
 
 	def update_divisions(self):
 		"""
-		# Update the frame's divisions in response to model changes.
+		# Update the frame's divisions in response to layout changes.
 		"""
 
 		# Rebuild division path indexes.
@@ -3195,10 +3199,7 @@ class Frame(Core):
 			return
 
 		self.split_vertical(session, dpath[0], divisions=quantity)
-
-		self.reset_intersections()
-		for i in range(len(self.layout.verticals)):
-			self.update_intersections(i)
+		self.layout_changed()
 		self.f_refresh()
 
 	def split_horizontal(self, session, vertical, horizontal, divisions=1):
@@ -3262,10 +3263,7 @@ class Frame(Core):
 			return
 
 		self.split_horizontal(session, *dpath, divisions=quantity)
-
-		self.reset_intersections()
-		for i in range(len(self.layout.verticals)):
-			self.update_intersections(i)
+		self.layout_changed()
 		self.f_refresh()
 
 	@comethod('frame', 'close/horizontal')
@@ -3292,9 +3290,7 @@ class Frame(Core):
 		del self.views[ds]
 		del self.stacks[ds]
 
-		self.reset_intersections()
-		for i in range(len(self.layout.verticals)):
-			self.update_intersections(i)
+		self.layout_changed()
 		self.refocus()
 		self.f_refresh()
 
@@ -3320,9 +3316,7 @@ class Frame(Core):
 		del self.views[ds]
 		del self.stacks[ds]
 
-		self.reset_intersections()
-		for i in range(len(self.layout.verticals)):
-			self.update_intersections(i)
+		self.layout_changed()
 		self.refocus()
 		self.f_refresh()
 
@@ -3393,8 +3387,7 @@ class Frame(Core):
 	@comethod('frame', 'set/vertical/width')
 	def f_set_vertical_width_value(self, dpath, quantity=0):
 		self.resize_vertical_width(dpath[0], quantity)
-		for i in range(dpath[0]-1, dpath[0]+1):
-			self.update_intersections(i)
+		self.layout_changed()
 		self.f_refresh()
 
 	@comethod('frame', 'increase/vertical/width')
@@ -3461,8 +3454,7 @@ class Frame(Core):
 	@comethod('frame', 'set/horizontal/height')
 	def f_set_horizontal_height_value(self, dpath, quantity=0):
 		self.resize_horizontal_height(*dpath, quantity)
-		for i in range(dpath[0]-1, dpath[0]+1):
-			self.update_intersections(i)
+		self.layout_changed()
 		self.f_refresh()
 
 	@comethod('frame', 'increase/horizontal/height')
@@ -3482,9 +3474,7 @@ class Frame(Core):
 		"""
 
 		self.layout = Layout.fill(1, area.lines, area.span, widths, heights)
-		for i in self.layout.indexes():
-			self.update_intersections(i)
-
+		self.layout_changed()
 		self.update_divisions()
 		if not self.stacks:
 			self.stacks = [list() for x in range(len(self.areas))]
@@ -4636,15 +4626,15 @@ class Frame(Core):
 		ntotal = sum(sizes)
 		dtotal = total - ntotal
 
-		# Evenly distribute the remaining space.
+		# Distribute the remaining space.
 		du, dr = divmod(dtotal, count)
-		if du != 0:
-			for i, v in enumerate(sizes):
-				# All receive the distribution unit.
-				sizes[i] = v + du
+		remainder = []
+		remainder += [1] * dr
+		remainder += [0] * (count - dr)
 
-		# Rotate the final area based on the total size.
-		sizes[total % count] += dr
+		for (i, v), r in zip(enumerate(sizes), remainder):
+			# All receive the distribution unit.
+			sizes[i] = v + du + r
 
 		return sizes
 
@@ -4706,7 +4696,9 @@ class Frame(Core):
 		vv = self.layout.verticals
 		dv = self.layout.divisions
 		vchanged = False
-		rdims = self.relative_dimensions()
+		if self.layout_fractions is None:
+			self.layout_fractions = self.relative_dimensions()
+		rdims = self.layout_fractions
 
 		if area.span != self.area.span:
 			vv = self.scale_vertical_spans(1, area.resize(-2, -2).move(1, 1), [x[0] for x in rdims])
@@ -4730,6 +4722,19 @@ class Frame(Core):
 		self.layout = Layout(vv, dv)
 		self.reset_intersections()
 		for i in range(len(vv)):
+			self.update_intersections(i)
+
+	def layout_changed(self):
+		"""
+		# Update or clear layout dependent caches.
+
+		# Primarily, reset the relative dimensions configured during resize and
+		# update the cached intersections.
+		"""
+
+		self.layout_fractions = None
+		self.reset_intersections()
+		for i in range(len(self.layout.verticals)):
 			self.update_intersections(i)
 
 	def reset_intersections(self):
