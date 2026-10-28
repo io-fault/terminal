@@ -4644,9 +4644,7 @@ class Frame(Core):
 				sizes[i] = v + du
 
 		# Rotate the final area based on the total size.
-		if dr != 0 and count > 1:
-			# Revoke difference from the size.
-			sizes[total % count] -= (du - dr)
+		sizes[total % count] += dr
 
 		return sizes
 
@@ -4667,7 +4665,7 @@ class Frame(Core):
 		av = []
 		yoffset = area.top_offset
 		xoffset = area.left_offset
-		rspan = area.span - (border * (len(fractions) + 1))
+		rspan = area.span - (border * (len(fractions) - 1))
 
 		for cc in Class.redistribute_allocations(rspan, fractions):
 			av.append(Area(yoffset, xoffset, area.lines, cc))
@@ -4711,7 +4709,7 @@ class Frame(Core):
 		rdims = self.relative_dimensions()
 
 		if area.span != self.area.span:
-			vv = self.scale_vertical_spans(1, area.resize(-1, -1).move(1, 1), [x[0] for x in rdims])
+			vv = self.scale_vertical_spans(1, area.resize(-2, -2).move(1, 1), [x[0] for x in rdims])
 			vchanged = True
 
 		if area.lines != self.area.lines:

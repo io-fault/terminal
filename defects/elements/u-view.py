@@ -28,6 +28,12 @@ def test_redistribute_allocations(test):
 
 	F = module.Frame.redistribute_allocations
 
+	# Validate that various allocations sum up to the given total.
+	for d in range(1, 5):
+		l = [1.0/d - 0.1] * d
+		for i in range(1500):
+			test/sum(F(i, l)) == i
+
 	test/list(F(10, [0.5, 0.5])) == [5, 5]
 	test/list(F(10, [0.4, 0.6])) == [4, 6]
 	test/list(F(10, [0.6, 0.4])) == [6, 4]
@@ -36,8 +42,8 @@ def test_redistribute_allocations(test):
 	test/list(F(10, [0.6, 0.4, 0.0])) == [6, 4, 0]
 	test/list(F(11, [0.4, 0.4, 0.0])) == [5, 5, 1] # Remainder inherited.
 
-	test/list(F(10, [0.6, 0.4, 1.0])) == [2, 6, 6]
-	test/list(F(11, [0.6, 0.4, 1.0])) == [2, 0, 13]
+	test/list(F(10, [0.6, 0.4, 1.0])) == [2, 2, 6]
+	test/list(F(11, [0.6, 0.4, 1.0])) == [2, 0, 9]
 
 def test_scale_vertical_spans(test):
 	"""
