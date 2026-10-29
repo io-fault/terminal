@@ -340,9 +340,8 @@ if 'layout-deltas':
 	a(('x', km_meta, km_control), 'frame/close/vertical')
 	a(('x', km_meta), 'frame/close/horizontal')
 
+	a(('-', km_meta, km_control), 'frame/split/vertical')
 	a(('-', km_meta), 'frame/split/horizontal')
-	a(('|', km_meta), 'frame/split/vertical')
-	a(('\\', km_meta), 'frame/split/vertical')
 
 	a((0x2191, km_meta), 'frame/increase/horizontal/height')
 	a((0x2193, km_meta), 'frame/decrease/horizontal/height')
