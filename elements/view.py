@@ -3468,6 +3468,34 @@ class Frame(Core):
 	def f_decrease_horizontal_height(self, dpath, quantity=1):
 		return self.f_set_horizontal_height_delta(dpath, -quantity)
 
+	@comethod('frame', 'equalize/vertical/width')
+	def f_equalize_verticals(self, dpath):
+		if self.layout_fractions is None:
+			self.layout_fractions = self.relative_dimensions()
+
+		vf = 1.0 / len(self.layout_fractions)
+		self.layout_fractions = [(vf, x[1]) for x in self.layout_fractions]
+
+		self.scale_divisions(self.area, force=True)
+		self.update_divisions()
+		self.reconfigure()
+		self.f_refresh()
+
+	@comethod('frame', 'equalize/horizontal/height')
+	def f_equalize_horizontals(self, dpath):
+		if self.layout_fractions is None:
+			self.layout_fractions = self.relative_dimensions()
+
+		v, h = dpath
+		vf, hfv = self.layout_fractions[v]
+		nd = len(hfv)
+		self.layout_fractions[v] = (vf, [1.0 / nd] * nd)
+
+		self.scale_divisions(self.area, force=True)
+		self.update_divisions()
+		self.reconfigure()
+		self.f_refresh()
+
 	def restore(self, area, widths, heights):
 		"""
 		# Restore the frame's layout.
@@ -4688,7 +4716,7 @@ class Frame(Core):
 
 		return av
 
-	def scale_divisions(self, area):
+	def scale_divisions(self, area, force=False):
 		"""
 		# Adjust the size of the divisions to fit within the new &area.
 		"""
@@ -4700,11 +4728,11 @@ class Frame(Core):
 			self.layout_fractions = self.relative_dimensions()
 		rdims = self.layout_fractions
 
-		if area.span != self.area.span:
+		if area.span != self.area.span or force:
 			vv = self.scale_vertical_spans(1, area.resize(-2, -2).move(1, 1), [x[0] for x in rdims])
 			vchanged = True
 
-		if area.lines != self.area.lines:
+		if area.lines != self.area.lines or force:
 			if not vchanged:
 				vv = [a.resize(area.lines - self.area.lines, 0) for a in vv]
 

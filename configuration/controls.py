@@ -343,6 +343,9 @@ if 'layout-deltas':
 	a(('-', km_meta, km_control), 'frame/split/vertical')
 	a(('-', km_meta), 'frame/split/horizontal')
 
+	a(('=', km_meta, km_control), 'frame/equalize/vertical/width')
+	a(('=', km_meta), 'frame/equalize/horizontal/height')
+
 	a((0x2191, km_meta), 'frame/increase/horizontal/height')
 	a((0x2193, km_meta), 'frame/decrease/horizontal/height')
 
