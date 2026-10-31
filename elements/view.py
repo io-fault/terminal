@@ -3123,15 +3123,6 @@ class Frame(Core):
 		self.views[:] = [x[d] for x, d in zip(self.stacks, levels)]
 		self.focus = self.views[self.paths[path]].content
 
-	def update_divisions(self):
-		"""
-		# Update the frame's divisions in response to layout changes.
-		"""
-
-		# Rebuild division path indexes.
-		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
-		self.areas = list(self.layout.map_vertical_divisions(1, self.area, 0, None))
-
 	def split_vertical(self, session, vertical, width=0.5, divisions=1):
 		"""
 		# Replace the &vertical with two. The &width is the fraction of cells
@@ -3255,7 +3246,6 @@ class Frame(Core):
 				vs.shown()
 
 		self.layout = l
-		self.paths = {p: i for i, p in enumerate(l.division_paths())}
 
 	@comethod('frame', 'split/horizontal')
 	def f_split_horizontal(self, session, dpath, quantity=1):
@@ -3387,7 +3377,7 @@ class Frame(Core):
 	@comethod('frame', 'set/vertical/width')
 	def f_set_vertical_width_value(self, dpath, quantity=0):
 		self.resize_vertical_width(dpath[0], quantity)
-		self.layout_changed()
+		self.layout_moved()
 		self.f_refresh()
 
 	@comethod('frame', 'increase/vertical/width')
@@ -3454,7 +3444,7 @@ class Frame(Core):
 	@comethod('frame', 'set/horizontal/height')
 	def f_set_horizontal_height_value(self, dpath, quantity=0):
 		self.resize_horizontal_height(*dpath, quantity)
-		self.layout_changed()
+		self.layout_moved()
 		self.f_refresh()
 
 	@comethod('frame', 'increase/horizontal/height')
@@ -3477,8 +3467,6 @@ class Frame(Core):
 		self.layout_fractions = [(vf, x[1]) for x in self.layout_fractions]
 
 		self.scale_divisions(self.area, force=True)
-		self.update_divisions()
-		self.reconfigure()
 		self.f_refresh()
 
 	@comethod('frame', 'equalize/horizontal/height')
@@ -3492,8 +3480,6 @@ class Frame(Core):
 		self.layout_fractions[v] = (vf, [1.0 / nd] * nd)
 
 		self.scale_divisions(self.area, force=True)
-		self.update_divisions()
-		self.reconfigure()
 		self.f_refresh()
 
 	def restore(self, area, widths, heights):
@@ -3503,22 +3489,8 @@ class Frame(Core):
 
 		self.layout = Layout.fill(1, area.lines, area.span, widths, heights)
 		self.layout_changed()
-		self.update_divisions()
 		if not self.stacks:
 			self.stacks = [list() for x in range(len(self.areas))]
-
-	def reconfigure(self):
-		"""
-		# Reconfigure all the views in order to signal motion or size changes.
-		"""
-
-		define = self.define
-		deltas = self.deltas
-
-		for stack, areas in zip(self.stacks, self.areas):
-			for vs in stack:
-				for a, v in zip(areas, vs.refractions()):
-					v.configure(deltas, define, a)
 
 	@comethod('frame', 'refresh/view/images')
 	def f_refresh_views(self):
@@ -3544,9 +3516,7 @@ class Frame(Core):
 		"""
 
 		self.scale_divisions(area)
-		self.area = area
-		self.update_divisions()
-		self.reconfigure()
+		self.f_refresh()
 
 	def resize_footer(self, dpath, height):
 		"""
@@ -4725,8 +4695,9 @@ class Frame(Core):
 		dv = self.layout.divisions
 		vchanged = False
 		if self.layout_fractions is None:
-			self.layout_fractions = self.relative_dimensions()
-		rdims = self.layout_fractions
+			rdims = self.relative_dimensions()
+		else:
+			rdims = self.layout_fractions
 
 		if area.span != self.area.span or force:
 			vv = self.scale_vertical_spans(1, area.resize(-2, -2).move(1, 1), [x[0] for x in rdims])
@@ -4734,6 +4705,7 @@ class Frame(Core):
 
 		if area.lines != self.area.lines or force:
 			if not vchanged:
+				# When not already scaled, add the difference to the vertical areas.
 				vv = [a.resize(area.lines - self.area.lines, 0) for a in vv]
 
 			dv = [
@@ -4741,29 +4713,49 @@ class Frame(Core):
 				for v, rd in zip(vv, rdims)
 			]
 		elif vchanged:
-			# spans updated, move divisions.
+			# Spans updated. Move and extend divisions.
 			dv = [
 				[Area(a.top_offset, v.left_offset, a.lines, v.span) for a in d]
 				for v, d in zip(vv, dv)
 			]
 
 		self.layout = Layout(vv, dv)
-		self.reset_intersections()
-		for i in range(len(vv)):
-			self.update_intersections(i)
+		self.area = area
 
-	def layout_changed(self):
+		# Signal layout motion, but update fractions afterwards as it's normally reset.
+		self.layout_moved()
+		self.layout_fractions = rdims
+
+	def layout_moved(self):
 		"""
-		# Update or clear layout dependent caches.
+		# Update or clear layout dependent caches and forward the changed to divisions.
 
-		# Primarily, reset the relative dimensions configured during resize and
-		# update the cached intersections.
+		# Called when the frame, a vertical, or a horizontal is sized.
 		"""
 
 		self.layout_fractions = None
 		self.reset_intersections()
 		for i in range(len(self.layout.verticals)):
 			self.update_intersections(i)
+
+		define = self.define
+		deltas = self.deltas
+
+		self.areas = list(self.layout.map_vertical_divisions(1, self.area, 0, None))
+		for stack, areas in zip(self.stacks, self.areas):
+			for vs in stack:
+				for a, v in zip(areas, vs.refractions()):
+					v.configure(deltas, define, a)
+
+	def layout_changed(self):
+		"""
+		# The number of verticals or their horizontals were increased or decreased.
+
+		# Calls &layout_moved after updating &paths.
+		"""
+
+		self.paths = {p: i for i, p in enumerate(self.layout.division_paths())}
+		self.layout_moved()
 
 	def reset_intersections(self):
 		"""
