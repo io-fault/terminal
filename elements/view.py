@@ -1176,7 +1176,10 @@ class Refraction(CellMatrix):
 
 			if scroll_lock:
 				img.line_offset += ni
-				i = min(v_lines, ni)
+				# Wastefully insert the entire delta to make sure that
+				# the tail of the new lines will correctly represent
+				# the view when trimmed.
+				i = ni
 			else:
 				i = max(0, min(v_lines - whence, ni))
 
