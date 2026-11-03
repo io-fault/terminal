@@ -1257,6 +1257,16 @@ class Refraction(CellMatrix):
 
 		yield AType(ry + larea.start, rx, (voffset - (larea.start or 0)), limit), cv
 
+	def v_refresh(self):
+		"""
+		# Refresh the view's image using the configured &image.line_offset.
+		"""
+
+		img = self.image
+		phrases = self.iterphrases(img.line_offset, img.line_offset + self.area.lines)
+		img.truncate()
+		img.suffix(phrases)
+
 	def refresh(self, whence:int=None):
 		"""
 		# Refresh the view image with &whence being the beginning of the new view.
@@ -1708,21 +1718,41 @@ class Refraction(CellMatrix):
 			self.query['search'] = str(text)
 		self.c_find_next_string()
 
+	@comethod('cursor', 'status')
+	def c_status(self):
+		log(f"Cursor: {self.focus[0].snapshot()!r} -> {self.focus[1].snapshot()!r}")
+
 	# View Controls
+
+	@comethod('view', 'status')
+	def v_log_status(self):
+		a = self.area
+		img = self.image
+		tl = (a.top_offset, a.left_offset)
+		vd = (a.lines, a.span)
+		log(
+			f"Frame visible: {self.frame_visible}",
+			f"Position: {tl} + {vd}",
+			f"View: {img.line_offset!r} -> {img.cell_offset!r}",
+		)
+
+	@comethod('view', 'transmit')
+	def v_transmit_view_image(self):
+		"""
+		# Transmit the view's image to the display.
+		"""
+		if self.frame_visible:
+			self.deltas.extend(self.v_render(slice(0, None)))
 
 	@comethod('view', 'refresh')
 	def v_refresh_view_image(self):
-		img = self.image
-		tl = (self.area.top_offset, self.area.left_offset)
-		vd = (self.area.lines, self.area.span)
-		log(
-			f"Position: {tl} + {vd}",
-			f"View: {img.line_offset!r} -> {img.cell_offset!r}",
-			f"Cursor: {self.focus[0].snapshot()!r}",
-			f"Lines: {self.source.ln_count()}, {self.source.version()}",
-		)
+		"""
+		# Refresh the view's image and transmit it to the display.
+		"""
+
+		self.v_refresh()
 		if self.frame_visible:
-			self.deltas.extend(self.refresh(img.line_offset))
+			self.deltas.extend(self.v_render(slice(0, None)))
 
 	@comethod('view', 'seek/line/previous')
 	def v_seek_line_previous(self, quantity=1):

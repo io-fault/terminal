@@ -258,6 +258,10 @@ if 'controls':
 	a(('r', km_shift, km_d), 'cursor/swap/case/selected/characters')
 	a(('r', km_control), 'frame/prompt/replace')
 	a(('r', km_meta), 'view/refresh')
+	a(('r', km_meta, km_shift), 'view/transmit')
+
+	a(('/', km_meta, km_shift), 'view/status')
+	a(('/', km_meta, km_shift, km_control), 'cursor/status')
 
 	a(('s'), 'cursor/select/field/series')
 	a(('s', km_shift), 'cursor/select/line/characters')
