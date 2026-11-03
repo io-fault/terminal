@@ -434,7 +434,7 @@ class Resource(types.Core):
 			for d in ds:
 				rf.deltas.extend(list(rf.v_update(d)))
 
-	def _commit(self, deltas):
+	def _commit(self, deltas, *, list=list):
 		"""
 		# Apply pending modifications.
 		"""
@@ -451,6 +451,7 @@ class Resource(types.Core):
 
 			for rf in views:
 				dsrc.track(rf)
+				# Fully materialize the delta to ensure image state is updated.
 				df = list(rf.v_update(dsrc))
 				if rf.frame_visible:
 					# Update all image states, but don't dispatch to the display
