@@ -330,6 +330,9 @@ if 'inserts':
 	a(('w', km_control), 'cursor/delete/field/previous')
 	a(('x', km_control), 'cursor/delete/character/previous')
 
+	a(('o', km_control), 'cursor/open/ahead')
+	a(('o', km_control, km_shift), 'cursor/open/behind')
+
 	a((0x232B), 'cursor/delete/character/previous')
 	a((0x2326), 'cursor/delete/character/previous')
 
