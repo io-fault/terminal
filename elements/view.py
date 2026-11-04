@@ -1114,16 +1114,20 @@ class Refraction(CellMatrix):
 
 		assert ni > 0 or nd > 0
 
-		# Determine orientation of the insertion or removal.
-		if ve >= vt and vo > 0:
-			# When on last page *and* first is not last.
+		# When on last page *and* first is not last with the exception
+		# of end of file appends that exceed the view's size.
+		scroll_lock = ve >= vt and (
+			vo > 0 or (
+				index >= vt and (whence + dt) > v_lines
+			)
+		)
+
+		if scroll_lock:
 			dins = alignment.stop_relative_insert
 			ddel = alignment.stop_relative_delete
-			scroll_lock = True
 		else:
 			dins = alignment.start_relative_insert
 			ddel = alignment.start_relative_delete
-			scroll_lock = False
 
 		# Identify the available lines before applying the change to &vt.
 		limit = min(v_lines, vt)
