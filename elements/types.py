@@ -2206,16 +2206,20 @@ class Monitor(object):
 		self.update(self.start or timestamp, timestamp)
 
 	def integrate_motion(self):
+		moved = False
 		lstart, lpos, lstop = self.cursor.lines.snapshot()
+		self.line = lpos
 		if lpos == lstop:
 			# Deleted.
-			self.line = lpos
-			self.source.attach_line_monitor(self.line, self.identity)
+			moved = True
 		elif self.line != lpos:
 			if self.source.detach_line_monitor(self.line, self.identity):
 				self.source.lines_changed(self.line)
+			moved = True
 
-			self.line = lpos
+		if moved:
+			if self.line >= self.source.ln_count():
+				self.line = self.source.ln_count() - 1
 			self.source.attach_line_monitor(self.line, self.identity)
 
 		self.cursor.lines.restore((self.line, self.line, self.line+1))
