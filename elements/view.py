@@ -1023,8 +1023,9 @@ class Refraction(CellMatrix):
 		dv = to - img.line_offset
 		if abs(dv) >= self.area.lines:
 			self.image.line_offset = to
+			self.v_refresh()
 			if self.frame_visible:
-				self.deltas.extend(self.refresh())
+				self.deltas.extend(self.v_render(slice(0, None)))
 			return
 
 		# Scroll view.
