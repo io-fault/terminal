@@ -2420,7 +2420,7 @@ class Work(object):
 	target: object
 	source: Sequence[Line]
 	level: int = 0
-	trim: bool = False
+	trim: int = 0
 	procedures: Sequence[Procedure] = _field(default_factory=list)
 	cursors: Sequence[object] = _field(default_factory=list)
 	executing: Mapping[int, object] = _field(default_factory=dict)

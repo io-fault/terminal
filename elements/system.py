@@ -299,7 +299,7 @@ class Insertion(IO):
 	target: Refraction
 	cursor: Cursor
 	leading: str
-	trim: bool
+	trim: int
 	state: Callable
 	finish: Callable
 
@@ -309,7 +309,7 @@ class Insertion(IO):
 	event_type = Event.io_receive
 
 	@classmethod
-	def establish(Class, work, system, lo, co, level=0, target=None):
+	def establish(Class, work, system, lo, co, level=0, target=None, trim=1):
 		"""
 		# Construct an &Insertion instance for receiving text from a new pipe.
 		"""
@@ -317,7 +317,7 @@ class Insertion(IO):
 		i = l = None
 		rf = target if target is not None else work.target
 		try:
-			i = Class(rf, Cursor.allocate(), '', False, *system.codec.Decoder(), level=level)
+			i = Class(rf, Cursor.allocate(), '', trim, *system.codec.Decoder(), level=level)
 			i.level = work.level
 			i.cursor.lines.restore((lo, lo, lo))
 			i.cursor.codepoints.restore((co, co, co))
@@ -363,7 +363,8 @@ class Insertion(IO):
 
 		fl = self.cursor.lines.get()
 		if self.trim:
-			src.trim_empty(fl)
+			for i in range(self.trim):
+				src.trim_empty(fl)
 			src.commit()
 
 		src.modifications.checkpoint()
@@ -1285,7 +1286,7 @@ class Host(Context):
 		c = workreference.cursor
 		il = workreference.level
 		pwd = self.fs_root + path
-		ins = Insertion(rf, c, '', False, *self.codec.Decoder(), level=il)
+		ins = Insertion(rf, c, '', workreference.trim, *self.codec.Decoder(), level=il)
 
 		# Build the invocations for the expressed instructions.
 		iv = []
@@ -1319,7 +1320,7 @@ class Host(Context):
 			c = workreference.cursor
 			rf = workreference.target
 			il = workreference.level
-			rx = Insertion(rf, c, '', False, *self.codec.Decoder(), level=il)
+			rx = Insertion(rf, c, '', workreference.trim, *self.codec.Decoder(), level=il)
 			tx = transmission
 
 		xp = self.prepare(workreference, self.fs_root + path, ixn)
@@ -1422,14 +1423,15 @@ class Host(Context):
 
 		return Transmission.establish(workreference, self, lines)
 
-	def receive(self, workreference, lo, co, level=0):
+	def receive(self, workreference, lo, co, level=0, trim=None):
 		"""
 		# Receive text from the host into &rf at line &lo and codepoint &co.
 
 		# A pipe is allocated to facilitate the transfer.
 		"""
 
-		return Insertion.establish(workreference, self, lo, co, level=level)
+		t = trim if trim is not None else workreference.trim
+		return Insertion.establish(workreference, self, lo, co, level=level, trim=t)
 
 	def redirect(self, workreference, redirection, path):
 		"""
@@ -1535,7 +1537,7 @@ class Host(Context):
 		lf = source.forms
 		path = source.origin.ref_identity
 
-		i = Insertion(view, Cursor.allocate(), '', True, *lf.lf_codec.Decoder())
+		i = Insertion(view, Cursor.allocate(), '', 1, *lf.lf_codec.Decoder())
 		view.source.cursors.add(i.cursor)
 		inv = Invocation(self.tool('cat').fs_path_string(), ('cat', str(path)))
 		exitlink = self.io.invoke(None, None, i, None, inv.spawn, None)

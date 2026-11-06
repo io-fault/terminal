@@ -3993,7 +3993,8 @@ class Frame(Core):
 		"""
 		control.work_resume()
 
-	def pg_execute(self, dpath, session):
+	@classmethod
+	def pg_execute(Class, vs, session, trim=1):
 		"""
 		# Execute the command present on the prompt of the &dpath division.
 
@@ -4001,7 +4002,6 @@ class Frame(Core):
 		# The dispatched &Work or a count of instructions executed.
 		"""
 
-		vs = self.select(dpath)
 		rl, target, pg = vs.refractions()
 		tsrc = target.source
 		is_transcript = not isinstance(target, Reflection) and tsrc.origin.ref_type == 'transcript'
@@ -4015,7 +4015,7 @@ class Frame(Core):
 		exectx = session.systems[sys]
 
 		# Compile the procedure.
-		proc = self.pg_compile(pg.forms, lines[1:])
+		proc = Class.pg_compile(pg.forms, lines[1:])
 		if not proc.steps:
 			return None
 
@@ -4024,7 +4024,7 @@ class Frame(Core):
 		if ixn is not None:
 			if ixn.invokes('cd'):
 				for rpath in ixn.fields[1:]:
-					self.pg_change_context_path(src, lines[0].ln_content, exectx, path, rpath)
+					Class.pg_change_context_path(src, lines[0].ln_content, exectx, path, rpath)
 				return None
 
 		if not exectx.dispatching:
@@ -4058,12 +4058,10 @@ class Frame(Core):
 			monitor_line = lo + n - 3
 			coordinates = (lo + 1, 0)
 			ilevel = 1
-			trim = True
 		else:
 			monitor_line = target.coordinates()[0]
 			coordinates = target.coordinates()
 			ilevel = 0
-			trim = False
 
 		revision = pg.source.active
 		monitor = session.monitor(target.source, monitor_line)
@@ -4113,7 +4111,7 @@ class Frame(Core):
 	@comethod('prompt', 'execute/close')
 	def pg_execute_close(self, dpath, session, prompt):
 		vs = self.select(dpath)
-		r = self.pg_execute(dpath, session)
+		r = self.pg_execute(vs, session)
 		if r:
 			self.pg_log_command(prompt)
 			try:
@@ -4132,7 +4130,8 @@ class Frame(Core):
 
 	@comethod('prompt', 'execute/reset')
 	def pg_execute_reset(self, dpath, session, prompt):
-		r = self.pg_execute(dpath, session)
+		vs = self.select(dpath)
+		r = self.pg_execute(vs, session)
 		if r or r is None:
 			self.pg_log_command(prompt)
 			return True
@@ -4140,7 +4139,7 @@ class Frame(Core):
 
 	@comethod('prompt', 'execute/repeat')
 	def pg_execute_repeat(self, dpath, session):
-		return bool(self.pg_execute(dpath, session))
+		return bool(self.pg_execute(self.select(dpath), session))
 
 	def relocate(self, dpath, *, title='open'):
 		"""
