@@ -426,8 +426,8 @@ class Resource(types.Core):
 
 	def lines_changed(self, *lines):
 		ds = [delta.Update(ln, "", "", 0) for ln in set(lines)]
-		vs = list(self.views)
-		for rf in vs:
+
+		for rf in list(self.views):
 			if not rf.frame_visible:
 				continue
 

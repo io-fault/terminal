@@ -624,12 +624,12 @@ class Session(Core):
 		if rf.reporting(self.prompting):
 			pg.control_mode = 'insert'
 
-		vs = Division(rl, rf, pg, rl.source.active)
+		div = Division(rl, rf, pg, rl.source.active)
 
 		if load:
-			Frame.load_resource(self, system, vs)
+			Frame.load_resource(self, system, div)
 
-		return vs
+		return div
 
 	def log(self, *lines):
 		"""
@@ -705,8 +705,8 @@ class Session(Core):
 
 		last = self.frame
 
-		for vs in self.frames[last].views:
-			vs.hidden()
+		for div in self.frames[last].views:
+			div.hidden()
 
 		self.frame = index
 		self.refocus()
@@ -714,8 +714,8 @@ class Session(Core):
 		# Anything in the new focus frame is stale.
 		del self.focus.deltas[:]
 
-		for vs in self.focus.views:
-			vs.shown()
+		for div in self.focus.views:
+			div.shown()
 
 		self.dispatch_delta(self.focus.render())
 		self.device.update_frame_status(self.frame, last)
@@ -798,14 +798,14 @@ class Session(Core):
 			di = f.division
 			stacks = [
 				[
-					(vs.content.source.origin.ref_path, vs.snapshot())
-					for vs in stack
+					(div.content.source.origin.ref_path, div.snapshot())
+					for div in stack
 				]
 				for stack in f.stacks
 			]
 			levels = [
-				stack.index(vs)
-				for vs, stack in zip(f.views, f.stacks)
+				stack.index(div)
+				for div, stack in zip(f.views, f.stacks)
 			]
 
 			yield (frame_id, vi, di, f.layout, stacks, levels)
@@ -1034,16 +1034,16 @@ class Session(Core):
 
 		if (self._focus['frame'], self._focus['view']) != (frame, view):
 			vi = frame.paths[(frame.vertical, frame.division)]
-			lcp = frame.views[vi]
+			div = frame.views[vi]
 			self._focus = {
 				'frame': frame,
 				'division': vi,
 				'view': view,
 				'resource': view.source,
-				'location': lcp.location,
-				'content': lcp.content,
-				'prompt': lcp.prompt,
-				'control': lcp, # Work Controls
+				'location': div.location,
+				'content': div.content,
+				'prompt': div.prompt,
+				'control': div, # Work Controls
 			}
 			cl = tools.partial(self.lookup, [view.source, view, frame, self])
 			self._oc = tools.cachedcalls(16)(cl)
@@ -1264,7 +1264,7 @@ class Session(Core):
 
 		c = len(frame.stacks)
 		stack_replicas = [
-			[self.refract(vs.content.source.origin.ref_path) for vs in stack]
+			[self.refract(div.content.source.origin.ref_path) for div in stack]
 			for stack in frame.stacks
 		]
 		f.stack_views(frame.vertical, frame.division, [0] * c, stack_replicas)
@@ -1346,8 +1346,8 @@ class Session(Core):
 		rl_before = rl_after = 0
 		pg_before = pg_after = 0
 		for frame in self.frames:
-			for vs in frame.views:
-				rl, co, pg = vs.refractions()
+			for div in frame.views:
+				rl, co, pg = div.refractions()
 
 				rl_count = tools.partial(countshared, set())
 				pg_count = tools.partial(countshared, set())
