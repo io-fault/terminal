@@ -2822,12 +2822,12 @@ class Division(Core):
 		rf.focus[1].restore((name, name, last.ln_length))
 
 	@comethod('location', 'reset')
-	def rl_reset(self, location, content):
+	def rl_reset(self, frame, location, content):
 		self.rl_update_path(location.source, content.source.origin)
-		self.refocus()
+		frame.refocus()
 
 	@comethod('location', 'open/level')
-	def rl_open_level(self, location, division, rl_syntax, session, content):
+	def rl_open_level(self, frame, location, division, rl_syntax, session, content):
 		# Get the system and path to open.
 		rl_selection = rl_syntax.location_path()
 
@@ -2838,7 +2838,7 @@ class Division(Core):
 		src.modifications.truncate()
 		src.elements.partition()
 
-		div = self.views[division]
+		div = frame.views[division]
 		if div.content_location_revision != location.source.active:
 			# Location was activated while the active revision was
 			# not the location of the content. Prior to pushing
@@ -2859,12 +2859,12 @@ class Division(Core):
 				div.content_location_revision = location.source.latest
 				location.source.switch_revision(div.content_location_revision)
 
-		level = self.f_push_refraction(session, division, *rl_selection)
-		self.switch_level(division, level)
-		self.refocus()
+		level = frame.f_push_refraction(session, division, *rl_selection)
+		frame.switch_level(division, level)
+		frame.refocus()
 
 	@comethod('location', 'execute/operation')
-	def rl_execute(self, location, dpath, rl_syntax, session, content):
+	def rl_execute(self, frame, location, dpath, rl_syntax, session, content):
 		# Copy the current effective location. (source.origin)
 		previous = content.source.origin
 		current_origin = (previous.ref_system, previous.ref_path)
@@ -2890,16 +2890,15 @@ class Division(Core):
 
 		# Open the new location if it does not match current.
 		if rl_selection != current_origin:
-			self.rl_open(dpath, rl_syntax, session, content)
+			self.rl_open(frame, dpath, rl_syntax, session, content)
 
 		location.refresh(0)
 		for rf in src.views:
 			rf.refresh(0)
 
-	@classmethod
-	def load_resource(Class, session, system, div):
-		rf = div.content
-		pg = div.prompt
+	def load_resource(self, session, system):
+		rf = self.content
+		pg = self.prompt
 
 		# Reset cursors to beginning.
 		rf.image.line_offset = 0
@@ -2915,19 +2914,19 @@ class Division(Core):
 			system.tool("cat").fs_path_string(),
 			ref.ref_path.fs_path_string()[len(pwdstr)+1:],
 		]
-		Class.pg_configure_command(pg, system.identity, pwdstr, command)
-		Class.pg_execute(div, session, trim=(1 if exists else 1))
-		Class.pg_log_command(pg)
+		self.pg_configure_command(system.identity, pwdstr, command)
+		self.pg_execute(session, trim=(1 if exists else 1))
+		self.pg_log_command()
 
 		# Use Refraction.recursor's contraint to seek the first line,
 		# stopping scroll lock and discarding most display deltas during load.
 		rf.focus[0].restore((0, -1, 1))
 
 	@comethod('location', 'open/resource')
-	def rl_open(self, dpath, rl_syntax, session, content):
+	def rl_open(self, frame, dpath, rl_syntax, session, content):
 		# Construct reference and load dependencies.
 		system, fspath = rl_syntax.location_path()
-		vi = self.paths[dpath]
+		vi = frame.paths[dpath]
 
 		typref = session.lookup_type(fspath)
 		syntype = session.load_type(typref)
@@ -2949,14 +2948,14 @@ class Division(Core):
 			new.monitor_images = session.monitor_images
 			new.keyboard = session.keyboard
 
-		self.attach(dpath, new)
-		div = self.views[vi]
+		frame.attach(dpath, new)
+		div = frame.views[vi]
 		div.content_location_revision = rl_syntax.source.active
 
-		self.switch_division(dpath)
+		frame.switch_division(dpath)
 
 		if load:
-			self.load_resource(session, system, div)
+			self.load_resource(session, system)
 
 	@comethod('location', 'switch/previous')
 	def rl_switch_previous(self, session, dpath, location, content, quantity=1):
@@ -2995,90 +2994,6 @@ class Division(Core):
 		lines.append(source.forms.ln_sequence(source.forms.ln_interpret('')))
 		return lines
 
-	@classmethod
-	def pg_log_command(Class, prompt):
-		# Copy the executing command.
-		src = prompt.source
-		copy = list(src.elements)
-		empty = Class.pg_empty(src, copy)
-		emptied = (len(copy) < 2) or (copy == empty)
-		activated = src.active
-		latest = src.latest
-
-		# Restore the original if editing history.
-		if activated < latest:
-			src.modifications.revert(src.elements)
-			src.modifications.truncate()
-			src.elements.partition()
-		else:
-			# Revisions are the primary means for recalling the past
-			# with prompts
-			src.modifications.truncate()
-
-		# Don't log empty commands.
-		if emptied:
-			return src.r_switch_revision(src.latest)
-		elif activated < src.latest:
-			# Copy past command forward.
-			src.revise(copy)
-
-			# Discard any empty commands.
-			# Needs to happen so that reductions may be performed.
-			while src.latest:
-				previous = list(src.revisions[-2][0])
-				empty = Class.pg_empty(src, previous)
-
-				# Discard empty.
-				if previous[1:] == empty[1:]:
-					# Revised over an empty prompt.
-					src.r_discard_revision(offset=-2)
-				else:
-					break
-		else:
-			# Latest revision was activated.
-			pass
-
-		# Discard redundant keeping the latest revision record.
-		while src.latest:
-			if list(src.revisions[-2][0]) == list(src.revisions[-1][0]):
-				src.r_discard_revision(offset=-2)
-			else:
-				break
-
-		# Switch to new empty prompt inheriting the context of the activated command.
-		src.r_switch_revision(src.revise(empty))
-		return activated
-
-	@staticmethod
-	def pg_configure_command(prompt, system, path, command=(), space=chr(0x10fa01)):
-		"""
-		# Initialize the prompt for &dpath division to issue &command to the &system.
-		"""
-
-		src = prompt.source
-		ln_count = src.ln_count()
-
-		if command:
-			cmdlines = [' '.join([x.replace(' ', space) for x in command])]
-		else:
-			cmdlines = [ln.ln_content for ln in src.select(1, ln_count)] or ['']
-
-		src.delete_lines(0, ln_count)
-		src.extend_lines(map(src.forms.ln_interpret, [str(system)+str(path)] + cmdlines))
-		src.checkpoint()
-
-		if ln_count == 0:
-			# Truncate changes if it's initializing the command.
-			src.modifications.truncate()
-
-		# Set line cursor to the first command line.
-		prompt.focus[0].restore((1, 1, 2))
-
-		if command:
-			# Set character cursor to the end of the command string.
-			ctxlen = len(cmdlines[0])
-			prompt.focus[1].restore((ctxlen, ctxlen, ctxlen))
-
 	@staticmethod
 	def pg_change_context_path(source, ctxline, system, path, new):
 		"""
@@ -3105,77 +3020,6 @@ class Division(Core):
 
 		return True
 
-	def pg_process(self, dpath, command, mode='insert'):
-		"""
-		# Configure the prompt, identified by &dpath, for executing
-		# the &command in &system.
-		"""
-
-		prompt = self.select(dpath).prompt
-		proc_id = str(self.prompting.pg_process_identity)
-		ppath = self.process_path(dpath)
-		self.pg_configure_command(prompt, proc_id, ppath, command)
-		self.pg_open(dpath)
-		self.pg_focus(dpath)
-		prompt.keyboard.set(mode)
-
-	def pg_open(self, dpath):
-		"""
-		# Make the prompt visible.
-		"""
-
-		vi = self.paths[dpath]
-
-		# Update session state.
-		rl, rf, pg = self.views[vi].refractions()
-
-		# Make footer visible if the view is empty.
-		if pg.area.lines == 0:
-			pg_allocation = self.prompting.pg_line_allocation
-
-			self.resize_footer(dpath, pg_allocation)
-			self.deltas.extend(
-				self.fill_areas(
-					self.r_patch_footer(self.symbols,
-						self.intersections, pg.area
-					)
-				)
-			)
-			self.deltas.extend(pg.refresh(0))
-
-			rf.footer_opened(pg_allocation)
-		else:
-			self.deltas.extend(pg.refresh(0))
-
-	def pg_focus(self, dpath):
-		"""
-		# Make the prompt the focus of the frame.
-		"""
-
-		self.focus = self.select(dpath).prompt
-
-	@comethod('prompt', 'close')
-	def pg_close(self, dpath) -> int:
-		"""
-		# Set the footer size of the division identified by &dpath to zero
-		# and refocus the division if the prompt was focused by the frame.
-
-		# [ Returns ]
-		# The change in the footer allocation that was necessary to close
-		# the prompt.
-		"""
-
-		d = 0
-		rl, rf, pg = self.select(dpath).refractions()
-
-		pg_line_count = pg.area.lines
-		if pg_line_count > 0:
-			d = self.resize_footer(dpath, 0)
-			rf.footer_closed(pg_line_count)
-			if pg is self.focus:
-				self.refocus()
-		return d
-
 	@staticmethod
 	def pg_compile(forms, lines):
 		"""
@@ -3188,8 +3032,171 @@ class Division(Core):
 		pi = iter(itertools.chain(*map(Procedure.terminate, icommands)))
 		return Procedure.structure(pi)
 
-	@classmethod
-	def pg_execute(Class, div, session, trim=1):
+	@staticmethod
+	def pg_select_last_field(prompt):
+		lo = prompt.focus[0].get()
+		areas, ef = prompt.fields(lo)
+		prompt.focus[0].set(lo)
+		if areas:
+			last_field = areas[-1]
+			prompt.focus[1].configure(last_field.start, last_field.stop, last_field.stop)
+
+	def pg_log_command(self):
+		# Copy the executing command.
+		prompt = self.prompt
+		src = prompt.source
+		copy = list(src.elements)
+		empty = self.pg_empty(src, copy)
+		emptied = (len(copy) < 2) or (copy == empty)
+		activated = src.active
+		latest = src.latest
+
+		# Restore the original if editing history.
+		if activated < latest:
+			src.modifications.revert(src.elements)
+			src.modifications.truncate()
+			src.elements.partition()
+		else:
+			# Revisions are the primary means for recalling the past
+			# with prompts
+			src.modifications.truncate()
+
+		# Don't log empty commands.
+		if emptied:
+			return src.r_switch_revision(src.latest)
+		elif activated < src.latest:
+			# Copy past command forward.
+			src.revise(copy)
+
+			# Discard any empty commands.
+			# Needs to happen so that reductions may be performed.
+			while src.latest:
+				previous = list(src.revisions[-2][0])
+				empty = self.pg_empty(src, previous)
+
+				# Discard empty.
+				if previous[1:] == empty[1:]:
+					# Revised over an empty prompt.
+					src.r_discard_revision(offset=-2)
+				else:
+					break
+		else:
+			# Latest revision was activated.
+			pass
+
+		# Discard redundant keeping the latest revision record.
+		while src.latest:
+			if list(src.revisions[-2][0]) == list(src.revisions[-1][0]):
+				src.r_discard_revision(offset=-2)
+			else:
+				break
+
+		# Switch to new empty prompt inheriting the context of the activated command.
+		src.r_switch_revision(src.revise(empty))
+		return activated
+
+	def pg_configure_command(self, system, path, command=(), space=chr(0x10fa01)):
+		"""
+		# Initialize the prompt for &dpath division to issue &command to the &system.
+		"""
+
+		prompt = self.prompt
+		src = prompt.source
+		ln_count = src.ln_count()
+
+		if command:
+			cmdlines = [' '.join([x.replace(' ', space) for x in command])]
+		else:
+			cmdlines = [ln.ln_content for ln in src.select(1, ln_count)] or ['']
+
+		src.delete_lines(0, ln_count)
+		src.extend_lines(map(src.forms.ln_interpret, [str(system)+str(path)] + cmdlines))
+		src.checkpoint()
+
+		if ln_count == 0:
+			# Truncate changes if it's initializing the command.
+			src.modifications.truncate()
+
+		# Set line cursor to the first command line.
+		prompt.focus[0].restore((1, 1, 2))
+
+		if command:
+			# Set character cursor to the end of the command string.
+			ctxlen = len(cmdlines[0])
+			prompt.focus[1].restore((ctxlen, ctxlen, ctxlen))
+
+	def pg_process(self, frame, dpath, command, mode='insert'):
+		"""
+		# Configure the prompt, identified by &dpath, for executing
+		# the &command in &system.
+		"""
+
+		prompt = self.prompt
+		proc_id = str(frame.prompting.pg_process_identity)
+		ppath = frame.process_path(dpath)
+		self.pg_configure_command(proc_id, ppath, command)
+		self.pg_open(frame, dpath)
+		self.pg_focus(frame)
+		prompt.keyboard.set(mode)
+
+	def pg_open(self, frame, dpath):
+		"""
+		# Make the prompt visible.
+		"""
+
+		vi = frame.paths[dpath]
+
+		# Update session state.
+		rl, rf, pg = frame.views[vi].refractions()
+
+		# Make footer visible if the view is empty.
+		if pg.area.lines == 0:
+			pg_allocation = frame.prompting.pg_line_allocation
+
+			frame.resize_footer(dpath, pg_allocation)
+			frame.deltas.extend(
+				frame.fill_areas(
+					frame.r_patch_footer(frame.symbols,
+						frame.intersections, pg.area
+					)
+				)
+			)
+			frame.deltas.extend(pg.refresh(0))
+
+			rf.footer_opened(pg_allocation)
+		else:
+			frame.deltas.extend(pg.refresh(0))
+
+	def pg_focus(self, frame):
+		"""
+		# Make the prompt the focus of the frame.
+		"""
+
+		frame.focus = self.prompt
+
+	@comethod('prompt', 'close')
+	def pg_close(self, frame, dpath) -> int:
+		"""
+		# Set the footer size of the division identified by &dpath to zero
+		# and refocus the division if the prompt was focused by the frame.
+
+		# [ Returns ]
+		# The change in the footer allocation that was necessary to close
+		# the prompt.
+		"""
+
+		d = 0
+		rl, rf, pg = self.refractions()
+
+		pg_line_count = pg.area.lines
+		if pg_line_count > 0:
+			d = frame.resize_footer(dpath, 0)
+			rf.footer_closed(pg_line_count)
+			if self is frame.select(dpath):
+				frame.refocus()
+		return d
+
+	def pg_execute(self, session, trim=1):
 		"""
 		# Execute the command present on the prompt of the &dpath division.
 
@@ -3197,7 +3204,7 @@ class Division(Core):
 		# The dispatched &Work or a count of instructions executed.
 		"""
 
-		rl, target, pg = div.refractions()
+		rl, target, pg = self.refractions()
 		tsrc = target.source
 		is_transcript = not isinstance(target, Reflection) and tsrc.origin.ref_type == 'transcript'
 		src = pg.source
@@ -3210,7 +3217,7 @@ class Division(Core):
 		exectx = session.systems[sys]
 
 		# Compile the procedure.
-		proc = Class.pg_compile(pg.forms, lines[1:])
+		proc = self.pg_compile(pg.forms, lines[1:])
 		if not proc.steps:
 			return None
 
@@ -3219,7 +3226,7 @@ class Division(Core):
 		if ixn is not None:
 			if ixn.invokes('cd'):
 				for rpath in ixn.fields[1:]:
-					Class.pg_change_context_path(src, lines[0].ln_content, exectx, path, rpath)
+					self.pg_change_context_path(src, lines[0].ln_content, exectx, path, rpath)
 				return None
 
 		if not exectx.dispatching:
@@ -3265,7 +3272,7 @@ class Division(Core):
 		else:
 			monitor.usage = (lambda x: None)
 
-		work = Work.allocate(monitor, div, target, lines, ilevel, trim)
+		work = Work.allocate(monitor, self, target, lines, ilevel, trim)
 		if isinstance(target, Reflection):
 			target.connect(session.transcript, exectx, work, path, proc)
 		else:
@@ -3276,68 +3283,57 @@ class Division(Core):
 			monitor.install()
 			work.spawn(exectx, path, proc)
 
-		div.work_dispatched(work)
+		self.work_dispatched(work)
 		session.monitor_status()
 		return work
 
-	@staticmethod
-	def pg_select_last_field(prompt):
-		lo = prompt.focus[0].get()
-		areas, ef = prompt.fields(lo)
-		prompt.focus[0].set(lo)
-		if areas:
-			last_field = areas[-1]
-			prompt.focus[1].configure(last_field.start, last_field.stop, last_field.stop)
-
 	@comethod('prompt', 'switch/revision/next')
-	def pg_switch_revision_next(self, prompt, dpath, quantity=1):
-		self.pg_open(dpath)
-		src = prompt.source
+	def pg_switch_revision_next(self, frame, dpath, quantity=1):
+		self.pg_open(frame, dpath)
+		src = self.prompt.source
 		src.r_switch_revision_next(quantity)
-		self.pg_select_last_field(prompt)
+		self.pg_select_last_field(self.prompt)
 
 	@comethod('prompt', 'switch/revision/previous')
-	def pg_switch_revision_previous(self, prompt, dpath, quantity=1):
-		self.pg_open(dpath)
-		src = prompt.source
+	def pg_switch_revision_previous(self, frame, dpath, quantity=1):
+		self.pg_open(frame, dpath)
+		src = self.prompt.source
 		src.r_switch_revision_previous(quantity)
-		self.pg_select_last_field(prompt)
+		self.pg_select_last_field(self.prompt)
 
 	@comethod('prompt', 'execute/close')
-	def pg_execute_close(self, dpath, session, prompt):
-		div = self.select(dpath)
-		r = self.pg_execute(div, session)
+	def pg_execute_close(self, frame, dpath, session, prompt):
+		r = self.pg_execute(session)
 		if r:
-			self.pg_log_command(prompt)
+			self.pg_log_command()
 			try:
-				if self.select(dpath) != div:
+				if frame.select(dpath) != self:
 					raise KeyError("layout changed")
 			except KeyError:
 				pass
 			else:
 				# Only when the prompt survived the command (close division).
-				self.pg_close(dpath)
+				self.pg_close(frame, dpath)
 			session.keyboard.set('control')
 			return True
 		elif r is None:
-			self.pg_log_command(prompt)
+			self.pg_log_command()
 		return False
 
 	@comethod('prompt', 'execute/reset')
-	def pg_execute_reset(self, dpath, session, prompt):
-		div = self.select(dpath)
-		r = self.pg_execute(div, session)
+	def pg_execute_reset(self, frame, dpath, session, prompt):
+		r = self.pg_execute(session)
 		if r or r is None:
-			self.pg_log_command(prompt)
+			self.pg_log_command()
 			return True
 		return False
 
 	@comethod('prompt', 'execute/repeat')
-	def pg_execute_repeat(self, dpath, session):
-		return bool(self.pg_execute(self.select(dpath), session))
+	def pg_execute_repeat(self, frame, dpath, session):
+		return bool(self.pg_execute(session))
 
 	@comethod('frame', 'prompt/save')
-	def f_prompt_save_resource(self, resource, system, prompt, dpath):
+	def prompt_save_resource(self, frame, resource, system, prompt, dpath):
 		# Ideally, the full path is present in the executed command.
 		# However, the command length with the qualified tool path
 		# is nearing excess, so trim the length by using a PWD relative
@@ -3353,9 +3349,9 @@ class Division(Core):
 			">/dev/null", "<*",
 			ref.ref_path.fs_path_string()[len(pwdstr)+1:],
 		]
-		self.pg_configure_command(prompt, system.identity, pwdstr, command)
-		self.pg_open(dpath)
-		self.pg_focus(dpath)
+		self.pg_configure_command(system.identity, pwdstr, command)
+		self.pg_open(frame, dpath)
+		self.pg_focus(frame)
 
 		prompt.annotate(annotations.Directory('fs',
 			prompt.forms.lf_fields.separation.system_context,
@@ -3366,10 +3362,10 @@ class Division(Core):
 		prompt.keyboard.set('control')
 
 	@comethod('frame', 'prompt/host')
-	def f_prompt_host(self, prompt, host, dpath):
-		self.pg_configure_command(prompt, host.identity, str(host.pwd()))
-		self.pg_open(dpath)
-		self.pg_focus(dpath)
+	def prompt_host(self, frame, prompt, host, dpath):
+		self.pg_configure_command(host.identity, str(host.pwd()))
+		self.pg_open(frame, dpath)
+		self.pg_focus(frame)
 
 		if prompt.annotation is None:
 			prompt.annotate(annotations.Directory('fs',
@@ -3381,21 +3377,21 @@ class Division(Core):
 		prompt.keyboard.set('insert')
 
 	@comethod('frame', 'prompt/process')
-	def f_prompt_process(self, dpath):
-		self.pg_process(dpath, [])
+	def prompt_process(self, frame, dpath):
+		self.pg_process(frame, dpath, [])
 
 	@comethod('frame', 'prompt/seek/absolute')
-	def prompt_seek_absolute(self, dpath):
+	def prompt_seek_absolute(self, frame, dpath):
 		cmd = ["cursor/seek/absolute/line", ""]
-		self.pg_process(dpath, cmd)
+		self.pg_process(frame, dpath, cmd)
 
 	@comethod('frame', 'prompt/seek/relative')
 	def prompt_seek_relative(self, dpath):
 		cmd = ["cursor/seek/relative/line", ""]
-		self.pg_process(dpath, cmd)
+		self.pg_process(frame, dpath, cmd)
 
 	@comethod('frame', 'prompt/replace')
-	def prompt_rewrite(self, content, dpath):
+	def prompt_rewrite(self, frame, content, dpath):
 		# Identify the field for preparing the rewrite context.
 		areas, ef = content.fields(content.focus[0].get())
 		hs = content.focus[1].slice()
@@ -3405,13 +3401,13 @@ class Division(Core):
 
 		ppath = self.process_path(dpath)
 		cmd = ["cursor/replace/fields", str(i), ""]
-		self.pg_process(dpath, cmd)
+		self.pg_process(frame, dpath, cmd)
 
 	@comethod('frame', 'prompt/pattern')
 	@comethod('elements', 'find')
-	def prompt_cursor_pattern(self, dpath):
+	def prompt_cursor_pattern(self, frame, dpath):
 		cmd = ["cursor/seek/pattern", ""]
-		self.pg_process(dpath, cmd)
+		self.pg_process(frame, dpath, cmd)
 
 class Frame(Core):
 	"""
@@ -3589,8 +3585,8 @@ class Frame(Core):
 				rf.c_seek_absolute(-1)
 				rf.c_seek_character_last()
 				rf.v_seek_line_last()
-			self.pg_configure_command(div.prompt, rf.system, rf.source.origin.ref_context)
-			self.pg_open(dpath)
+			div.pg_configure_command(rf.system, rf.source.origin.ref_context)
+			div.pg_open(frame, dpath)
 
 		div.rl_update_path(div.location.source, rf.source.origin)
 		self.deltas.extend(rf.refresh())
@@ -4252,9 +4248,10 @@ class Frame(Core):
 		"""
 
 		vi = self.paths[dpath]
-		rl, cv, pg = self.views[vi].refractions()
+		div = self.views[vi]
+		rl, cv, pg = div.refractions()
 
-		self.rl_place_cursor(rl)
+		div.rl_place_cursor(rl)
 
 		self.focus = rl
 		self.focus.annotation = annotations.Directory(title,

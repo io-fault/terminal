@@ -557,7 +557,7 @@ class Session(Core):
 		)
 
 		src = Resource(ref, self.load_type('location'))
-		Frame.rl_update_path(src, reference)
+		Division.rl_update_path(src, reference)
 
 		rf = Refraction(src)
 		rf.area = rf.area.resize(lines, 0)
@@ -625,9 +625,8 @@ class Session(Core):
 			pg.control_mode = 'insert'
 
 		div = Division(rl, rf, pg, rl.source.active)
-
 		if load:
-			Frame.load_resource(self, system, div)
+			div.load_resource(self, system)
 
 		return div
 
@@ -1045,7 +1044,7 @@ class Session(Core):
 				'prompt': div.prompt,
 				'control': div, # Work Controls
 			}
-			cl = tools.partial(self.lookup, [view.source, view, frame, self])
+			cl = tools.partial(self.lookup, [view.source, view, div, frame, self])
 			self._oc = tools.cachedcalls(16)(cl)
 
 		device.render_image()
