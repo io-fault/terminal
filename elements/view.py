@@ -2664,9 +2664,9 @@ class Refraction(CellMatrix):
 		return (self.source.ln_count(), 0)
 
 @dataclasses.dataclass()
-class Structure(object):
+class Division(Core):
 	"""
-	# View structure used by &Frame for managing divisions.
+	# The &Frame elements that display content and manage &Work.
 
 	# [ Properties ]
 	# /location/
@@ -2820,8 +2820,8 @@ class Frame(Core):
 	focus: Refraction
 
 	areas: Sequence[Area]
-	views: Sequence[Structure]
-	stacks: Sequence[Sequence[Structure]]
+	views: Sequence[Division]
+	stacks: Sequence[Sequence[Division]]
 
 	@property
 	def focus_path(self):
@@ -3167,7 +3167,7 @@ class Frame(Core):
 			for x in range(limit - n):
 				stacks.append([(default, None)])
 
-	def stack_views(self, vertical, division, levels, stacks:Sequence[Sequence[Structure]]):
+	def stack_views(self, vertical, division, levels, stacks:Sequence[Sequence[Division]]):
 		"""
 		# Initialize the stacks of the frame.
 		"""

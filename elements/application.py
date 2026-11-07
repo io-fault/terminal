@@ -22,7 +22,7 @@ from . import retention
 
 from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax
 from .storage import Resource, Directory, delta
-from .view import Refraction, Reflection, Frame, Structure as View
+from .view import Refraction, Reflection, Frame, Division
 from .system import Context as SystemContext, Host, Process, IOManager
 
 # Disable signal exits for multiple interpreter cases.
@@ -624,7 +624,7 @@ class Session(Core):
 		if rf.reporting(self.prompting):
 			pg.control_mode = 'insert'
 
-		vs = View(rl, rf, pg, rl.source.active)
+		vs = Division(rl, rf, pg, rl.source.active)
 
 		if load:
 			Frame.load_resource(self, system, vs)

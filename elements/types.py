@@ -2551,7 +2551,7 @@ class WorkControl(Protocol):
 	"""
 	# Interfaces for controlling and monitoring work sets.
 
-	# Implemented by &Work owners, &.view.Structure.
+	# Implemented by &Work owners, &.view.Division.
 	"""
 
 	def work_dispatched(self, work:Work):
