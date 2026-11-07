@@ -3332,7 +3332,7 @@ class Division(Core):
 	def pg_execute_repeat(self, frame, dpath, session):
 		return bool(self.pg_execute(session))
 
-	@comethod('frame', 'prompt/save')
+	@comethod('prompt', 'prepare/save')
 	def prompt_save_resource(self, frame, resource, system, prompt, dpath):
 		# Ideally, the full path is present in the executed command.
 		# However, the command length with the qualified tool path
@@ -3361,7 +3361,7 @@ class Division(Core):
 
 		prompt.keyboard.set('control')
 
-	@comethod('frame', 'prompt/host')
+	@comethod('prompt', 'prepare/host')
 	def prompt_host(self, frame, prompt, host, dpath):
 		self.pg_configure_command(host.identity, str(host.pwd()))
 		self.pg_open(frame, dpath)
@@ -3376,21 +3376,21 @@ class Division(Core):
 
 		prompt.keyboard.set('insert')
 
-	@comethod('frame', 'prompt/process')
+	@comethod('prompt', 'prepare/process')
 	def prompt_process(self, frame, dpath):
 		self.pg_process(frame, dpath, [])
 
-	@comethod('frame', 'prompt/seek/absolute')
+	@comethod('prompt', 'prepare/seek/absolute')
 	def prompt_seek_absolute(self, frame, dpath):
 		cmd = ["cursor/seek/absolute/line", ""]
 		self.pg_process(frame, dpath, cmd)
 
-	@comethod('frame', 'prompt/seek/relative')
+	@comethod('prompt', 'prepare/seek/relative')
 	def prompt_seek_relative(self, dpath):
 		cmd = ["cursor/seek/relative/line", ""]
 		self.pg_process(frame, dpath, cmd)
 
-	@comethod('frame', 'prompt/replace')
+	@comethod('prompt', 'prepare/replace')
 	def prompt_rewrite(self, frame, content, dpath):
 		# Identify the field for preparing the rewrite context.
 		areas, ef = content.fields(content.focus[0].get())
@@ -3403,8 +3403,7 @@ class Division(Core):
 		cmd = ["cursor/replace/fields", str(i), ""]
 		self.pg_process(frame, dpath, cmd)
 
-	@comethod('frame', 'prompt/pattern')
-	@comethod('elements', 'find')
+	@comethod('prompt', 'prepare/pattern')
 	def prompt_cursor_pattern(self, frame, dpath):
 		cmd = ["cursor/seek/pattern", ""]
 		self.pg_process(frame, dpath, cmd)

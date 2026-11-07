@@ -190,8 +190,8 @@ if 'controls':
 	a(('c', km_executing, km_conceal, km_control), 'prompt/close')
 	a(('c', km_writing, km_control), 'annotation/interrupt')
 
-	a((k_space, km_control), 'frame/prompt/host')
-	a((k_space, km_shift, km_control), 'frame/prompt/process')
+	a((k_space, km_control), 'prompt/prepare/host')
+	a((k_space, km_shift, km_control), 'prompt/prepare/process')
 
 	a(('a'), 'cursor/transition/insert/end-of-field')
 	a(('a', km_shift), 'cursor/transition/insert/end-of-line')
@@ -213,8 +213,8 @@ if 'controls':
 	a(('f'), 'cursor/seek/field/next')
 	a(('f', km_shift), 'cursor/seek/selected/character/last')
 
-	a(('g', km_control), 'frame/prompt/seek/absolute')
-	a(('g', km_shift, km_control), 'frame/prompt/seek/relative')
+	a(('g', km_control), 'prompt/prepare/seek/absolute')
+	a(('g', km_shift, km_control), 'prompt/prepare/seek/relative')
 
 	a(('h'), 'cursor/select/line')
 	a(('h', km_shift), 'cursor/seek/line/bisection')
@@ -243,7 +243,7 @@ if 'controls':
 	a(('n'), 'cursor/seek/match/next')
 	a(('n', km_shift), 'cursor/seek/match/previous')
 	a(('n', km_shift, km_control), 'cursor/configure/pattern')
-	a(('n', km_control), 'frame/prompt/pattern')
+	a(('n', km_control), 'prompt/prepare/pattern')
 
 	a(('o'), 'cursor/open/ahead')
 	a(('o', km_shift), 'cursor/open/behind')
@@ -256,7 +256,7 @@ if 'controls':
 	a(('r'), 'cursor/transition/capture/replace')
 	a(('r', km_shift), 'cursor/swap/case/character')
 	a(('r', km_shift, km_d), 'cursor/swap/case/selected/characters')
-	a(('r', km_control), 'frame/prompt/replace')
+	a(('r', km_control), 'prompt/prepare/replace')
 	a(('r', km_meta), 'view/refresh')
 	a(('r', km_meta, km_shift), 'view/transmit')
 
@@ -265,7 +265,7 @@ if 'controls':
 
 	a(('s'), 'cursor/select/field/series')
 	a(('s', km_shift), 'cursor/select/line/characters')
-	a(('s', km_control), 'frame/prompt/save')
+	a(('s', km_control), 'prompt/prepare/save')
 
 	a(('v'), 'cursor/transition/annotation/select')
 	a(('v', km_shift), 'cursor/annotation/rotate')
