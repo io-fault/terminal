@@ -608,11 +608,7 @@ class Session(Core):
 
 			rf = Refraction(source)
 			rf.monitor_images = self.monitor_images
-		rf.keyboard = self.keyboard
-
-		if load:
-			rf.focus[0].set(-1)
-			system.load_resource(source, rf)
+			rf.keyboard = self.keyboard
 
 		if addressing is not None:
 			rf.restore(addressing[:-2])
@@ -628,7 +624,12 @@ class Session(Core):
 		if rf.reporting(self.prompting):
 			pg.control_mode = 'insert'
 
-		return View(rl, rf, pg, rl.source.active)
+		vs = View(rl, rf, pg, rl.source.active)
+
+		if load:
+			Frame.load_resource(self, system, vs)
+
+		return vs
 
 	def log(self, *lines):
 		"""

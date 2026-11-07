@@ -3078,6 +3078,33 @@ class Frame(Core):
 		for rf in src.views:
 			rf.refresh(0)
 
+	@classmethod
+	def load_resource(Class, session, system, vs):
+		rf = vs.content
+		pg = vs.prompt
+
+		# Reset cursors to beginning.
+		rf.image.line_offset = 0
+		rf.focus[0].restore((0, 0, 1))
+		rf.focus[1].restore((0, 0, 1))
+
+		# Dispatch cat writing into line storage.
+		ref = rf.source.origin
+		exists = ref.ref_path.fs_type() != 'void'
+		pwd = ref.ref_context
+		pwdstr = pwd.fs_path_string()
+		command = [
+			system.tool("cat").fs_path_string(),
+			ref.ref_path.fs_path_string()[len(pwdstr)+1:],
+		]
+		Class.pg_configure_command(pg, system.identity, pwdstr, command)
+		Class.pg_execute(vs, session, trim=(1 if exists else 1))
+		Class.pg_log_command(pg)
+
+		# Use Refraction.recursor's contraint to seek the first line,
+		# stopping scroll lock and discarding most display deltas during load.
+		rf.focus[0].restore((0, -1, 1))
+
 	@comethod('location', 'open/resource')
 	def rl_open(self, dpath, rl_syntax, session, content):
 		# Construct reference and load dependencies.
@@ -3101,17 +3128,17 @@ class Frame(Core):
 				load = True
 
 			new = Refraction(source)
-			new.focus[0].set(-1)
-			new.keyboard = session.keyboard
 			new.monitor_images = session.monitor_images
+			new.keyboard = session.keyboard
 
 		self.attach(dpath, new)
-		self.views[vi].content_location_revision = rl_syntax.source.active
+		vs = self.views[vi]
+		vs.content_location_revision = rl_syntax.source.active
 
 		self.switch_division(dpath)
 
 		if load:
-			system.load_resource(source, new)
+			self.load_resource(session, system, vs)
 
 	@comethod('location', 'switch/previous')
 	def rl_switch_previous(self, session, dpath, location, content, quantity=1):
@@ -3816,7 +3843,7 @@ class Frame(Core):
 		return activated
 
 	@staticmethod
-	def pg_configure_command(prompt, system, path, command=()):
+	def pg_configure_command(prompt, system, path, command=(), space=chr(0x10fa01)):
 		"""
 		# Initialize the prompt for &dpath division to issue &command to the &system.
 		"""
@@ -3825,7 +3852,7 @@ class Frame(Core):
 		ln_count = src.ln_count()
 
 		if command:
-			cmdlines = [' '.join(command)]
+			cmdlines = [' '.join([x.replace(' ', space) for x in command])]
 		else:
 			cmdlines = [ln.ln_content for ln in src.select(1, ln_count)] or ['']
 
