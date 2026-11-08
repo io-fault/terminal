@@ -3602,7 +3602,7 @@ class Frame(Core):
 				rf.c_seek_character_last()
 				rf.v_seek_line_last()
 			div.pg_configure_command(rf.system, rf.source.origin.ref_context)
-			div.pg_open(frame, dpath)
+			div.pg_open(self, dpath)
 
 		div.rl_update_path(div.location.source, rf.source.origin)
 		self.deltas.extend(rf.refresh())
