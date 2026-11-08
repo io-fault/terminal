@@ -232,7 +232,7 @@ if 'controls':
 
 	a(('l'), 'cursor/select/indentation')
 	a(('l', km_shift), 'cursor/select/indentation/level')
-	a(('l', km_control), 'frame/open/resource')
+	a(('l', km_control), 'location/edit')
 	a(('l', km_meta, km_control), 'session/open/log')
 
 	a(('m'), 'cursor/move/selected/lines/ahead')

@@ -2972,6 +2972,23 @@ class Division(Core):
 		if location.source.r_switch_revision_last():
 			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
 
+	@comethod('location', 'edit')
+	@comethod('resource', 'select')
+	def rl_edit(self, frame, dpath, *, title='open'):
+		"""
+		# Shift the focus to the location view of the division identified by
+		# &dpath.
+		"""
+
+		rl = self.location
+		self.rl_place_cursor(rl)
+		rl.annotation = annotations.Directory(title,
+			rl.forms.lf_fields.separation.system_context,
+			*rl.focus
+		)
+
+		frame.focus = rl
+
 	@staticmethod
 	def pg_clear_command(prompt):
 		"""
@@ -4239,29 +4256,6 @@ class Frame(Core):
 		# Resume any associated work.
 		"""
 		control.work_resume()
-
-	def relocate(self, dpath, *, title='open'):
-		"""
-		# Shift the focus to the location view of the division identified by
-		# &dpath.
-		"""
-
-		vi = self.paths[dpath]
-		div = self.views[vi]
-		rl, cv, pg = div.refractions()
-
-		div.rl_place_cursor(rl)
-
-		self.focus = rl
-		self.focus.annotation = annotations.Directory(title,
-			self.focus.forms.lf_fields.separation.system_context,
-			*self.focus.focus
-		)
-
-	@comethod('frame', 'open/resource')
-	@comethod('resource', 'select')
-	def f_switch_resource(self):
-		self.relocate((self.vertical, self.division))
 
 	def target(self, top, left):
 		"""
