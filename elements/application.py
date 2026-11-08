@@ -311,7 +311,7 @@ class Session(Core):
 		self.sources.insert_resource(self.transcript)
 
 		# Exclusively for the prompt.
-		self.process.rehash([Host, Process, Resource, Refraction, Reflection, Frame, Session])
+		self.process.rehash([Division, Host, Process, Resource, Refraction, Reflection, Frame, Session])
 
 	@comethod('session', 'retitle')
 	def retitle(self, title):

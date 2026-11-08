@@ -948,7 +948,7 @@ class Process(Context):
 
 		itype, mpath = iname.split('/', 1)
 		args = ()
-		phypath = [rf.source, rf, frame, rsession]
+		phypath = [rf.source, rf, div, frame, rsession]
 		phy, op, sels = rsession.lookup(phypath, itype, mpath)
 
 		# First argument is used as quantity if it is an integer string.
