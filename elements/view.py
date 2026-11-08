@@ -2859,7 +2859,7 @@ class Division(Core):
 				div.content_location_revision = location.source.latest
 				location.source.switch_revision(div.content_location_revision)
 
-		level = frame.f_push_refraction(session, division, *rl_selection)
+		level = frame.push_division(session, division, *rl_selection)
 		frame.switch_level(division, level)
 		frame.refocus()
 
@@ -4352,14 +4352,13 @@ class Frame(Core):
 		if nlevel < 0:
 			# No divisions left. Force default.
 			default = (session.host.fs_pwd()@'/dev/null')
-			self.f_push_refraction(session, division, session.host.identity, default)
+			self.push_division(session, division, session.host.identity, default)
 			nlevel = 0
 
 		self.switch_level(division, nlevel)
 		self.refocus()
 
-	@comethod('frame', 'push/refraction')
-	def f_push_refraction(self, session, division, system, path, *, addressing=None):
+	def push_division(self, session, division, system, path, *, addressing=None):
 		div = session.refract(path, addressing=addressing)
 		dstack = self.stacks[division]
 
