@@ -3425,6 +3425,45 @@ class Division(Core):
 		cmd = ["cursor/seek/pattern", ""]
 		self.pg_process(frame, dpath, cmd)
 
+	@comethod('work', 'list')
+	def list_work(self, control):
+		"""
+		# List the currently executing work associated with the view.
+		"""
+
+		for work in control.work_list():
+			yield work.source[0].relevel(0)
+			for ln in work.source[1:]:
+				yield ln.relevel(1)
+
+	@comethod('work', 'terminate')
+	def terminate_work(self, control):
+		"""
+		# Request associated work termination.
+		"""
+		control.work_terminate()
+
+	@comethod('work', 'interrupt')
+	def interrupt_work(self, control):
+		"""
+		# Immediately stop associated work.
+		"""
+		control.work_interrupt(True)
+
+	@comethod('work', 'suspend')
+	def suspend_work(self, control):
+		"""
+		# Suspend associated work.
+		"""
+		control.work_suspend(True)
+
+	@comethod('work', 'resume')
+	def resume_work(self, control):
+		"""
+		# Resume any associated work.
+		"""
+		control.work_resume()
+
 class Frame(Core):
 	"""
 	# Frame implementation for laying out and interacting with a set of refactions.
@@ -4217,45 +4256,6 @@ class Frame(Core):
 		for avalues, fill_char in patterns:
 			a = Area(*avalues)
 			yield a, [Type.inscribe(ord(fill_char))] * a.volume
-
-	@comethod('work', 'list')
-	def list_work(self, control):
-		"""
-		# List the currently executing work associated with the view.
-		"""
-
-		for work in control.work_list():
-			yield work.source[0].relevel(0)
-			for ln in work.source[1:]:
-				yield ln.relevel(1)
-
-	@comethod('work', 'terminate')
-	def terminate_work(self, control):
-		"""
-		# Request associated work termination.
-		"""
-		control.work_terminate()
-
-	@comethod('work', 'interrupt')
-	def interrupt_work(self, control):
-		"""
-		# Immediately stop associated work.
-		"""
-		control.work_interrupt(True)
-
-	@comethod('work', 'suspend')
-	def suspend_work(self, control):
-		"""
-		# Suspend associated work.
-		"""
-		control.work_suspend(True)
-
-	@comethod('work', 'resume')
-	def resume_work(self, control):
-		"""
-		# Resume any associated work.
-		"""
-		control.work_resume()
 
 	def target(self, top, left):
 		"""
