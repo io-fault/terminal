@@ -46,34 +46,29 @@ class Resource(types.Core):
 	origin: types.Reference
 	forms: types.Reformulations
 
-	elements: Sequence[str]
-	modifications: delta.Log
+	elements: Sequence[str] = Field(default_factory=list)
+	modifications: delta.Log = None
 
-	revisions: Sequence[tuple[Sequence[str], delta.Log]]
-	active: int
+	status: object = None
+	views: object = Field(default_factory=weakref.WeakSet)
+	cursors: object = Field(default_factory=weakref.WeakSet)
+	revisions: Sequence[tuple[Sequence[str], delta.Log]] = Field(default_factory=list)
+	active: int = 0
 
-	status: object
-	views: object
+	@classmethod
+	def allocate(Class, origin, forms):
+		return Class(origin = origin, forms = forms)
+
+	def __post_init__(self):
+		self.active = self.revise()
+		self.switch_revision(0)
 
 	@property
 	def latest(self) -> int:
 		"""
 		# Latest revision available.
 		"""
-
 		return len(self.revisions) - 1
-
-	def __init__(self, origin, forms):
-		self.origin = origin
-		self.status = None
-		self.forms = forms
-
-		self.views = weakref.WeakSet()
-		self.cursors = weakref.WeakSet()
-
-		self.revisions = []
-		self.active = self.revise()
-		self.switch_revision(0)
 
 	def revise(self, lines=()) -> int:
 		"""
@@ -1133,10 +1128,7 @@ class Directory(types.Core):
 	# to resources across multiple filesystems.
 	"""
 
-	resources: Mapping[str, Resource]
-
-	def __init__(self, Type=dict):
-		self.resources = Type()
+	resources: Mapping[str, Resource] = Field(default_factory=dict)
 
 	def allocate_resource(self, ref:types.Reference, syntax_type) -> Resource:
 		"""
@@ -1145,7 +1137,7 @@ class Directory(types.Core):
 		# Does not change the state of the collection.
 		"""
 
-		return Resource(ref, syntax_type)
+		return Resource.allocate(ref, syntax_type)
 
 	def create_resource(self, system, typref, syntype, path) -> Resource:
 		"""

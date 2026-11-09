@@ -5,6 +5,7 @@ import itertools
 import collections
 import weakref
 
+import dataclasses
 from dataclasses import dataclass
 from fault.context import comethod
 from fault.context import tools
@@ -18,12 +19,52 @@ from ..cells import text
 from ..cells.text import Phrase, Redirect, Words, Unit, Image
 from ..cells.types import Area, Cell, Glyph, Pixels, Screen, Device, Line as LineStyle
 
-class Core(comethod.object):
+class ElementType(comethod.Type):
+	"""
+	# Metaclass for elements providing &dataclasses.field and &dataclass.replace
+	# during construction along with an additional comethod decorators for exporting
+	# methods based on their names.
+	"""
+
+	__slots__ = ()
+
+	@classmethod
+	def __prepare__(Class, name, bases, **kw):
+		d = super().__prepare__(name, bases, **kw)
+		d['Field'] = dataclasses.field
+		d['Replace'] = dataclasses.replace
+
+		# @export and @conceptual.
+		n = name.lower()
+		mc = d['comethod']
+		def cem(f):
+			fn = f.__name__
+			i = fn.find('_')
+			assert i > 0
+			return mc(fn[:i], fn[i+1:].replace('_', '/'))
+		d['conceptual'] = cem
+		d['instruction'] = (lambda f: mc(n, f.__name__.replace('_', '/'))(f))
+
+		return d
+
+	def __new__(Class, n, b, d):
+		n = super().__new__(Class, n, b, d)
+		del n.Field
+		del n.Replace
+		dc = d.pop('__dc__', {})
+		dc['eq'] = False
+		dc['kw_only'] = True
+		return dataclasses.dataclass(n, **dc)
+
+class Core(comethod.object, metaclass=ElementType):
 	"""
 	# Core element type.
 
 	# Common base class for all instructable application elements.
 	"""
+
+	# State.
+	__hash__ = object.__hash__
 
 @tools.struct()
 class Prompting(object):

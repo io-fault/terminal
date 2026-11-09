@@ -251,7 +251,7 @@ class Session(Core):
 
 		self.executable = executable
 
-		self.process = Process(
+		self.process = Process.allocate(
 			System(
 				'process',
 				system.identity.sys_credentials,
@@ -304,7 +304,7 @@ class Session(Core):
 			exepath.fs_path_string(), self.executable.context,
 			exepath
 		)
-		self.transcript = Resource(session_log, self.load_type('teletype'))
+		self.transcript = Resource.allocate(session_log, self.load_type('teletype'))
 		self.transcript.ln_initialize()
 		self.transcript.commit()
 
@@ -536,9 +536,9 @@ class Session(Core):
 			files.root@'/dev/null',
 		)
 
-		src = Resource(ref, self.load_type('ivectors'))
+		src = Resource.allocate(ref, self.load_type('ivectors'))
 
-		rf = Refraction(src)
+		rf = Refraction(source=src)
 		rf.area = rf.area.resize(lines, 0)
 		rf.forms = self.pg_forms(src)
 		rf.keyboard = self.keyboard
@@ -556,10 +556,10 @@ class Session(Core):
 			files.root@'/dev/null',
 		)
 
-		src = Resource(ref, self.load_type('location'))
+		src = Resource.allocate(ref, self.load_type('location'))
 		Division.rl_update_path(src, reference)
 
-		rf = Refraction(src)
+		rf = Refraction(source=src)
 		rf.area = rf.area.resize(lines, 0)
 		rf.forms = self.rl_forms(src, reference.ref_context)
 		rf.keyboard = self.keyboard
@@ -596,7 +596,7 @@ class Session(Core):
 
 		if typref == 'reflection':
 			source = self.sources.create_resource(system.identity, typref, syntype, path)
-			rf = Reflection(self.device, self.theme['empty'].inscribe(ord(' ')), source)
+			rf = Reflection.allocate(self.device, self.theme['empty'].inscribe(ord(' ')), source)
 			load = False
 		else:
 			try:
@@ -606,7 +606,7 @@ class Session(Core):
 				source = self.sources.create_resource(system.identity, typref, syntype, path)
 				load = True
 
-			rf = Refraction(source)
+			rf = Refraction(source=source)
 			rf.monitor_images = self.monitor_images
 			rf.keyboard = self.keyboard
 
@@ -624,7 +624,7 @@ class Session(Core):
 		if rf.reporting(self.prompting):
 			pg.control_mode = 'insert'
 
-		div = Division(rl, rf, pg, rl.source.active)
+		div = Division.allocate(rl, rf, pg)
 		if load:
 			div.load_resource(self, system)
 
@@ -729,14 +729,14 @@ class Session(Core):
 		"""
 
 		f = Frame(
-			self.symbols,
-			self.prompting,
-			self.device.define, self.theme,
-			self.load_type('location'),
-			self.keyboard, area,
-			index=len(self.frames),
-			title=title
+			area = area,
+			symbols = self.symbols,
+			prompting = self.prompting,
+			define = self.device.define,
+			theme = self.theme,
+			keyboard = self.keyboard,
 		)
+		f.identify(len(self.frames), title)
 		self.frames.append(f)
 
 		f.restore(self.device.screen.area, widths, heights)
@@ -1523,7 +1523,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	device = Device()
 
 	from fault.system.thread import amutex
-	host = Host(
+	host = Host.allocate(
 		IOManager.allocate(device.synchronize_io, amutex()),
 		files.root,
 		System(
@@ -1532,7 +1532,6 @@ def main(inv:process.Invocation) -> process.Exit:
 			'',
 			query.hostname(),
 		),
-		'utf-8',
 		query.executable('env').fs_path_string(),
 		['env'],
 	)

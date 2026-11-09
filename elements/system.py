@@ -898,13 +898,14 @@ class Process(Context):
 	# dispatched operations.
 	"""
 
-	dispatching = False
-	command_type = 'application-instruction'
+	session: object
+	dispatching: bool = False
+	command_type: str = 'application-instruction'
+	index: dict = Field(default_factory=dict)
 
-	def __init__(self, sysid, session):
-		self.session = weakref.proxy(session)
-		self.identity = sysid
-		self.index = {}
+	@classmethod
+	def allocate(Class, sysid, session):
+		return Class(identity = sysid, session = weakref.proxy(session))
 
 	def rehash(self, types):
 		"""
@@ -1052,16 +1053,19 @@ class Host(Context):
 		# the lower index entries having priority over the higher.
 	"""
 
-	command_type = 'host-executable'
-	dispatching = True
-
 	io: IOManager
 	encoding: str
 	executable: str
 	interface: Sequence[str]
-	environment: Mapping[str, str]
-	path_separator: str
-	index: Mapping[str, list[files.Path]]
+	fs_root: files.Path
+	path_separator: str = ':'
+	encoding = 'utf-8'
+	environment: Mapping[str, str] = Field(default_factory=dict)
+	index: Mapping[str, list[files.Path]] = Field(default_factory=dict)
+	tools: Mapping[str, list[files.Path]] = Field(default_factory=dict)
+
+	command_type: str = 'host-executable'
+	dispatching: bool = True
 
 	# Defaults are failsafes presuming a POSIX environment.
 	# &store_resource and &load_resource currently depend on this.
@@ -1070,6 +1074,20 @@ class Host(Context):
 		'tee': '/bin/tee',
 		'env': '/usr/bin/env',
 	}
+
+	@classmethod
+	def allocate(Class, io, fsr, ident, ifpath, argv, encoding='utf-8'):
+		return Class(
+			io = io,
+			fs_root = fsr,
+			identity = ident,
+			executable = ifpath,
+			encoding = encoding,
+			interface = argv,
+		)
+
+	def __post_init__(self):
+		self.codec = Characters.from_codec(self.encoding, 'surrogateescape')
 
 	from os import dup as _dup
 	from os import kill as _kill
@@ -1228,19 +1246,6 @@ class Host(Context):
 
 		for x, default in self.cached_tools.items():
 			self.tools[x] = self.index.get(x, (default,))[0]
-
-	def __init__(self, io, root, identity:System, encoding, ifpath, argv):
-		self.io = io
-		self.fs_root = root
-		self.identity = identity
-		self.environment = {}
-		self.encoding = encoding
-		self.codec = Characters.from_codec(encoding, 'surrogateescape')
-		self.executable = ifpath
-		self.interface = argv
-		self.index = {}
-		self.tools = {}
-		self.path_separator = ':'
 
 	def tool(self, identifier):
 		"""

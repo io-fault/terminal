@@ -1,6 +1,7 @@
 """
 # View elements rendering display instructions for representing content.
 """
+import struct
 import itertools
 import dataclasses
 from collections.abc import Sequence, Iterable, Mapping
@@ -41,19 +42,11 @@ class CellMatrix(Core):
 		# Whether the content can be seen in the frame.
 	"""
 
-	area: Area
-	image: object
-	define: Callable[[str], int]
-	deltas: Sequence
-	frame_visible: bool
-
-	def __init__(self):
-		self.deltas = []
-		self.define = ord
-		self.image = None
-		self.area = Area(0, 0, 0, 0)
-
-		self.frame_visible = False
+	area: Area = Area(0, 0, 0, 0)
+	image: Screen|Image = None
+	define: Callable[[str], int] = ord
+	deltas: Sequence = Field(default_factory=list)
+	frame_visible: bool = False
 
 	def configure(self, deltas, define, area):
 		"""
@@ -93,32 +86,34 @@ class Reflection(CellMatrix):
 		# View local display deltas.
 	"""
 
-	from struct import pack
-	pack_text_length = staticmethod(tools.partial(pack, "H"))
-	del pack
+	device: object
+	empty: object
+	source: object
+
+	image: Screen = Field(default_factory=(lambda: Screen(Area(0, 0, 0, 0), bytearray(b""))))
+	control_mode: str = 'relay'
+	work: None = None
+	system_context = None
+	procedure = None
+	queue: Sequence = Field(default_factory=list)
+	local: Sequence = Field(default_factory=list)
+
+	@classmethod
+	def allocate(Class, device, empty, source):
+		return Class(
+			device = device,
+			empty = empty,
+			source = source,
+		)
+
+	pack_text_length = staticmethod(tools.partial(struct.pack, "H"))
 
 	@property
 	def system(self):
 		return self.source.origin.ref_system
 
-	def __init__(self, device, empty, source):
-		super().__init__()
-
-		self.control_mode = 'relay'
-		self.procedure = None
-		self.system_context = None
-		self.work = None
-		self.queue = []
-		self.local = []
-
-		# Initialize an empty screen for the invariant; resize is expected on connect.
-		self.image = Screen(Area(0, 0, 0, 0), bytearray(b""))
-
-		self.source = source
-		self.device = device
-		self.empty = empty
-
-		self.synchronize_io_snapshot = device.controls_snapshot(-2) + b'\x00\x00'
+	def __post_init__(self):
+		self.synchronize_io_snapshot = self.device.controls_snapshot(-2) + b'\x00\x00'
 
 	def reporting(self, configuration):
 		if self.work is None:
@@ -347,13 +342,22 @@ class Refraction(CellMatrix):
 		# Per dimension offsets used to trigger margin scrolls.
 	"""
 
-	system: System
 	source: storage.Resource
-	image: Image
-	annotation: Optional[Annotation]
-	focus: Sequence[object]
-	limits: Sequence[int]
+
+	system: System = None
+	image: Image = Field(default_factory=Image)
+	annotation: Optional[Annotation] = None
+	focus: Sequence[object] = Field(default_factory=(lambda: (Position(), Position())))
+	query: Mapping = Field(default_factory=dict)
+	limits: Sequence[int] = (0, 0)
 	version: object = (0, 0, None)
+	control_mode: str = 'control'
+	monitor_images: object = None
+
+	def __post_init__(self):
+		self.system = self.source.origin.ref_system # Default execution context.
+		self.forms = self.source.forms
+		self.source.views.add(self)
 
 	def snapshot(self):
 		"""
@@ -448,24 +452,6 @@ class Refraction(CellMatrix):
 			return True
 
 		return False
-
-	def __init__(self, resource):
-		super().__init__()
-		self.control_mode = 'control'
-
-		self.source = resource
-		self.system = self.source.origin.ref_system # Default execution context.
-		self.forms = resource.forms
-		self.annotation = None
-		self.monitor_images = None
-
-		self.focus = (Position(), Position())
-		self.query = {} # Query state; last search, seek, etc.
-		# View related state.
-		self.limits = (0, 0)
-
-		self.image = Image()
-		resource.views.add(self)
 
 	def v_status(self, session, mode='control') -> Status:
 		"""
@@ -2663,7 +2649,6 @@ class Refraction(CellMatrix):
 	def extend_document(self):
 		return (self.source.ln_count(), 0)
 
-@dataclasses.dataclass()
 class Division(Core):
 	"""
 	# The &Frame elements that display content and manage &Work.
@@ -2690,9 +2675,16 @@ class Division(Core):
 		# The dispatched work associated with the view.
 	"""
 
+	@classmethod
+	def allocate(Class, rl, co, pg):
+		div = Class(location=rl, content=co, prompt=pg)
+		div.content_location_revision = rl.source.active
+		return div
+
 	location: Refraction
-	content: Refraction
+	content: Refraction|Reflection
 	prompt: Refraction
+
 	content_location_revision: int = 0
 	jobs: Mapping[Work] = dataclasses.field(default_factory=dict)
 
@@ -2933,7 +2925,7 @@ class Division(Core):
 
 		if typref == 'reflection':
 			source = session.sources.create_resource(system.identity, typref, syntype, fspath)
-			new = Reflection(session.device, session.theme['empty'].inscribe(ord(' ')), source)
+			new = Reflection.allocate(session.device, session.theme['empty'].inscribe(ord(' ')), source)
 			new.keyboard = session.keyboard
 			load = False
 		else:
@@ -3502,15 +3494,36 @@ class Frame(Core):
 	"""
 
 	area: Area
-	title: str
-	structure: object
-	vertical: int
-	division: int
-	focus: Refraction
+	title: str = None
+	index: int = None
+	vertical: int = 0
+	division: int = 0
+	focus: Refraction = None
 
-	areas: Sequence[Area]
-	views: Sequence[Division]
-	stacks: Sequence[Sequence[Division]]
+	areas: Sequence[Area] = Field(default_factory=list)
+	views: Sequence[Division] = Field(default_factory=list)
+	stacks: Sequence[Sequence[Division]] = Field(default_factory=list)
+	layout: Layout = Layout([], [])
+	layout_fractions: dict|None = None
+	intersections: dict = Field(default_factory=dict)
+	stacks: Sequence = Field(default_factory=list)
+	views: Sequence[CellMatrix] = Field(default_factory=list)
+	paths: Mapping = Field(default_factory=dict)
+
+	symbols: dict
+	define: object = None
+	theme: dict = None
+	prompting: Prompting = None
+	keyboard: object = None
+	deltas: Sequence = Field(default_factory=list)
+
+	def __post_init__(self):
+		self.border = self.theme['frame-border']
+		self.reset_intersections()
+
+	def identify(self, index, title):
+		self.index = index
+		self.title = title
 
 	@property
 	def focus_path(self):
@@ -3558,32 +3571,6 @@ class Frame(Core):
 			fe = ds.prompt
 
 		return ds, fe
-
-	def __init__(self, symbols, prompting, define, theme, fs, keyboard, area, index=None, title=None):
-		self.symbols = symbols
-		self.prompting = prompting
-		self.define = define
-		self.theme = theme
-		self.border = theme['frame-border']
-		self.filesystem = fs
-		self.keyboard = keyboard
-		self.area = area
-		self.layout = Layout([], [])
-		self.layout_fractions = None
-		self.index = index
-		self.title = title
-		self.intersections = {}
-		self.reset_intersections()
-
-		self.vertical = 0
-		self.division = 0
-		self.focus = None
-
-		self.paths = {} # (vertical, division) -> element-index
-		self.views = []
-		self.stacks = []
-
-		self.deltas = []
 
 	def status_modifiers(self, dpath, view):
 		"""
