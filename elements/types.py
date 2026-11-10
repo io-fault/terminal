@@ -41,7 +41,7 @@ class ElementType(comethod.Type):
 			fn = f.__name__
 			i = fn.find('_')
 			assert i > 0
-			return mc(fn[:i], fn[i+1:].replace('_', '/'))
+			return mc(fn[:i], fn[i+1:].replace('_', '/'))(f)
 		d['conceptual'] = cem
 		d['instruction'] = (lambda f: mc(n, f.__name__.replace('_', '/'))(f))
 
