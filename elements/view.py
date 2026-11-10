@@ -2813,13 +2813,13 @@ class Division(Core):
 		name = last.ln_content.rfind('/') + 1
 		rf.focus[1].restore((name, name, last.ln_length))
 
-	@comethod('location', 'reset')
-	def rl_reset(self, frame, location, content):
+	@conceptual
+	def location_reset(self, frame, location, content):
 		self.rl_update_path(location.source, content.source.origin)
 		frame.refocus()
 
-	@comethod('location', 'open/level')
-	def rl_open_level(self, frame, location, division, rl_syntax, session, content):
+	@conceptual
+	def location_open_level(self, frame, location, division, rl_syntax, session, content):
 		# Get the system and path to open.
 		rl_selection = rl_syntax.location_path()
 
@@ -2855,8 +2855,8 @@ class Division(Core):
 		frame.switch_level(division, level)
 		frame.refocus()
 
-	@comethod('location', 'execute/operation')
-	def rl_execute(self, frame, location, dpath, rl_syntax, session, content):
+	@conceptual
+	def location_execute_operation(self, frame, location, dpath, rl_syntax, session, content):
 		# Copy the current effective location. (source.origin)
 		previous = content.source.origin
 		current_origin = (previous.ref_system, previous.ref_path)
@@ -2914,7 +2914,6 @@ class Division(Core):
 		# stopping scroll lock and discarding most display deltas during load.
 		rf.focus[0].restore((0, -1, 1))
 
-	@comethod('location', 'open/resource')
 	def rl_open(self, frame, dpath, rl_syntax, session, content):
 		# Construct reference and load dependencies.
 		system, fspath = rl_syntax.location_path()
@@ -2936,7 +2935,7 @@ class Division(Core):
 				source = session.sources.create_resource(system.identity, typref, syntype, fspath)
 				load = True
 
-			new = Refraction(source)
+			new = Refraction(source=source)
 			new.monitor_images = session.monitor_images
 			new.keyboard = session.keyboard
 
@@ -2949,24 +2948,24 @@ class Division(Core):
 		if load:
 			self.load_resource(session, system)
 
-	@comethod('location', 'switch/previous')
-	def rl_switch_previous(self, session, dpath, location, content, quantity=1):
+	@conceptual
+	def location_switch_previous(self, session, dpath, location, content, quantity=1):
 		if location.source.r_switch_revision_previous(quantity=quantity):
 			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
 
-	@comethod('location', 'switch/next')
-	def rl_switch_next(self, session, dpath, location, content, quantity=1):
+	@conceptual
+	def location_switch_next(self, session, dpath, location, content, quantity=1):
 		if location.source.r_switch_revision_next(quantity=quantity):
 			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
 
-	@comethod('location', 'switch/last')
-	def rl_switch_last(self, session, dpath, location, content):
+	@conceptual
+	def location_switch_last(self, session, dpath, location, content):
 		if location.source.r_switch_revision_last():
 			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
 
-	@comethod('location', 'edit')
 	@comethod('resource', 'select')
-	def rl_edit(self, frame, dpath, *, title='open'):
+	@conceptual
+	def location_edit(self, frame, dpath, *, title='open'):
 		"""
 		# Shift the focus to the location view of the division identified by
 		# &dpath.
