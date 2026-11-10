@@ -3242,6 +3242,7 @@ class Division(Core):
 			# process execution context
 			return exectx.evaluate(None, 0, path, proc)
 
+		mtarget = target
 		if is_transcript:
 			tsrc.checkpoint()
 			# End of file cursor, but before the final line for margin scroll.
@@ -3269,25 +3270,32 @@ class Division(Core):
 			monitor_line = lo + n - 3
 			coordinates = (lo + 1, 0)
 			ilevel = 1
+		elif isinstance(target, Reflection):
+			monitor_line = 1
+			coordinates = (1, 0)
+			ilevel = 0
+			mtarget = rl
 		else:
 			monitor_line = target.coordinates()[0]
 			coordinates = target.coordinates()
 			ilevel = 0
 
 		revision = pg.source.active
-		monitor = session.monitor(target.source, monitor_line)
+		monitor = session.monitor(mtarget.source, monitor_line)
 		if hasattr(exectx, 'io'):
 			monitor.usage = exectx.io.usage_reader(limit=128)
 		else:
 			monitor.usage = (lambda x: None)
 
 		work = Work.allocate(monitor, self, target, lines, ilevel, trim)
+		lo, co = coordinates
+		work.cursor.lines.restore((lo, lo, lo+1))
+		work.cursor.codepoints.restore((co, co, co))
+
 		if isinstance(target, Reflection):
 			target.connect(session.transcript, exectx, work, path, proc)
+			monitor.install()
 		else:
-			lo, co = coordinates
-			work.cursor.lines.restore((lo, lo, lo+1))
-			work.cursor.codepoints.restore((co, co, co))
 			tsrc.cursors.add(work.cursor)
 			monitor.install()
 			work.spawn(exectx, path, proc)
