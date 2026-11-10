@@ -3183,8 +3183,8 @@ class Division(Core):
 
 		frame.focus = self.prompt
 
-	@comethod('prompt', 'close')
-	def pg_close(self, frame, dpath) -> int:
+	@conceptual
+	def prompt_close(self, frame, dpath) -> int:
 		"""
 		# Set the footer size of the division identified by &dpath to zero
 		# and refocus the division if the prompt was focused by the frame.
@@ -3304,22 +3304,22 @@ class Division(Core):
 		session.monitor_status()
 		return work
 
-	@comethod('prompt', 'switch/revision/next')
-	def pg_switch_revision_next(self, frame, dpath, quantity=1):
+	@conceptual
+	def prompt_switch_revision_next(self, frame, dpath, quantity=1):
 		self.pg_open(frame, dpath)
 		src = self.prompt.source
 		src.r_switch_revision_next(quantity)
 		self.pg_select_last_field(self.prompt)
 
-	@comethod('prompt', 'switch/revision/previous')
-	def pg_switch_revision_previous(self, frame, dpath, quantity=1):
+	@conceptual
+	def prompt_switch_revision_previous(self, frame, dpath, quantity=1):
 		self.pg_open(frame, dpath)
 		src = self.prompt.source
 		src.r_switch_revision_previous(quantity)
 		self.pg_select_last_field(self.prompt)
 
-	@comethod('prompt', 'execute/close')
-	def pg_execute_close(self, frame, dpath, session, prompt):
+	@conceptual
+	def prompt_execute_close(self, frame, dpath, session, prompt):
 		r = self.pg_execute(session)
 		if r:
 			self.pg_log_command()
@@ -3330,27 +3330,27 @@ class Division(Core):
 				pass
 			else:
 				# Only when the prompt survived the command (close division).
-				self.pg_close(frame, dpath)
+				self.prompt_close(frame, dpath)
 			session.keyboard.set('control')
 			return True
 		elif r is None:
 			self.pg_log_command()
 		return False
 
-	@comethod('prompt', 'execute/reset')
-	def pg_execute_reset(self, frame, dpath, session, prompt):
+	@conceptual
+	def prompt_execute_reset(self, frame, dpath, session, prompt):
 		r = self.pg_execute(session)
 		if r or r is None:
 			self.pg_log_command()
 			return True
 		return False
 
-	@comethod('prompt', 'execute/repeat')
-	def pg_execute_repeat(self, frame, dpath, session):
+	@conceptual
+	def prompt_execute_repeat(self, frame, dpath, session):
 		return bool(self.pg_execute(session))
 
-	@comethod('prompt', 'prepare/save')
-	def prompt_save_resource(self, frame, resource, system, prompt, dpath):
+	@conceptual
+	def prompt_prepare_save(self, frame, resource, system, prompt, dpath):
 		# Ideally, the full path is present in the executed command.
 		# However, the command length with the qualified tool path
 		# is nearing excess, so trim the length by using a PWD relative
@@ -3378,8 +3378,8 @@ class Division(Core):
 
 		prompt.keyboard.set('control')
 
-	@comethod('prompt', 'prepare/host')
-	def prompt_host(self, frame, prompt, host, dpath):
+	@conceptual
+	def prompt_prepare_host(self, frame, prompt, host, dpath):
 		self.pg_configure_command(host.identity, str(host.pwd()))
 		self.pg_open(frame, dpath)
 		self.pg_focus(frame)
@@ -3393,22 +3393,22 @@ class Division(Core):
 
 		prompt.keyboard.set('insert')
 
-	@comethod('prompt', 'prepare/process')
-	def prompt_process(self, frame, dpath):
+	@conceptual
+	def prompt_prepare_process(self, frame, dpath):
 		self.pg_process(frame, dpath, [])
 
-	@comethod('prompt', 'prepare/seek/absolute')
-	def prompt_seek_absolute(self, frame, dpath):
+	@conceptual
+	def prompt_prepare_seek_absolute(self, frame, dpath):
 		cmd = ["cursor/seek/absolute/line", ""]
 		self.pg_process(frame, dpath, cmd)
 
-	@comethod('prompt', 'prepare/seek/relative')
-	def prompt_seek_relative(self, dpath):
+	@conceptual
+	def prompt_prepare_seek_relative(self, dpath):
 		cmd = ["cursor/seek/relative/line", ""]
 		self.pg_process(frame, dpath, cmd)
 
-	@comethod('prompt', 'prepare/replace')
-	def prompt_rewrite(self, frame, content, dpath):
+	@conceptual
+	def prompt_prepare_replace(self, frame, content, dpath):
 		# Identify the field for preparing the rewrite context.
 		areas, ef = content.fields(content.focus[0].get())
 		hs = content.focus[1].slice()
@@ -3420,8 +3420,8 @@ class Division(Core):
 		cmd = ["cursor/replace/fields", str(i), ""]
 		self.pg_process(frame, dpath, cmd)
 
-	@comethod('prompt', 'prepare/pattern')
-	def prompt_cursor_pattern(self, frame, dpath):
+	@conceptual
+	def prompt_prepare_pattern(self, frame, dpath):
 		cmd = ["cursor/seek/pattern", ""]
 		self.pg_process(frame, dpath, cmd)
 
