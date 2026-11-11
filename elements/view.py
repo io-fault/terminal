@@ -2684,9 +2684,13 @@ class Division(Core):
 	location: Refraction
 	content: Refraction|Reflection
 	prompt: Refraction
+	focus: Refraction|Reflection = None
 
 	content_location_revision: int = 0
 	jobs: Mapping[Work] = dataclasses.field(default_factory=dict)
+
+	def __post_init__(self):
+		self.focus = self.content
 
 	def refractions(self):
 		return (self.location, self.content, self.prompt)
@@ -2816,29 +2820,30 @@ class Division(Core):
 	@conceptual
 	def location_reset(self, frame, location, content):
 		self.rl_update_path(location.source, content.source.origin)
-		frame.refocus()
+		self.focus = self.content
 
 	@conceptual
-	def location_open_level(self, frame, location, division, rl_syntax, session, content):
+	def location_open_level(self, session, frame, division):
 		# Get the system and path to open.
+		rl_syntax = self.location.forms.lf_fields.separation
 		rl_selection = rl_syntax.location_path()
+		rl = self.location
 
 		# Unconditionally restore location before creating stack level.
-		src = location.source
+		src = rl.source
 		src.modifications.commit()
 		src.modifications.revert(src.elements)
 		src.modifications.truncate()
 		src.elements.partition()
 
-		div = frame.views[division]
-		if div.content_location_revision != location.source.active:
+		if self.content_location_revision != src.active:
 			# Location was activated while the active revision was
 			# not the location of the content. Prior to pushing
 			# the division level, attempt to restore the location
 			# revision of the content.
 
 			try:
-				location.source.switch_revision(div.content_location_revision)
+				src.switch_revision(self.content_location_revision)
 			except IndexError:
 				# If location history is truncated without proper updates,
 				# this case becomes possible. Reset to latest forcing
@@ -2848,21 +2853,27 @@ class Division(Core):
 				# always adding a revision or staying on the same one.
 				# Here, the old level's location would preferably match
 				# the content and its corresponding location revision.
-				div.content_location_revision = location.source.latest
-				location.source.switch_revision(div.content_location_revision)
+				self.content_location_revision = src.latest
+				src.switch_revision(self.content_location_revision)
+
+		if self.focus is self.location:
+			# Reset focus and keyboard if activated from location.
+			self.focus = self.content
+			self.focus.keyboard.set(self.focus.control_mode)
 
 		level = frame.push_division(session, division, *rl_selection)
 		frame.switch_level(division, level)
 		frame.refocus()
 
 	@conceptual
-	def location_execute_operation(self, frame, location, dpath, rl_syntax, session, content):
+	def location_execute_operation(self, session, frame, dpath):
 		# Copy the current effective location. (source.origin)
-		previous = content.source.origin
+		rl_syntax = self.location.forms.lf_fields.separation
+		previous = self.content.source.origin
 		current_origin = (previous.ref_system, previous.ref_path)
 
 		# Copy the new target. Remember the revision to restore the location.
-		src = location.source
+		src = self.location.source
 		rl_copy = list(src.elements)
 		rl_selection = rl_syntax.location_path()
 
@@ -2882,11 +2893,11 @@ class Division(Core):
 
 		# Open the new location if it does not match current.
 		if rl_selection != current_origin:
-			self.rl_open(frame, dpath, rl_syntax, session, content)
+			self.rl_open(session, frame, dpath)
 
-		location.refresh(0)
-		for rf in src.views:
-			rf.refresh(0)
+		self.focus = self.content
+		self.focus.keyboard.set('control')
+		self.location.refresh(0)
 
 	def load_resource(self, session, system):
 		rf = self.content
@@ -2914,54 +2925,69 @@ class Division(Core):
 		# stopping scroll lock and discarding most display deltas during load.
 		rf.focus[0].restore((0, -1, 1))
 
-	def rl_open(self, frame, dpath, rl_syntax, session, content):
+	def open_prompt_if_report(self, frame, dpath):
+		rf = self.content
+		if not rf.frame_visible or not rf.reporting(frame.prompting):
+			return
+
+		# If reporting and the prompt is not visible.
+		if isinstance(rf, Refraction):
+			rf.c_seek_absolute(-1)
+			rf.c_seek_character_last()
+			rf.v_seek_line_last()
+		self.pg_configure_command(rf.system, rf.source.origin.ref_context)
+		self.pg_open(frame, dpath)
+
+	def switch_content(self, frame, dpath, rf):
+		"""
+		# Assign the &rf to the division identified by &dpath.
+		"""
+
+		# Swap content. Update visibility and focus as needed.
+		src = rf.source
+		area = self.content.area
+		old = self.content
+		old.frame_visible = False
+		self.content = rf
+		rf.frame_visible = True
+		if old is self.focus:
+			self.focus = rf
+
+		# Configure and refresh.
+		rf.configure(frame.deltas, frame.define, area)
+		self.rl_update_path(self.location.source, rf.source.origin)
+		rf.deltas.extend(rf.refresh())
+
+	def rl_open(self, session, frame, dpath):
 		# Construct reference and load dependencies.
+		rl_syntax = self.location.forms.lf_fields.separation
 		system, fspath = rl_syntax.location_path()
-		vi = frame.paths[dpath]
 
-		typref = session.lookup_type(fspath)
-		syntype = session.load_type(typref)
+		new = session._refract(system, fspath)
+		self.content_location_revision = rl_syntax.source.active
+		self.switch_content(frame, dpath, new)
+		if self.focus is new:
+			self.focus.keyboard.set('control')
 
-		if typref == 'reflection':
-			source = session.sources.create_resource(system.identity, typref, syntype, fspath)
-			new = Reflection.allocate(session.device, session.theme['empty'].inscribe(ord(' ')), source)
-			new.keyboard = session.keyboard
-			load = False
-		else:
-			try:
-				source = session.sources.select_resource(fspath)
-				load = False
-			except KeyError:
-				source = session.sources.create_resource(system.identity, typref, syntype, fspath)
-				load = True
-
-			new = Refraction(source=source)
-			new.monitor_images = session.monitor_images
-			new.keyboard = session.keyboard
-
-		frame.attach(dpath, new)
-		div = frame.views[vi]
-		div.content_location_revision = rl_syntax.source.active
-
-		frame.switch_division(dpath)
-
-		if load:
+		src = new.source
+		lnc = src.ln_count()
+		if lnc == 0 or (lnc == 1 and not src.sole(0).ln_content):
 			self.load_resource(session, system)
 
 	@conceptual
-	def location_switch_previous(self, session, dpath, location, content, quantity=1):
-		if location.source.r_switch_revision_previous(quantity=quantity):
-			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
+	def location_switch_previous(self, session, frame, dpath, quantity=1):
+		if self.location.source.r_switch_revision_previous(quantity=quantity):
+			self.rl_open(session, frame, dpath)
 
 	@conceptual
-	def location_switch_next(self, session, dpath, location, content, quantity=1):
-		if location.source.r_switch_revision_next(quantity=quantity):
-			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
+	def location_switch_next(self, session, frame, dpath, quantity=1):
+		if self.location.source.r_switch_revision_next(quantity=quantity):
+			self.rl_open(session, frame, dpath)
 
 	@conceptual
-	def location_switch_last(self, session, dpath, location, content):
-		if location.source.r_switch_revision_last():
-			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
+	def location_switch_last(self, session, frame, dpath):
+		if self.location.source.r_switch_revision_last():
+			self.rl_open(session, frame, dpath)
 
 	@comethod('resource', 'select')
 	@conceptual
@@ -2978,7 +3004,7 @@ class Division(Core):
 			*rl.focus
 		)
 
-		frame.focus = rl
+		self.focus = rl
 
 	@staticmethod
 	def pg_clear_command(prompt):
@@ -3173,14 +3199,14 @@ class Division(Core):
 
 			rf.footer_opened(pg_allocation)
 		else:
-			frame.deltas.extend(pg.refresh(0))
+			pg.deltas.extend(pg.refresh(0))
 
 	def pg_focus(self, frame):
 		"""
 		# Make the prompt the focus of the frame.
 		"""
 
-		frame.focus = self.prompt
+		self.focus = self.prompt
 
 	@conceptual
 	def prompt_close(self, frame, dpath) -> int:
@@ -3194,15 +3220,29 @@ class Division(Core):
 		"""
 
 		d = 0
-		rl, rf, pg = self.refractions()
+		rl, content, pg = self.refractions()
 
 		pg_line_count = pg.area.lines
 		if pg_line_count > 0:
 			d = frame.resize_footer(dpath, 0)
-			rf.footer_closed(pg_line_count)
-			if self is frame.select(dpath):
-				frame.refocus()
+			content.footer_closed(pg_line_count)
+
+			if self.focus is pg:
+				self.focus = content
+				if self is frame.select(dpath):
+					frame.refocus()
 		return d
+
+	@conceptual
+	def prompt_escape(self, frame, dpath):
+		"""
+		# Refocus content and close prompt if not reporting.
+		"""
+
+		if not self.content.reporting(frame.prompting):
+			self.prompt_close(frame, dpath)
+		else:
+			self.focus = self.content
 
 	def pg_execute(self, session, trim=1):
 		"""
@@ -3639,6 +3679,7 @@ class Frame(Core):
 
 		div.rl_update_path(div.location.source, rf.source.origin)
 		self.deltas.extend(rf.refresh())
+		return div
 
 	@staticmethod
 	def align_stacks(stacks, limit, default):
@@ -3673,7 +3714,8 @@ class Frame(Core):
 				dstack.append(div)
 
 		self.views[:] = [x[d] for x, d in zip(self.stacks, levels)]
-		self.focus = self.views[self.paths[path]].content
+		self.focus = self.views[self.paths[path]]
+		self.focus.focus = self.focus.content
 
 	def split_vertical(self, session, vertical, width=0.5, divisions=1):
 		"""
@@ -4105,19 +4147,10 @@ class Frame(Core):
 		# Change the focused view accounting for prompt priority.
 		"""
 
-		self.focus.control_mode = self.keyboard.mapping
-
 		dpath = self.restrict_path(dpath)
-		rl, co, pg = self.select(dpath).refractions()
-
-		if co.reporting(self.prompting) and pg.area.lines > 0:
-			# If reporting and the prompt is visible.
-			self.focus = pg
-		else:
-			self.focus = co
-
-		# Restore mode.
-		self.keyboard.set(self.focus.control_mode)
+		self.focus.focus.control_mode = self.keyboard.mapping
+		self.focus = self.select(dpath)
+		self.keyboard.set(self.focus.focus.control_mode)
 		self.vertical, self.division = dpath
 
 	def switch_level(self, division, level):
@@ -4129,7 +4162,7 @@ class Frame(Core):
 		div = self.stacks[division][level]
 
 		if div is cs:
-			# Already selected presuming unique Views.
+			# Already selected.
 			return
 
 		cs.hidden()
@@ -4148,7 +4181,7 @@ class Frame(Core):
 		div.shown()
 
 		# Focus was in &cs, which is now hidden, so switch to update focus.
-		if self.focus in cs.refractions():
+		if self.focus is cs:
 			self.switch_division(dpath)
 
 		self.deltas.extend(div.refresh())
@@ -4235,7 +4268,7 @@ class Frame(Core):
 
 		path = self.restrict_path((self.vertical, self.division))
 		self.vertical, self.division = path
-		self.focus = self.select(path).content
+		self.focus = self.select(path)
 
 	def fill_areas(self, patterns, *, Area=Area, ord=ord):
 		"""
@@ -4390,7 +4423,8 @@ class Frame(Core):
 			h = phrase.tell(cp, *phrase.m_codepoint)
 			trf.focus[1].set(h - li.ln_level)
 
-		self.focus = trf
+		self.focus = div
+		div.focus = trf
 
 	@classmethod
 	def r_enclose(Class, symbols, border, width, height):
