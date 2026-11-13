@@ -1267,7 +1267,7 @@ class Session(Core):
 		fi = self.allocate_frame(area, [area.span - 2], [[area.lines - 2]])
 		f = self.frames[fi]
 
-		c = len(f.areas)
+		c = f.layout.total_divisions
 		stacks = [[self.refract(null)] for i in range(c)]
 		f.stack_views(0, 0, [0] * c, stacks)
 

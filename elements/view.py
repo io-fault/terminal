@@ -2692,6 +2692,34 @@ class Division(Core):
 	def __post_init__(self):
 		self.focus = self.content
 
+	def repartition(self, area, hborder=1, fborder=1):
+		"""
+		# Update the &CellMatrix areas to be relative to the new &area.
+		"""
+
+		span = area.span
+		top = area.top_offset
+		left = area.left_offset
+		header = self.location.area.lines
+		footer = self.prompt.area.lines
+
+		borders = 0
+		if header:
+			borders += hborder
+		else:
+			hborder = 0
+
+		if footer:
+			borders += fborder
+
+		self.location.area = Area(top, left, header, span)
+		self.prompt.area = Area(area.bottom_offset - footer, left, footer, span)
+
+		self.content.area = Area(
+			top + header + hborder, left,
+			area.lines - (header + footer) - borders, span
+		)
+
 	def refractions(self):
 		return (self.location, self.content, self.prompt)
 
@@ -3665,7 +3693,7 @@ class Frame(Core):
 		rf.frame_visible = True
 
 		# Configure and refresh.
-		rf.configure(self.deltas, self.define, self.areas[vi][1])
+		rf.configure(self.deltas, self.define, div.content.area)
 
 		# Reveal the prompt for reporting types. (transcripts)
 		if rf.reporting(self.prompting):
@@ -3702,14 +3730,15 @@ class Frame(Core):
 		self.division = division
 		path = (vertical, division)
 
-		for division, stack in enumerate(stacks):
+		areas = list(self.layout.map_areas(0, None))
+		for area, (division, stack) in zip(areas, enumerate(stacks)):
 			dstack = self.stacks[division]
-			la, ca, pa = self.areas[division]
 
 			for div in stack:
-				div.location.configure(self.deltas, self.define, la)
-				div.content.configure(self.deltas, self.define, ca)
-				div.prompt.configure(self.deltas, self.define, pa)
+				div.location.configure(self.deltas, self.define, div.location.area)
+				div.content.configure(self.deltas, self.define, div.content.area)
+				div.prompt.configure(self.deltas, self.define, div.prompt.area)
+				div.repartition(area)
 				div.hidden()
 				dstack.append(div)
 
@@ -3750,12 +3779,11 @@ class Frame(Core):
 		]
 		self.views[idx] = [x[0] for x in self.stacks[nri]]
 		self.areas[idx] = l.map_vertical_divisions(1, self.area, vertical+1, vertical+2)
-		for av, dv in zip(self.areas[nri], self.stacks[nri]):
+		areas = l.map_areas(vertical+1, vertical+2)
+		for av, dv in zip(areas, self.stacks[nri]):
 			for div in dv:
-				div.location.configure(self.deltas, self.define, av[0])
-				div.content.configure(self.deltas, self.define, av[1])
-				div.prompt.configure(self.deltas, self.define, av[2])
 				div.hidden()
+				div.repartition(av)
 		for div in self.views[nri]:
 			div.shown()
 
@@ -3821,6 +3849,9 @@ class Frame(Core):
 		vro = (div_index - vfdi) + 1
 		self.areas[ins_offset] = divmap[vro:vro+divisions]
 
+		areas = list(l.map_areas(vertical, vertical+1))
+		new_areas = areas[vro:vro+divisions]
+
 		la, ca, pa = self.areas[div_index]
 		d = self.layout.divisions[vertical][horizontal].lines \
 			- l.divisions[vertical][horizontal].lines
@@ -3832,11 +3863,12 @@ class Frame(Core):
 
 		# New divisions indexes after insertion.
 		ndivs = slice(div_index + 1, div_index + divisions + 1)
-		for av, dv in zip(self.areas[ndivs], self.stacks[ndivs]):
+		for area, av, dv in zip(new_areas, self.areas[ndivs], self.stacks[ndivs]):
 			for div in dv:
-				div.location.configure(self.deltas, self.define, av[0])
-				div.content.configure(self.deltas, self.define, av[1])
-				div.prompt.configure(self.deltas, self.define, av[2])
+				div.location.configure(self.deltas, self.define, div.location.area)
+				div.content.configure(self.deltas, self.define, div.content.area)
+				div.prompt.configure(self.deltas, self.define, div.prompt.area)
+				div.repartition(area)
 				div.shown()
 
 		self.layout = l
@@ -4084,7 +4116,7 @@ class Frame(Core):
 		self.layout = Layout.fill(1, area.lines, area.span, widths, heights)
 		self.layout_changed()
 		if not self.stacks:
-			self.stacks = [list() for x in range(len(self.areas))]
+			self.stacks = [list() for x in range(self.layout.total_divisions)]
 
 	@comethod('frame', 'refresh/view/images')
 	def f_refresh_views(self):
@@ -4389,7 +4421,7 @@ class Frame(Core):
 		div = session.refract(path, addressing=addressing)
 		dstack = self.stacks[division]
 
-		la, ca, pa = self.areas[division]
+		la, ca, pa = dstack[0].areas()
 		div.location.configure(self.deltas, self.define, la)
 		div.content.configure(self.deltas, self.define, ca)
 		div.prompt.configure(self.deltas, self.define, pa)
@@ -4825,10 +4857,9 @@ class Frame(Core):
 		deltas = self.deltas
 
 		self.areas = list(self.layout.map_vertical_divisions(1, self.area, 0, None))
-		for stack, areas in zip(self.stacks, self.areas):
+		for stack, area in zip(self.stacks, self.layout.map_areas(0, None)):
 			for div in stack:
-				for a, v in zip(areas, div.refractions()):
-					v.configure(deltas, define, a)
+				div.repartition(area)
 
 	def layout_changed(self):
 		"""
