@@ -4033,34 +4033,24 @@ class Frame(Core):
 			# Cannot resize over or under the frame's bounds.
 			return
 
-		dv = l.divisions[vertical]
-		last = (horizontal + 1) == len(dv)
-		d = height - dv[horizontal].lines
+		nl = self.layout.resize_horizontal_height(vertical, horizontal, height)
 
+		assert nd > 1
+		last = (horizontal + 1) == nd
 		if last:
 			ti = horizontal - 1
 			bi = horizontal
-			d = -d
 		else:
 			ti = horizontal
 			bi = horizontal + 1
 
 		tdi = self.paths[(vertical, ti)]
-		bdi = self.paths[(vertical, bi)]
+		areas = list(nl.map_areas(vertical, vertical+1))[ti:bi]
+		for i, area in enumerate(areas):
+			for div in self.stacks[tdi+i]:
+				div.repartition(area)
 
-		for div in self.stacks[tdi]:
-			ca = div.content.area
-			pa = div.prompt.area
-			div.content.area = ca.resize(d, 0)
-			div.prompt.area = pa.move(d, 0)
-
-		for div in self.stacks[bdi]:
-			la = div.location.area
-			ca = div.content.area
-			div.location.area = la.move(d, 0)
-			div.content.area = ca.move(d, 0).resize(-d, 0)
-
-		self.layout = self.layout.resize_horizontal_height(vertical, horizontal, height)
+		self.layout = nl
 
 	@comethod('frame', 'set/horizontal/height')
 	def f_set_horizontal_height_value(self, dpath, quantity=0):
