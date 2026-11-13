@@ -2720,6 +2720,41 @@ class Division(Core):
 			area.lines - (header + footer) - borders, span
 		)
 
+	def resize_footer(self, height, fborder=1):
+		"""
+		# Adjust the size, &height, of the footer.
+		"""
+
+		flines = self.prompt.area.lines
+		d = height - flines
+
+		# Initial opening needs to include the border size.
+		if height - d == 0:
+			# height was zero. Pad with border width.
+			d += fborder
+		elif height == 0 and d != 0:
+			# height set to zero. Compensate for border.
+			d -= fborder
+
+		ca = self.content.area.resize(-d, 0)
+		pa = Area(ca.bottom_offset + fborder, ca.left_offset, height, ca.span)
+
+		self.content.area = ca
+		self.prompt.area = pa
+		self.content.v_compensate()
+		self.prompt.v_compensate()
+
+		# Update limits.
+		self.content.resize()
+		self.prompt.resize()
+
+		self.prompt.deltas.extend(self.prompt.refresh(0))
+		if pa.lines:
+			self.content.footer_opened(pa.lines)
+		else:
+			self.content.footer_closed(flines)
+		return d
+
 	def refractions(self):
 		return (self.location, self.content, self.prompt)
 
@@ -3206,26 +3241,21 @@ class Division(Core):
 		# Make the prompt visible.
 		"""
 
-		vi = frame.paths[dpath]
-
-		# Update session state.
-		rl, rf, pg = frame.views[vi].refractions()
+		assert frame.views[frames.paths[dpath]] is self
+		rl, rf, pg = self.refractions()
 
 		# Make footer visible if the view is empty.
 		if pg.area.lines == 0:
 			pg_allocation = frame.prompting.pg_line_allocation
 
-			frame.resize_footer(dpath, pg_allocation)
+			self.resize_footer(pg_allocation)
 			frame.deltas.extend(
 				frame.fill_areas(
 					frame.r_patch_footer(frame.symbols,
-						frame.intersections, pg.area
+						frame.intersections, self.prompt.area
 					)
 				)
 			)
-			frame.deltas.extend(pg.refresh(0))
-
-			rf.footer_opened(pg_allocation)
 		else:
 			pg.deltas.extend(pg.refresh(0))
 
@@ -3252,8 +3282,7 @@ class Division(Core):
 
 		pg_line_count = pg.area.lines
 		if pg_line_count > 0:
-			d = frame.resize_footer(dpath, 0)
-			content.footer_closed(pg_line_count)
+			d = self.resize_footer(0)
 
 			if self.focus is pg:
 				self.focus = content
@@ -4109,35 +4138,6 @@ class Frame(Core):
 
 		self.scale_divisions(area)
 		self.f_refresh()
-
-	def resize_footer(self, dpath, height):
-		"""
-		# Adjust the size, &height, of the footer for the given &dpath.
-		"""
-
-		vi = self.paths[dpath]
-		l, rf, p = self.views[vi].refractions()
-		self.update_intersections(dpath[0])
-		d = height - p.area.lines
-
-		# Initial opening needs to include the border size.
-		if height - d == 0:
-			# height was zero. Pad with border width.
-			d += 1
-		elif height == 0 and d != 0:
-			# height set to zero. Compensate for border.
-			d -= 1
-
-		rf.configure(rf.deltas, rf.define, rf.area.resize(-d, 0))
-		rf.v_compensate()
-
-		a = Area(rf.area.bottom_offset + 1, rf.area.left_offset, height, rf.area.span)
-		p.configure(p.deltas, p.define, a)
-		# &render will emit the entire image, so make sure the footer is trimmed.
-		p.v_compensate()
-
-		# Update frame areas.
-		return d
 
 	def switch_division(self, dpath):
 		"""
