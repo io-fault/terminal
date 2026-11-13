@@ -3554,8 +3554,6 @@ class Frame(Core):
 	# /paths/
 		# The vertical-relative division indexes. Translates into
 		# the flat division index used by most containers on &Frame.
-	# /areas/
-		# The areas of the frame identified by their division index.
 	# /views/
 		# The location, content, prompt triples that populate the divisions.
 	# /stacks/
@@ -3575,7 +3573,6 @@ class Frame(Core):
 	division: int = 0
 	focus: Refraction = None
 
-	areas: Sequence[Area] = Field(default_factory=list)
 	views: Sequence[Division] = Field(default_factory=list)
 	stacks: Sequence[Sequence[Division]] = Field(default_factory=list)
 	layout: Layout = Layout([], [])
@@ -3778,7 +3775,6 @@ class Frame(Core):
 			for i in range(divisions)
 		]
 		self.views[idx] = [x[0] for x in self.stacks[nri]]
-		self.areas[idx] = l.map_vertical_divisions(1, self.area, vertical+1, vertical+2)
 		areas = l.map_areas(vertical+1, vertical+2)
 		for av, dv in zip(areas, self.stacks[nri]):
 			for div in dv:
@@ -3796,12 +3792,6 @@ class Frame(Core):
 			div.location.area = la.resize(0, -d)
 			div.content.area = ca.resize(0, -d)
 			div.prompt.area = pa.resize(0, -d)
-
-		# Reflect changes to &vertical in &areas.
-		self.areas[divs] = [
-			(div.location.area, div.content.area, div.prompt.area)
-			for div in self.views[divs]
-		]
 
 		self.layout = l
 		self.paths = {p: i for i, p in enumerate(l.division_paths())}
@@ -3847,23 +3837,21 @@ class Frame(Core):
 		# Slice in the new divisions.
 		divmap = list(l.map_vertical_divisions(1, self.area, vertical, vertical+1))
 		vro = (div_index - vfdi) + 1
-		self.areas[ins_offset] = divmap[vro:vro+divisions]
 
 		areas = list(l.map_areas(vertical, vertical+1))
 		new_areas = areas[vro:vro+divisions]
 
-		la, ca, pa = self.areas[div_index]
+		div = self.views[div_index]
+		la, ca, pa = div.areas()
 		d = self.layout.divisions[vertical][horizontal].lines \
 			- l.divisions[vertical][horizontal].lines
-		div = self.views[div_index]
-		self.areas[div_index] = (la, ca.resize(-d, 0), pa.move(-d, 0))
 		div.location.area, \
 		div.content.area, \
-		div.prompt.area = self.areas[div_index]
+		div.prompt.area = (la, ca.resize(-d, 0), pa.move(-d, 0))
 
 		# New divisions indexes after insertion.
 		ndivs = slice(div_index + 1, div_index + divisions + 1)
-		for area, av, dv in zip(new_areas, self.areas[ndivs], self.stacks[ndivs]):
+		for area, dv in zip(new_areas, self.stacks[ndivs]):
 			for div in dv:
 				div.location.configure(self.deltas, self.define, div.location.area)
 				div.content.configure(self.deltas, self.define, div.content.area)
@@ -3902,7 +3890,6 @@ class Frame(Core):
 
 		self.paths = {p: i for i, p in enumerate(l.division_paths())}
 		self.layout = l
-		del self.areas[ds]
 		del self.views[ds]
 		del self.stacks[ds]
 
@@ -3928,7 +3915,6 @@ class Frame(Core):
 
 		self.paths = {p: i for i, p in enumerate(l.division_paths())}
 		self.layout = l
-		del self.areas[ds]
 		del self.views[ds]
 		del self.stacks[ds]
 
@@ -3966,10 +3952,6 @@ class Frame(Core):
 		i = self.paths[(ri, 0)]
 		rir = slice(self.paths[(ri, 0)], i + len(l.divisions[ri]))
 
-		self.areas[lir] = [
-			(la.resize(0, -d), ca.resize(0, -d), pa.resize(0, -d))
-			for la, ca, pa in list(self.areas[lir])
-		]
 		for i in range(lir.start, lir.stop):
 			for div in self.stacks[i]:
 				la = div.location.area
@@ -3980,14 +3962,6 @@ class Frame(Core):
 				div.content.area = ca.resize(0, -d)
 				div.prompt.area = pa.resize(0, -d)
 
-		self.areas[rir] = [
-			(
-				la.move(0, -d).resize(0, d),
-				ca.move(0, -d).resize(0, d),
-				pa.move(0, -d).resize(0, d)
-			)
-			for la, ca, pa in list(self.areas[rir])
-		]
 		for i in range(rir.start, rir.stop):
 			for div in self.stacks[i]:
 				la = div.location.area
@@ -4045,20 +4019,12 @@ class Frame(Core):
 		tdi = self.paths[(vertical, ti)]
 		bdi = self.paths[(vertical, bi)]
 
-		la, ca, pa = self.areas[tdi]
-		self.areas[tdi] = (la, ca.resize(d, 0), pa.move(d, 0))
 		for div in self.stacks[tdi]:
 			ca = div.content.area
 			pa = div.prompt.area
 			div.content.area = ca.resize(d, 0)
 			div.prompt.area = pa.move(d, 0)
 
-		la, ca, pa = self.areas[bdi]
-		self.areas[bdi] = (
-			la.move(d, 0),
-			ca.move(d, 0).resize(-d, 0),
-			pa,
-		)
 		for div in self.stacks[bdi]:
 			la = div.location.area
 			ca = div.content.area
@@ -4171,7 +4137,6 @@ class Frame(Core):
 		p.v_compensate()
 
 		# Update frame areas.
-		self.areas[vi] = (self.areas[vi][0], rf.area, p.area)
 		return d
 
 	def switch_division(self, dpath):
@@ -4205,7 +4170,6 @@ class Frame(Core):
 			if v == division:
 				break
 
-		self.areas[division] = div.areas()
 		if div.prompt.area.lines != cs.prompt.area.lines:
 			# Update layout structure if the footers differ.
 			current = cs.prompt.area.lines
@@ -4856,7 +4820,6 @@ class Frame(Core):
 		define = self.define
 		deltas = self.deltas
 
-		self.areas = list(self.layout.map_vertical_divisions(1, self.area, 0, None))
 		for stack, area in zip(self.stacks, self.layout.map_areas(0, None)):
 			for div in stack:
 				div.repartition(area)
