@@ -2684,9 +2684,76 @@ class Division(Core):
 	location: Refraction
 	content: Refraction|Reflection
 	prompt: Refraction
+	focus: Refraction|Reflection = None
 
 	content_location_revision: int = 0
 	jobs: Mapping[Work] = dataclasses.field(default_factory=dict)
+
+	def __post_init__(self):
+		self.focus = self.content
+
+	def repartition(self, area, hborder=1, fborder=1):
+		"""
+		# Update the &CellMatrix areas to be relative to the new &area.
+		"""
+
+		span = area.span
+		top = area.top_offset
+		left = area.left_offset
+		header = self.location.area.lines
+		footer = self.prompt.area.lines
+
+		borders = 0
+		if header:
+			borders += hborder
+		else:
+			hborder = 0
+
+		if footer:
+			borders += fborder
+
+		self.location.area = Area(top, left, header, span)
+		self.prompt.area = Area(area.bottom_offset - footer, left, footer, span)
+
+		self.content.area = Area(
+			top + header + hborder, left,
+			area.lines - (header + footer) - borders, span
+		)
+
+	def resize_footer(self, height, fborder=1):
+		"""
+		# Adjust the size, &height, of the footer.
+		"""
+
+		flines = self.prompt.area.lines
+		d = height - flines
+
+		# Initial opening needs to include the border size.
+		if height - d == 0:
+			# height was zero. Pad with border width.
+			d += fborder
+		elif height == 0 and d != 0:
+			# height set to zero. Compensate for border.
+			d -= fborder
+
+		ca = self.content.area.resize(-d, 0)
+		pa = Area(ca.bottom_offset + fborder, ca.left_offset, height, ca.span)
+
+		self.content.area = ca
+		self.prompt.area = pa
+		self.content.v_compensate()
+		self.prompt.v_compensate()
+
+		# Update limits.
+		self.content.resize()
+		self.prompt.resize()
+
+		self.prompt.deltas.extend(self.prompt.refresh(0))
+		if pa.lines:
+			self.content.footer_opened(pa.lines)
+		else:
+			self.content.footer_closed(flines)
+		return d
 
 	def refractions(self):
 		return (self.location, self.content, self.prompt)
@@ -2816,29 +2883,30 @@ class Division(Core):
 	@conceptual
 	def location_reset(self, frame, location, content):
 		self.rl_update_path(location.source, content.source.origin)
-		frame.refocus()
+		self.focus = self.content
 
 	@conceptual
-	def location_open_level(self, frame, location, division, rl_syntax, session, content):
+	def location_open_level(self, session, frame, division):
 		# Get the system and path to open.
+		rl_syntax = self.location.forms.lf_fields.separation
 		rl_selection = rl_syntax.location_path()
+		rl = self.location
 
 		# Unconditionally restore location before creating stack level.
-		src = location.source
+		src = rl.source
 		src.modifications.commit()
 		src.modifications.revert(src.elements)
 		src.modifications.truncate()
 		src.elements.partition()
 
-		div = frame.views[division]
-		if div.content_location_revision != location.source.active:
+		if self.content_location_revision != src.active:
 			# Location was activated while the active revision was
 			# not the location of the content. Prior to pushing
 			# the division level, attempt to restore the location
 			# revision of the content.
 
 			try:
-				location.source.switch_revision(div.content_location_revision)
+				src.switch_revision(self.content_location_revision)
 			except IndexError:
 				# If location history is truncated without proper updates,
 				# this case becomes possible. Reset to latest forcing
@@ -2848,21 +2916,27 @@ class Division(Core):
 				# always adding a revision or staying on the same one.
 				# Here, the old level's location would preferably match
 				# the content and its corresponding location revision.
-				div.content_location_revision = location.source.latest
-				location.source.switch_revision(div.content_location_revision)
+				self.content_location_revision = src.latest
+				src.switch_revision(self.content_location_revision)
+
+		if self.focus is self.location:
+			# Reset focus and keyboard if activated from location.
+			self.focus = self.content
+			self.focus.keyboard.set(self.focus.control_mode)
 
 		level = frame.push_division(session, division, *rl_selection)
 		frame.switch_level(division, level)
 		frame.refocus()
 
 	@conceptual
-	def location_execute_operation(self, frame, location, dpath, rl_syntax, session, content):
+	def location_execute_operation(self, session, frame, dpath):
 		# Copy the current effective location. (source.origin)
-		previous = content.source.origin
+		rl_syntax = self.location.forms.lf_fields.separation
+		previous = self.content.source.origin
 		current_origin = (previous.ref_system, previous.ref_path)
 
 		# Copy the new target. Remember the revision to restore the location.
-		src = location.source
+		src = self.location.source
 		rl_copy = list(src.elements)
 		rl_selection = rl_syntax.location_path()
 
@@ -2882,11 +2956,11 @@ class Division(Core):
 
 		# Open the new location if it does not match current.
 		if rl_selection != current_origin:
-			self.rl_open(frame, dpath, rl_syntax, session, content)
+			self.rl_open(session, frame, dpath)
 
-		location.refresh(0)
-		for rf in src.views:
-			rf.refresh(0)
+		self.focus = self.content
+		self.focus.keyboard.set('control')
+		self.location.refresh(0)
 
 	def load_resource(self, session, system):
 		rf = self.content
@@ -2914,54 +2988,69 @@ class Division(Core):
 		# stopping scroll lock and discarding most display deltas during load.
 		rf.focus[0].restore((0, -1, 1))
 
-	def rl_open(self, frame, dpath, rl_syntax, session, content):
+	def open_prompt_if_report(self, frame, dpath):
+		rf = self.content
+		if not rf.frame_visible or not rf.reporting(frame.prompting):
+			return
+
+		# If reporting and the prompt is not visible.
+		if isinstance(rf, Refraction):
+			rf.c_seek_absolute(-1)
+			rf.c_seek_character_last()
+			rf.v_seek_line_last()
+		self.pg_configure_command(rf.system, rf.source.origin.ref_context)
+		self.pg_open(frame, dpath)
+
+	def switch_content(self, frame, dpath, rf):
+		"""
+		# Assign the &rf to the division identified by &dpath.
+		"""
+
+		# Swap content. Update visibility and focus as needed.
+		src = rf.source
+		area = self.content.area
+		old = self.content
+		old.frame_visible = False
+		self.content = rf
+		rf.frame_visible = True
+		if old is self.focus:
+			self.focus = rf
+
+		# Configure and refresh.
+		rf.configure(frame.deltas, frame.define, area)
+		self.rl_update_path(self.location.source, rf.source.origin)
+		rf.deltas.extend(rf.refresh())
+
+	def rl_open(self, session, frame, dpath):
 		# Construct reference and load dependencies.
+		rl_syntax = self.location.forms.lf_fields.separation
 		system, fspath = rl_syntax.location_path()
-		vi = frame.paths[dpath]
 
-		typref = session.lookup_type(fspath)
-		syntype = session.load_type(typref)
+		new = session._refract(system, fspath)
+		self.content_location_revision = rl_syntax.source.active
+		self.switch_content(frame, dpath, new)
+		if self.focus is new:
+			self.focus.keyboard.set('control')
 
-		if typref == 'reflection':
-			source = session.sources.create_resource(system.identity, typref, syntype, fspath)
-			new = Reflection.allocate(session.device, session.theme['empty'].inscribe(ord(' ')), source)
-			new.keyboard = session.keyboard
-			load = False
-		else:
-			try:
-				source = session.sources.select_resource(fspath)
-				load = False
-			except KeyError:
-				source = session.sources.create_resource(system.identity, typref, syntype, fspath)
-				load = True
-
-			new = Refraction(source=source)
-			new.monitor_images = session.monitor_images
-			new.keyboard = session.keyboard
-
-		frame.attach(dpath, new)
-		div = frame.views[vi]
-		div.content_location_revision = rl_syntax.source.active
-
-		frame.switch_division(dpath)
-
-		if load:
+		src = new.source
+		lnc = src.ln_count()
+		if lnc == 0 or (lnc == 1 and not src.sole(0).ln_content):
 			self.load_resource(session, system)
 
 	@conceptual
-	def location_switch_previous(self, session, dpath, location, content, quantity=1):
-		if location.source.r_switch_revision_previous(quantity=quantity):
-			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
+	def location_switch_previous(self, session, frame, dpath, quantity=1):
+		if self.location.source.r_switch_revision_previous(quantity=quantity):
+			self.rl_open(session, frame, dpath)
 
 	@conceptual
-	def location_switch_next(self, session, dpath, location, content, quantity=1):
-		if location.source.r_switch_revision_next(quantity=quantity):
-			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
+	def location_switch_next(self, session, frame, dpath, quantity=1):
+		if self.location.source.r_switch_revision_next(quantity=quantity):
+			self.rl_open(session, frame, dpath)
 
 	@conceptual
-	def location_switch_last(self, session, dpath, location, content):
-		if location.source.r_switch_revision_last():
-			self.rl_open(dpath, location.forms.lf_fields.separation, session, content)
+	def location_switch_last(self, session, frame, dpath):
+		if self.location.source.r_switch_revision_last():
+			self.rl_open(session, frame, dpath)
 
 	@comethod('resource', 'select')
 	@conceptual
@@ -2978,7 +3067,7 @@ class Division(Core):
 			*rl.focus
 		)
 
-		frame.focus = rl
+		self.focus = rl
 
 	@staticmethod
 	def pg_clear_command(prompt):
@@ -3152,35 +3241,30 @@ class Division(Core):
 		# Make the prompt visible.
 		"""
 
-		vi = frame.paths[dpath]
-
-		# Update session state.
-		rl, rf, pg = frame.views[vi].refractions()
+		assert frame.views[frames.paths[dpath]] is self
+		rl, rf, pg = self.refractions()
 
 		# Make footer visible if the view is empty.
 		if pg.area.lines == 0:
 			pg_allocation = frame.prompting.pg_line_allocation
 
-			frame.resize_footer(dpath, pg_allocation)
+			self.resize_footer(pg_allocation)
 			frame.deltas.extend(
 				frame.fill_areas(
 					frame.r_patch_footer(frame.symbols,
-						frame.intersections, pg.area
+						frame.intersections, self.prompt.area
 					)
 				)
 			)
-			frame.deltas.extend(pg.refresh(0))
-
-			rf.footer_opened(pg_allocation)
 		else:
-			frame.deltas.extend(pg.refresh(0))
+			pg.deltas.extend(pg.refresh(0))
 
 	def pg_focus(self, frame):
 		"""
 		# Make the prompt the focus of the frame.
 		"""
 
-		frame.focus = self.prompt
+		self.focus = self.prompt
 
 	@conceptual
 	def prompt_close(self, frame, dpath) -> int:
@@ -3194,15 +3278,28 @@ class Division(Core):
 		"""
 
 		d = 0
-		rl, rf, pg = self.refractions()
+		rl, content, pg = self.refractions()
 
 		pg_line_count = pg.area.lines
 		if pg_line_count > 0:
-			d = frame.resize_footer(dpath, 0)
-			rf.footer_closed(pg_line_count)
-			if self is frame.select(dpath):
-				frame.refocus()
+			d = self.resize_footer(0)
+
+			if self.focus is pg:
+				self.focus = content
+				if self is frame.select(dpath):
+					frame.refocus()
 		return d
+
+	@conceptual
+	def prompt_escape(self, frame, dpath):
+		"""
+		# Refocus content and close prompt if not reporting.
+		"""
+
+		if not self.content.reporting(frame.prompting):
+			self.prompt_close(frame, dpath)
+		else:
+			self.focus = self.content
 
 	def pg_execute(self, session, trim=1):
 		"""
@@ -3486,8 +3583,6 @@ class Frame(Core):
 	# /paths/
 		# The vertical-relative division indexes. Translates into
 		# the flat division index used by most containers on &Frame.
-	# /areas/
-		# The areas of the frame identified by their division index.
 	# /views/
 		# The location, content, prompt triples that populate the divisions.
 	# /stacks/
@@ -3507,7 +3602,6 @@ class Frame(Core):
 	division: int = 0
 	focus: Refraction = None
 
-	areas: Sequence[Area] = Field(default_factory=list)
 	views: Sequence[Division] = Field(default_factory=list)
 	stacks: Sequence[Sequence[Division]] = Field(default_factory=list)
 	layout: Layout = Layout([], [])
@@ -3625,7 +3719,7 @@ class Frame(Core):
 		rf.frame_visible = True
 
 		# Configure and refresh.
-		rf.configure(self.deltas, self.define, self.areas[vi][1])
+		rf.configure(self.deltas, self.define, div.content.area)
 
 		# Reveal the prompt for reporting types. (transcripts)
 		if rf.reporting(self.prompting):
@@ -3639,6 +3733,7 @@ class Frame(Core):
 
 		div.rl_update_path(div.location.source, rf.source.origin)
 		self.deltas.extend(rf.refresh())
+		return div
 
 	@staticmethod
 	def align_stacks(stacks, limit, default):
@@ -3661,19 +3756,21 @@ class Frame(Core):
 		self.division = division
 		path = (vertical, division)
 
-		for division, stack in enumerate(stacks):
+		areas = list(self.layout.map_areas(0, None))
+		for area, (division, stack) in zip(areas, enumerate(stacks)):
 			dstack = self.stacks[division]
-			la, ca, pa = self.areas[division]
 
 			for div in stack:
-				div.location.configure(self.deltas, self.define, la)
-				div.content.configure(self.deltas, self.define, ca)
-				div.prompt.configure(self.deltas, self.define, pa)
+				div.location.configure(self.deltas, self.define, div.location.area)
+				div.content.configure(self.deltas, self.define, div.content.area)
+				div.prompt.configure(self.deltas, self.define, div.prompt.area)
+				div.repartition(area)
 				div.hidden()
 				dstack.append(div)
 
 		self.views[:] = [x[d] for x, d in zip(self.stacks, levels)]
-		self.focus = self.views[self.paths[path]].content
+		self.focus = self.views[self.paths[path]]
+		self.focus.focus = self.focus.content
 
 	def split_vertical(self, session, vertical, width=0.5, divisions=1):
 		"""
@@ -3707,13 +3804,11 @@ class Frame(Core):
 			for i in range(divisions)
 		]
 		self.views[idx] = [x[0] for x in self.stacks[nri]]
-		self.areas[idx] = l.map_vertical_divisions(1, self.area, vertical+1, vertical+2)
-		for av, dv in zip(self.areas[nri], self.stacks[nri]):
+		areas = l.map_areas(vertical+1, vertical+2)
+		for av, dv in zip(areas, self.stacks[nri]):
 			for div in dv:
-				div.location.configure(self.deltas, self.define, av[0])
-				div.content.configure(self.deltas, self.define, av[1])
-				div.prompt.configure(self.deltas, self.define, av[2])
 				div.hidden()
+				div.repartition(av)
 		for div in self.views[nri]:
 			div.shown()
 
@@ -3726,12 +3821,6 @@ class Frame(Core):
 			div.location.area = la.resize(0, -d)
 			div.content.area = ca.resize(0, -d)
 			div.prompt.area = pa.resize(0, -d)
-
-		# Reflect changes to &vertical in &areas.
-		self.areas[divs] = [
-			(div.location.area, div.content.area, div.prompt.area)
-			for div in self.views[divs]
-		]
 
 		self.layout = l
 		self.paths = {p: i for i, p in enumerate(l.division_paths())}
@@ -3777,24 +3866,26 @@ class Frame(Core):
 		# Slice in the new divisions.
 		divmap = list(l.map_vertical_divisions(1, self.area, vertical, vertical+1))
 		vro = (div_index - vfdi) + 1
-		self.areas[ins_offset] = divmap[vro:vro+divisions]
 
-		la, ca, pa = self.areas[div_index]
+		areas = list(l.map_areas(vertical, vertical+1))
+		new_areas = areas[vro:vro+divisions]
+
+		div = self.views[div_index]
+		la, ca, pa = div.areas()
 		d = self.layout.divisions[vertical][horizontal].lines \
 			- l.divisions[vertical][horizontal].lines
-		div = self.views[div_index]
-		self.areas[div_index] = (la, ca.resize(-d, 0), pa.move(-d, 0))
 		div.location.area, \
 		div.content.area, \
-		div.prompt.area = self.areas[div_index]
+		div.prompt.area = (la, ca.resize(-d, 0), pa.move(-d, 0))
 
 		# New divisions indexes after insertion.
 		ndivs = slice(div_index + 1, div_index + divisions + 1)
-		for av, dv in zip(self.areas[ndivs], self.stacks[ndivs]):
+		for area, dv in zip(new_areas, self.stacks[ndivs]):
 			for div in dv:
-				div.location.configure(self.deltas, self.define, av[0])
-				div.content.configure(self.deltas, self.define, av[1])
-				div.prompt.configure(self.deltas, self.define, av[2])
+				div.location.configure(self.deltas, self.define, div.location.area)
+				div.content.configure(self.deltas, self.define, div.content.area)
+				div.prompt.configure(self.deltas, self.define, div.prompt.area)
+				div.repartition(area)
 				div.shown()
 
 		self.layout = l
@@ -3828,7 +3919,6 @@ class Frame(Core):
 
 		self.paths = {p: i for i, p in enumerate(l.division_paths())}
 		self.layout = l
-		del self.areas[ds]
 		del self.views[ds]
 		del self.stacks[ds]
 
@@ -3854,7 +3944,6 @@ class Frame(Core):
 
 		self.paths = {p: i for i, p in enumerate(l.division_paths())}
 		self.layout = l
-		del self.areas[ds]
 		del self.views[ds]
 		del self.stacks[ds]
 
@@ -3892,10 +3981,6 @@ class Frame(Core):
 		i = self.paths[(ri, 0)]
 		rir = slice(self.paths[(ri, 0)], i + len(l.divisions[ri]))
 
-		self.areas[lir] = [
-			(la.resize(0, -d), ca.resize(0, -d), pa.resize(0, -d))
-			for la, ca, pa in list(self.areas[lir])
-		]
 		for i in range(lir.start, lir.stop):
 			for div in self.stacks[i]:
 				la = div.location.area
@@ -3906,14 +3991,6 @@ class Frame(Core):
 				div.content.area = ca.resize(0, -d)
 				div.prompt.area = pa.resize(0, -d)
 
-		self.areas[rir] = [
-			(
-				la.move(0, -d).resize(0, d),
-				ca.move(0, -d).resize(0, d),
-				pa.move(0, -d).resize(0, d)
-			)
-			for la, ca, pa in list(self.areas[rir])
-		]
 		for i in range(rir.start, rir.stop):
 			for div in self.stacks[i]:
 				la = div.location.area
@@ -3956,42 +4033,24 @@ class Frame(Core):
 			# Cannot resize over or under the frame's bounds.
 			return
 
-		dv = l.divisions[vertical]
-		last = (horizontal + 1) == len(dv)
-		d = height - dv[horizontal].lines
+		nl = self.layout.resize_horizontal_height(vertical, horizontal, height)
 
+		assert nd > 1
+		last = (horizontal + 1) == nd
 		if last:
 			ti = horizontal - 1
 			bi = horizontal
-			d = -d
 		else:
 			ti = horizontal
 			bi = horizontal + 1
 
 		tdi = self.paths[(vertical, ti)]
-		bdi = self.paths[(vertical, bi)]
+		areas = list(nl.map_areas(vertical, vertical+1))[ti:bi]
+		for i, area in enumerate(areas):
+			for div in self.stacks[tdi+i]:
+				div.repartition(area)
 
-		la, ca, pa = self.areas[tdi]
-		self.areas[tdi] = (la, ca.resize(d, 0), pa.move(d, 0))
-		for div in self.stacks[tdi]:
-			ca = div.content.area
-			pa = div.prompt.area
-			div.content.area = ca.resize(d, 0)
-			div.prompt.area = pa.move(d, 0)
-
-		la, ca, pa = self.areas[bdi]
-		self.areas[bdi] = (
-			la.move(d, 0),
-			ca.move(d, 0).resize(-d, 0),
-			pa,
-		)
-		for div in self.stacks[bdi]:
-			la = div.location.area
-			ca = div.content.area
-			div.location.area = la.move(d, 0)
-			div.content.area = ca.move(d, 0).resize(-d, 0)
-
-		self.layout = self.layout.resize_horizontal_height(vertical, horizontal, height)
+		self.layout = nl
 
 	@comethod('frame', 'set/horizontal/height')
 	def f_set_horizontal_height_value(self, dpath, quantity=0):
@@ -4042,7 +4101,7 @@ class Frame(Core):
 		self.layout = Layout.fill(1, area.lines, area.span, widths, heights)
 		self.layout_changed()
 		if not self.stacks:
-			self.stacks = [list() for x in range(len(self.areas))]
+			self.stacks = [list() for x in range(self.layout.total_divisions)]
 
 	@comethod('frame', 'refresh/view/images')
 	def f_refresh_views(self):
@@ -4070,54 +4129,15 @@ class Frame(Core):
 		self.scale_divisions(area)
 		self.f_refresh()
 
-	def resize_footer(self, dpath, height):
-		"""
-		# Adjust the size, &height, of the footer for the given &dpath.
-		"""
-
-		vi = self.paths[dpath]
-		l, rf, p = self.views[vi].refractions()
-		self.update_intersections(dpath[0])
-		d = height - p.area.lines
-
-		# Initial opening needs to include the border size.
-		if height - d == 0:
-			# height was zero. Pad with border width.
-			d += 1
-		elif height == 0 and d != 0:
-			# height set to zero. Compensate for border.
-			d -= 1
-
-		rf.configure(rf.deltas, rf.define, rf.area.resize(-d, 0))
-		rf.v_compensate()
-
-		a = Area(rf.area.bottom_offset + 1, rf.area.left_offset, height, rf.area.span)
-		p.configure(p.deltas, p.define, a)
-		# &render will emit the entire image, so make sure the footer is trimmed.
-		p.v_compensate()
-
-		# Update frame areas.
-		self.areas[vi] = (self.areas[vi][0], rf.area, p.area)
-		return d
-
 	def switch_division(self, dpath):
 		"""
 		# Change the focused view accounting for prompt priority.
 		"""
 
-		self.focus.control_mode = self.keyboard.mapping
-
 		dpath = self.restrict_path(dpath)
-		rl, co, pg = self.select(dpath).refractions()
-
-		if co.reporting(self.prompting) and pg.area.lines > 0:
-			# If reporting and the prompt is visible.
-			self.focus = pg
-		else:
-			self.focus = co
-
-		# Restore mode.
-		self.keyboard.set(self.focus.control_mode)
+		self.focus.focus.control_mode = self.keyboard.mapping
+		self.focus = self.select(dpath)
+		self.keyboard.set(self.focus.focus.control_mode)
 		self.vertical, self.division = dpath
 
 	def switch_level(self, division, level):
@@ -4129,7 +4149,7 @@ class Frame(Core):
 		div = self.stacks[division][level]
 
 		if div is cs:
-			# Already selected presuming unique Views.
+			# Already selected.
 			return
 
 		cs.hidden()
@@ -4140,7 +4160,6 @@ class Frame(Core):
 			if v == division:
 				break
 
-		self.areas[division] = div.areas()
 		if div.prompt.area.lines != cs.prompt.area.lines:
 			# Update layout structure if the footers differ.
 			current = cs.prompt.area.lines
@@ -4148,7 +4167,7 @@ class Frame(Core):
 		div.shown()
 
 		# Focus was in &cs, which is now hidden, so switch to update focus.
-		if self.focus in cs.refractions():
+		if self.focus is cs:
 			self.switch_division(dpath)
 
 		self.deltas.extend(div.refresh())
@@ -4235,7 +4254,7 @@ class Frame(Core):
 
 		path = self.restrict_path((self.vertical, self.division))
 		self.vertical, self.division = path
-		self.focus = self.select(path).content
+		self.focus = self.select(path)
 
 	def fill_areas(self, patterns, *, Area=Area, ord=ord):
 		"""
@@ -4356,7 +4375,7 @@ class Frame(Core):
 		div = session.refract(path, addressing=addressing)
 		dstack = self.stacks[division]
 
-		la, ca, pa = self.areas[division]
+		la, ca, pa = dstack[0].areas()
 		div.location.configure(self.deltas, self.define, la)
 		div.content.configure(self.deltas, self.define, ca)
 		div.prompt.configure(self.deltas, self.define, pa)
@@ -4390,7 +4409,8 @@ class Frame(Core):
 			h = phrase.tell(cp, *phrase.m_codepoint)
 			trf.focus[1].set(h - li.ln_level)
 
-		self.focus = trf
+		self.focus = div
+		div.focus = trf
 
 	@classmethod
 	def r_enclose(Class, symbols, border, width, height):
@@ -4790,11 +4810,9 @@ class Frame(Core):
 		define = self.define
 		deltas = self.deltas
 
-		self.areas = list(self.layout.map_vertical_divisions(1, self.area, 0, None))
-		for stack, areas in zip(self.stacks, self.areas):
+		for stack, area in zip(self.stacks, self.layout.map_areas(0, None)):
 			for div in stack:
-				for a, v in zip(areas, div.refractions()):
-					v.configure(deltas, define, a)
+				div.repartition(area)
 
 	def layout_changed(self):
 		"""

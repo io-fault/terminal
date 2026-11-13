@@ -685,6 +685,10 @@ class Layout(object):
 	verticals: Sequence[Area]
 	divisions: Sequence[Sequence[Area]]
 
+	@property
+	def total_divisions(self):
+		return sum(len(x) for x in self.divisions)
+
 	def __iter__(self):
 		return zip(self.verticals, self.divisions)
 
@@ -729,9 +733,13 @@ class Layout(object):
 
 		return Class(nverts, ndivs)
 
+	def map_areas(self, start, stop):
+		return itertools.chain.from_iterable(
+			self.divisions[i + start]
+			for i, v in enumerate(self.verticals[start:stop])
+		)
+
 	def map_vertical_divisions(self, border, area, start, stop):
-		ry = area.top_offset
-		rx = area.left_offset
 		hb = border
 		dp = 2
 		dl = 2

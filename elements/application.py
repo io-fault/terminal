@@ -584,6 +584,25 @@ class Session(Core):
 
 		return system.reference(path, type)
 
+	def _refract(self, system, path):
+		typref = self.lookup_type(path)
+		syntype = self.load_type(typref)
+
+		if typref == 'reflection':
+			source = self.sources.create_resource(system.identity, typref, syntype, path)
+			rf = Reflection.allocate(self.device, self.theme['empty'].inscribe(ord(' ')), source)
+		else:
+			try:
+				source = self.sources.select_resource(path)
+			except KeyError:
+				source = self.sources.create_resource(system.identity, typref, syntype, path)
+
+			rf = Refraction(source=source)
+			rf.monitor_images = self.monitor_images
+			rf.keyboard = self.keyboard
+
+		return rf
+
 	def refract(self, path, addressing=None):
 		"""
 		# Construct a &Refraction for the resource identified by &path.
@@ -686,7 +705,7 @@ class Session(Core):
 				self.frame = self.frame % nframes
 				f = self.focus = self.frames[self.frame]
 
-		self.keyboard.set(f.focus.control_mode)
+		self.keyboard.set(f.focus.focus.control_mode)
 		f.switch_division((f.vertical, f.division))
 
 	def reframe(self, index):
@@ -700,7 +719,7 @@ class Session(Core):
 		if self.focus:
 			# Never to be seen.
 			del self.focus.deltas[:]
-			self.focus.focus.control_mode = self.keyboard.mapping
+			self.focus.focus.focus.control_mode = self.keyboard.mapping
 
 		last = self.frame
 
@@ -858,9 +877,8 @@ class Session(Core):
 
 	def chresource(self, frame, path):
 		dpath = (frame.vertical, frame.division)
-		rf = self.refract(path).content
-		frame.attach(dpath, rf)
-		return rf
+		div = self.refract(path)
+		return frame.attach(dpath, div.content)
 
 	def error(self, context, exception):
 		"""
@@ -1027,13 +1045,13 @@ class Session(Core):
 		"""
 
 		frame = self.focus
-		view = frame.focus
+		div = frame.focus
+		view = div.focus
 		device = self.device
 		screen = device.screen
 
-		if (self._focus['frame'], self._focus['view']) != (frame, view):
+		if (self._focus['frame'], self._focus['control'], self._focus['view']) != (frame, div, view):
 			vi = frame.paths[(frame.vertical, frame.division)]
-			div = frame.views[vi]
 			self._focus = {
 				'frame': frame,
 				'division': vi,
@@ -1093,20 +1111,22 @@ class Session(Core):
 		"""
 
 		self.host.io.service() # Dispatch event loop for I/O integration.
-		self._focus = {'frame': None, 'view': None, 'cursor': None, 'division': 0}
+		self._focus = {'frame': None, 'control': None, 'view': None, 'cursor': None, 'division': 0}
 
 		# Expects initial synchronize instruction to draw first cursor.
 		try:
 			while self.frames:
 				last_frame = self.focus
-				last_view = last_frame.focus
+				last_div = last_frame.focus
+				last_view = last_div.focus
 				lv_status = last_view.v_status(self, self.keyboard.mapping)
 
 				for ds in self.cycle():
 					self.dispatch_delta(ds)
 
 				next_frame = self.focus
-				next_view = next_frame.focus
+				next_div = next_frame.focus
+				next_view = next_div.focus
 				nv_status = next_view.v_status(self, self.keyboard.mapping)
 
 				new = dict(next_frame.indicate(nv_status))
@@ -1247,7 +1267,7 @@ class Session(Core):
 		fi = self.allocate_frame(area, [area.span - 2], [[area.lines - 2]])
 		f = self.frames[fi]
 
-		c = len(f.areas)
+		c = f.layout.total_divisions
 		stacks = [[self.refract(null)] for i in range(c)]
 		f.stack_views(0, 0, [0] * c, stacks)
 
@@ -1294,12 +1314,13 @@ class Session(Core):
 	@comethod('session', 'open/log')
 	def open_session_log(self):
 		frame = self.focus
-		rf = self.chresource(frame, self.transcript.origin.ref_path)
+		div = self.chresource(frame, self.transcript.origin.ref_path)
 		frame.refocus()
 		l = rf.source.ln_count()
+		rf = div.content
 		rf.focus[0].set(l-1)
 		rf.scroll(lambda x: max(0, l - rf.area.lines))
-		assert rf is self.focus.focus
+		assert rf is self.focus.focus.focus
 		assert rf.frame_visible == True
 		assert rf.source is session.transcript
 
@@ -1382,7 +1403,7 @@ class Session(Core):
 
 	@comethod('elements', 'select')
 	def c_transmit_selected(self):
-		rf = self.focus.focus
+		rf = self.focus.focus.focus
 		codec = rf.forms.lf_codec
 		lform = rf.forms.lf_lines
 
