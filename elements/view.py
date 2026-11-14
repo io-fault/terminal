@@ -4282,7 +4282,8 @@ class Frame(Core):
 		v, d, s = self.identify_cell_division(left, top)
 		i = self.paths[(v, d)]
 
-		l, c, p = self.views[i].refractions()
+		div = self.views[i]
+		l, c, p = div.refractions()
 		if s == 1:
 			rf = l
 		elif s == 3:
@@ -4290,7 +4291,7 @@ class Frame(Core):
 		else:
 			rf = c
 
-		return ((v, d, s), rf)
+		return ((v, d, s), div, rf)
 
 	def indicate(self, vstat:Status):
 		"""
@@ -4386,7 +4387,7 @@ class Frame(Core):
 	@comethod('frame', 'select/absolute')
 	def f_select_absolute(self, cellstatus):
 		ay, ax = cellstatus
-		div, trf = self.target(ay, ax)
+		da, div, trf = self.target(ay, ax)
 
 		sy = trf.area.top_offset
 		sx = trf.area.left_offset
@@ -4395,8 +4396,8 @@ class Frame(Core):
 		ry += trf.image.line_offset
 		rx = max(0, rx)
 
-		self.vertical = div[0]
-		self.division = div[1]
+		self.vertical = da[0]
+		self.division = da[1]
 
 		trf.focus[0].set(ry)
 		try:
@@ -4806,9 +4807,6 @@ class Frame(Core):
 		self.reset_intersections()
 		for i in range(len(self.layout.verticals)):
 			self.update_intersections(i)
-
-		define = self.define
-		deltas = self.deltas
 
 		for stack, area in zip(self.stacks, self.layout.map_areas(0, None)):
 			for div in stack:
