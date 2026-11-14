@@ -2855,14 +2855,13 @@ class Division(Core):
 	@classmethod
 	def rl_update_path(Class, src:storage.Resource, ref:Reference):
 		"""
-		# Rewrite the lines in &src with the given &pathcontext and &path.
+		# Rewrite the lines in &src with the given &path.
 		"""
 
-		src.delete_lines(0, src.ln_count())
-		src.commit()
-
 		lines = Class.rl_determine(ref.ref_system, ref.ref_context, ref.ref_path)
+		lnc = src.ln_count()
 		src.extend_lines(map(src.forms.ln_interpret, lines))
+		src.delete_lines(0, lnc)
 		src.commit()
 
 		# Unconditionally truncate the deltas as revisions usually
