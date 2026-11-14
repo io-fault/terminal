@@ -1383,6 +1383,9 @@ class Host(Context):
 					for i in range(trim):
 						src.trim_empty(fl)
 					src.commit()
+					if src.ln_count() == 0:
+						src.ln_initialize()
+						src.commit()
 		finally:
 			del workreference
 			for x, _ in fdmap:
