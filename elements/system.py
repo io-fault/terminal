@@ -1291,7 +1291,7 @@ class Host(Context):
 		c = workreference.cursor
 		il = workreference.level
 		pwd = self.fs_root + path
-		ins = Insertion(rf, c, '', workreference.trim, *self.codec.Decoder(), level=il)
+		ins = Insertion(rf, c, '', 0, *self.codec.Decoder(), level=il)
 
 		# Build the invocations for the expressed instructions.
 		iv = []
@@ -1325,7 +1325,7 @@ class Host(Context):
 			c = workreference.cursor
 			rf = workreference.target
 			il = workreference.level
-			rx = Insertion(rf, c, '', workreference.trim, *self.codec.Decoder(), level=il)
+			rx = Insertion(rf, c, '', 0, *self.codec.Decoder(), level=il)
 			tx = transmission
 
 		xp = self.prepare(workreference, self.fs_root + path, ixn)
@@ -1372,6 +1372,17 @@ class Host(Context):
 						exit_code = (yield self.execute(workreference, index, path, step, self.replicate(fdmap)))
 
 				skip = check(exit_code)
+			else:
+				# Trim at the edge of work, not on a per-Insertion basis.
+				# This can race with Insertion under fork-exec cases where
+				# a background process continues writing to the pipe.
+				trim = workreference.trim
+				if trim:
+					src = workreference.target.source
+					fl = workreference.cursor.lines.get()
+					for i in range(trim):
+						src.trim_empty(fl)
+					src.commit()
 		finally:
 			del workreference
 			for x, _ in fdmap:
