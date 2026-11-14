@@ -2977,7 +2977,7 @@ class Division(Core):
 		pwdstr = pwd.fs_path_string()
 		command = [
 			system.tool("cat").fs_path_string(),
-			ref.ref_path.fs_path_string()[len(pwdstr)+1:],
+			ref.ref_path.fs_path_string()[len(pwdstr if pwdstr != '/' else '')+1:],
 		]
 		self.pg_configure_command(system.identity, pwdstr, command)
 		self.pg_execute(session, trim=(1 if exists else 1))
