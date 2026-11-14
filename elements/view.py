@@ -4773,10 +4773,11 @@ class Frame(Core):
 			vv = self.scale_vertical_spans(1, area.resize(-2, -2).move(1, 1), [x[0] for x in rdims])
 			vchanged = True
 
-		if area.lines != self.area.lines or force:
+		dlines = area.lines - self.area.lines
+		if dlines or force:
 			if not vchanged:
 				# When not already scaled, add the difference to the vertical areas.
-				vv = [a.resize(area.lines - self.area.lines, 0) for a in vv]
+				vv = [a.resize(dlines, 0) for a in vv]
 
 			dv = [
 				self.scale_horizontal_lines(1, v, rd[1])

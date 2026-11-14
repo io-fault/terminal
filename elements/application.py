@@ -758,7 +758,8 @@ class Session(Core):
 		f.identify(len(self.frames), title)
 		self.frames.append(f)
 
-		f.restore(self.device.screen.area, widths, heights)
+		f.restore(area, widths, heights)
+		f.scale_divisions(self.device.screen.area, force=True)
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
 		return f.index
 
