@@ -753,6 +753,7 @@ class Resource(types.Core):
 
 		lines = self.delete_lines(0, self.ln_count())
 		self.ln_initialize()
+		return lines
 
 	def delete_lines(self, start:int, stop:int):
 		"""
