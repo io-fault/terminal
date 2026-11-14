@@ -2881,7 +2881,7 @@ class Syntax(object):
 		"""
 
 		sys, exe, path = self.system_context()
-		path = exe.fs_root + path
+		path = exe.fs_root + (path or [])
 
 		for li in self.source.select(1, self.source.ln_count()):
 			path @= li.ln_content
@@ -2923,7 +2923,7 @@ class Syntax(object):
 		if relative or not lc.startswith(s):
 			# pathref defaults to pwd, but is overwritten to fetch initial
 			# line of the location's resource.
-			return self.typed_path_fields(exe.fs_root + path, lc.split(s), separator=s)
+			return self.typed_path_fields(exe.fs_root + (path or []), lc.split(s), separator=s)
 		else:
 			return self.typed_path_fields(exe.fs_root, lc.split(s), separator=s)
 

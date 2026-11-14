@@ -447,7 +447,7 @@ class Directory(object):
 		if lc.startswith('/'):
 			return exe.fs_root, slice(0, length)
 
-		return exe.fs_root + path, slice(0, length)
+		return exe.fs_root + (path or []), slice(0, length)
 
 	identify_context = identify_location_context
 
