@@ -48,22 +48,6 @@ class CellMatrix(Core):
 	deltas: Sequence = Field(default_factory=list)
 	frame_visible: bool = False
 
-	def configure(self, deltas, define, area):
-		"""
-		# Assign the requirements for integrating a view for display and usage.
-		"""
-
-		self.deltas = deltas
-		self.define = define
-
-		a = self.area
-		self.area = area
-
-		if a.span != area.span or a.lines != area.lines:
-			self.resize()
-
-		return self
-
 	def reporting(self, configuration):
 		return False
 
@@ -163,9 +147,11 @@ class Reflection(CellMatrix):
 		)
 		return absolute, source
 
-	def resize(self):
-		cellbytes = self.area.volume * Cell.size
-		sa = Area(0, 0, self.area.lines, self.area.span)
+	def reposition(self, area):
+		self.area = area
+
+		cellbytes = area.volume * Cell.size
+		sa = Area(0, 0, area.lines, area.span)
 		new = Screen(sa, bytearray(b"\x00") * cellbytes)
 
 		# Inherit intersection.
@@ -180,6 +166,8 @@ class Reflection(CellMatrix):
 			resize_screen += self.pack_text_length(len(mp)) + mp
 			self.queue.append(resize_screen)
 			self.transmit_events()
+
+		return self
 
 	def footer_opened(self, taken):
 		pass
@@ -353,10 +341,13 @@ class Refraction(CellMatrix):
 	version: object = (0, 0, None)
 	control_mode: str = 'control'
 	monitor_images: object = None
+	forms: Reformulations = None
+	keyboard: object = None
 
 	def __post_init__(self):
 		self.system = self.source.origin.ref_system # Default execution context.
-		self.forms = self.source.forms
+		if self.forms is None:
+			self.forms = self.source.forms
 		self.source.views.add(self)
 
 	def snapshot(self):
@@ -471,12 +462,12 @@ class Refraction(CellMatrix):
 			*cs, *rs
 		)
 
-	def resize(self):
+	def reposition(self, area):
+		self.area = area
 		self.limits = (
-			min(12, self.area.lines // 12) or -1, # Vertical, align with elements.
-			min(6, self.area.span // 20) or -1,
+			min(12, area.lines // 12) or -1, # Vertical, align with elements.
+			min(6, area.span // 20) or -1,
 		)
-
 		return self
 
 	def footer_opened(self, taken):
@@ -2692,6 +2683,16 @@ class Division(Core):
 	def __post_init__(self):
 		self.focus = self.content
 
+	def frame(self, deltas):
+		"""
+		# Set the shared frame context for signalling display changes.
+		"""
+
+		for rf in self.refractions():
+			rf.deltas = deltas
+
+		return self
+
 	def repartition(self, area, hborder=1, fborder=1):
 		"""
 		# Update the &CellMatrix areas to be relative to the new &area.
@@ -2712,13 +2713,14 @@ class Division(Core):
 		if footer:
 			borders += fborder
 
-		self.location.area = Area(top, left, header, span)
-		self.prompt.area = Area(area.bottom_offset - footer, left, footer, span)
-
-		self.content.area = Area(
+		self.location.reposition(Area(top, left, header, span))
+		self.prompt.reposition(Area(area.bottom_offset - footer, left, footer, span))
+		self.content.reposition(Area(
 			top + header + hborder, left,
 			area.lines - (header + footer) - borders, span
-		)
+		))
+
+		return self
 
 	def resize_footer(self, height, fborder=1):
 		"""
@@ -2739,14 +2741,10 @@ class Division(Core):
 		ca = self.content.area.resize(-d, 0)
 		pa = Area(ca.bottom_offset + fborder, ca.left_offset, height, ca.span)
 
-		self.content.area = ca
-		self.prompt.area = pa
+		self.content.reposition(ca)
+		self.prompt.reposition(pa)
 		self.content.v_compensate()
 		self.prompt.v_compensate()
-
-		# Update limits.
-		self.content.resize()
-		self.prompt.resize()
 
 		self.prompt.deltas.extend(self.prompt.refresh(0))
 		if pa.lines:
@@ -3011,12 +3009,12 @@ class Division(Core):
 		old = self.content
 		old.frame_visible = False
 		self.content = rf
+		rf.deltas = old.deltas
+		rf.reposition(area)
 		rf.frame_visible = True
 		if old is self.focus:
 			self.focus = rf
 
-		# Configure and refresh.
-		rf.configure(frame.deltas, frame.define, area)
 		self.rl_update_path(self.location.source, rf.source.origin)
 		rf.deltas.extend(rf.refresh())
 
@@ -3718,7 +3716,8 @@ class Frame(Core):
 		rf.frame_visible = True
 
 		# Configure and refresh.
-		rf.configure(self.deltas, self.define, div.content.area)
+		rf.deltas = self.deltas
+		rf.reposition(div.content.area)
 
 		# Reveal the prompt for reporting types. (transcripts)
 		if rf.reporting(self.prompting):
@@ -3756,9 +3755,7 @@ class Frame(Core):
 			dstack = self.stacks[division]
 
 			for div in stack:
-				div.location.configure(self.deltas, self.define, div.location.area)
-				div.content.configure(self.deltas, self.define, div.content.area)
-				div.prompt.configure(self.deltas, self.define, div.prompt.area)
+				div.frame(self.deltas)
 				div.repartition(area)
 				div.hidden()
 				dstack.append(div)
@@ -3813,9 +3810,9 @@ class Frame(Core):
 			ca = div.content.area
 			pa = div.prompt.area
 
-			div.location.area = la.resize(0, -d)
-			div.content.area = ca.resize(0, -d)
-			div.prompt.area = pa.resize(0, -d)
+			div.location.reposition(la.resize(0, -d))
+			div.content.reposition(ca.resize(0, -d))
+			div.prompt.reposition(pa.resize(0, -d))
 
 		self.layout = l
 		self.paths = {p: i for i, p in enumerate(l.division_paths())}
@@ -3869,17 +3866,15 @@ class Frame(Core):
 		la, ca, pa = div.areas()
 		d = self.layout.divisions[vertical][horizontal].lines \
 			- l.divisions[vertical][horizontal].lines
-		div.location.area, \
-		div.content.area, \
-		div.prompt.area = (la, ca.resize(-d, 0), pa.move(-d, 0))
+		div.location.reposition(la)
+		div.content.reposition(ca.resize(-d, 0))
+		div.prompt.reposition(pa.move(-d, 0))
 
 		# New divisions indexes after insertion.
 		ndivs = slice(div_index + 1, div_index + divisions + 1)
 		for area, dv in zip(new_areas, self.stacks[ndivs]):
 			for div in dv:
-				div.location.configure(self.deltas, self.define, div.location.area)
-				div.content.configure(self.deltas, self.define, div.content.area)
-				div.prompt.configure(self.deltas, self.define, div.prompt.area)
+				div.frame(self.deltas)
 				div.repartition(area)
 				div.shown()
 
@@ -3982,9 +3977,9 @@ class Frame(Core):
 				ca = div.content.area
 				pa = div.prompt.area
 
-				div.location.area = la.resize(0, -d)
-				div.content.area = ca.resize(0, -d)
-				div.prompt.area = pa.resize(0, -d)
+				div.location.reposition(la.resize(0, -d))
+				div.content.reposition(ca.resize(0, -d))
+				div.prompt.reposition(pa.resize(0, -d))
 
 		for i in range(rir.start, rir.stop):
 			for div in self.stacks[i]:
@@ -3992,9 +3987,9 @@ class Frame(Core):
 				ca = div.content.area
 				pa = div.prompt.area
 
-				div.location.area = la.move(0, -d).resize(0, d)
-				div.content.area = ca.move(0, -d).resize(0, d)
-				div.prompt.area = pa.move(0, -d).resize(0, d)
+				div.location.reposition(la.move(0, -d).resize(0, d))
+				div.content.reposition(ca.move(0, -d).resize(0, d))
+				div.prompt.reposition(pa.move(0, -d).resize(0, d))
 
 		self.layout = self.layout.resize_vertical_width(vertical, width)
 
@@ -4371,9 +4366,7 @@ class Frame(Core):
 		div = session.divide(path, addressing=addressing, system=system)
 
 		v, d = self.layout.find_path(division)
-		div.location.configure(self.deltas, self.define, div.location.area)
-		div.content.configure(self.deltas, self.define, div.content.area)
-		div.prompt.configure(self.deltas, self.define, div.prompt.area)
+		div.frame(self.deltas)
 		div.repartition(self.layout.divisions[v][d])
 
 		self.stacks[division].append(div)

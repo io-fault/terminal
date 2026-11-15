@@ -20,7 +20,7 @@ from . import annotations
 from . import types
 from . import retention
 
-from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax
+from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax, Area
 from .storage import Resource, Directory, delta
 from .view import Refraction, Reflection, Frame, Division
 from .system import Context as SystemContext, Host, Process, IOManager
@@ -537,14 +537,14 @@ class Session(Core):
 		)
 
 		src = Resource.allocate(ref, self.load_type('ivectors'))
-
-		rf = Refraction(source=src)
-		rf.area = rf.area.resize(lines, 0)
-		rf.forms = self.pg_forms(src)
-		rf.keyboard = self.keyboard
-		rf.monitor_images = self.monitor_images
-
-		return rf
+		return Refraction(
+			source=src,
+			define=self.device.define,
+			keyboard=self.keyboard,
+			monitor_images=self.monitor_images,
+			forms=self.pg_forms(src),
+			area=Area(0, 0, lines, 0),
+		)
 
 	def allocate_location(self, reference, lines=2):
 		ref = Reference(
@@ -559,13 +559,14 @@ class Session(Core):
 		src = Resource.allocate(ref, self.load_type('location'))
 		Division.rl_update_path(src, reference)
 
-		rf = Refraction(source=src)
-		rf.area = rf.area.resize(lines, 0)
-		rf.forms = self.rl_forms(src, reference.ref_context)
-		rf.keyboard = self.keyboard
-		rf.monitor_images = self.monitor_images
-
-		return rf
+		return Refraction(
+			source=src,
+			define=self.device.define,
+			keyboard=self.keyboard,
+			monitor_images=self.monitor_images,
+			forms=self.rl_forms(src, reference.ref_context),
+			area=Area(0, 0, lines, 0),
+		)
 
 	def refer(self, system, path, type=None):
 		"""
@@ -600,11 +601,18 @@ class Session(Core):
 				source = self.sources.create_resource(system.identity, typref, syntype, path)
 
 		if typref == 'reflection':
-			rf = Reflection.allocate(self.device, self.theme['empty'].inscribe(ord(' ')), source)
+			rf = Reflection.allocate(
+				device=self.device,
+				empty=self.theme['empty'].inscribe(ord(' ')),
+				source=source,
+			)
 		else:
-			rf = Refraction(source=source)
-			rf.monitor_images = self.monitor_images
-			rf.keyboard = self.keyboard
+			rf = Refraction(
+				source=source,
+				define=self.device.define,
+				keyboard=self.keyboard,
+				monitor_images=self.monitor_images,
+			)
 
 		return rf
 
