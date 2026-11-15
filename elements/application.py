@@ -608,7 +608,7 @@ class Session(Core):
 
 		return rf
 
-	def divide(self, path, addressing=None, system=None, location_lines=2, prompt_lines=0):
+	def divide(self, path, addressing=None, system=None, location_lines=2, prompt_lines=None):
 		"""
 		# Construct a &Division for the resource identified by &path.
 
@@ -625,13 +625,16 @@ class Session(Core):
 		else:
 			load = False
 
+		dc = self.allocate_source_refraction(system or self.host, path)
 		if addressing is not None:
 			location_lines = addressing[-2]
 			prompt_lines = addressing[-1]
+		else:
+			if prompt_lines is None:
+				prompt_lines = 2 if dc.reporting(self.prompting) else 0
 
-		dc = self.allocate_source_refraction(system or self.host, path)
 		rl = self.allocate_location(dc.source.origin, location_lines)
-		pg = self.allocate_prompt(prompt_lines)
+		pg = self.allocate_prompt(prompt_lines or 0)
 
 		div = Division.allocate(rl, dc, pg)
 		if load:
