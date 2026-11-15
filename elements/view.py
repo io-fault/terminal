@@ -2673,9 +2673,9 @@ class Division(Core):
 		return div
 
 	location: Refraction
-	content: Refraction|Reflection
+	content: CellMatrix
 	prompt: Refraction
-	focus: Refraction|Reflection = None
+	focus: CellMatrix = None
 
 	content_location_revision: int = 0
 	jobs: Mapping[Work] = dataclasses.field(default_factory=dict)
