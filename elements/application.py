@@ -800,7 +800,7 @@ class Session(Core):
 			fi = self.allocate_frame(area, *layout, title=frame_id or None)
 			f = self.frames[fi]
 			f.align_stacks(stacks, divcount, null)
-			f.stack_views(vi, di, levels, (smap(self.divide, stack) for stack in stacks))
+			f.attach_divisions((vi, di), levels, (smap(self.divide, stack) for stack in stacks))
 			f.f_refresh()
 
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
@@ -1270,7 +1270,7 @@ class Session(Core):
 
 		c = f.layout.total_divisions
 		stacks = [[self.divide(null)] for i in range(c)]
-		f.stack_views(0, 0, [0] * c, stacks)
+		f.attach_divisions((0, 0), [0] * c, stacks)
 
 		f.f_refresh()
 		self.reframe(fi)
@@ -1287,7 +1287,7 @@ class Session(Core):
 			[self.divide(div.content.source.origin.ref_path) for div in stack]
 			for stack in frame.stacks
 		]
-		f.stack_views(frame.vertical, frame.division, [0] * c, stack_replicas)
+		f.attach_divisions((frame.vertical, frame.division), [0] * c, stack_replicas)
 
 		f.f_refresh()
 		self.reframe(fi)
@@ -1592,7 +1592,7 @@ def main(inv:process.Invocation) -> process.Exit:
 		f = session.frames[fi]
 		stacks = [[session.divide(wd@filepath)] for filepath in ['/dev/null']]
 		levels = [0] * len(stacks)
-		f.stack_views(0, 0, levels, stacks)
+		f.attach_divisions((0, 0), levels, stacks)
 		f.f_refresh()
 		session.reframe(fi)
 		session.frames_restored = True

@@ -3746,14 +3746,10 @@ class Frame(Core):
 			for x in range(limit - n):
 				stacks.append([(default, None)])
 
-	def stack_views(self, vertical, division, levels, stacks:Sequence[Sequence[Division]]):
+	def attach_divisions(self, key, levels, stacks:Sequence[Sequence[Division]]):
 		"""
-		# Initialize the stacks of the frame.
+		# Initialize the stacks of the frame and update the focus.
 		"""
-
-		self.vertical = vertical
-		self.division = division
-		path = (vertical, division)
 
 		areas = list(self.layout.map_areas(0, None))
 		for area, (division, stack) in zip(areas, enumerate(stacks)):
@@ -3768,7 +3764,8 @@ class Frame(Core):
 				dstack.append(div)
 
 		self.views[:] = [x[d] for x, d in zip(self.stacks, levels)]
-		self.focus = self.views[self.paths[path]]
+		self.focus = self.views[self.paths[key]]
+		self.vertical, self.division = key
 
 	def split_vertical(self, session, vertical, width=0.5, divisions=1):
 		"""
