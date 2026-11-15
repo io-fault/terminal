@@ -3769,7 +3769,6 @@ class Frame(Core):
 
 		self.views[:] = [x[d] for x, d in zip(self.stacks, levels)]
 		self.focus = self.views[self.paths[path]]
-		self.focus.focus = self.focus.content
 
 	def split_vertical(self, session, vertical, width=0.5, divisions=1):
 		"""
