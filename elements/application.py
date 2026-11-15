@@ -584,68 +584,65 @@ class Session(Core):
 
 		return system.reference(path, type)
 
-	def _refract(self, system, path):
+	def allocate_source_refraction(self, system, path, source=None):
+		"""
+		# Construct a &Refraction for the resource identified by &path.
+
+		# An empty &Resource instance is created if the path has not been loaded.
+		"""
+
 		typref = self.lookup_type(path)
 		syntype = self.load_type(typref)
-
-		if typref == 'reflection':
-			source = self.sources.create_resource(system.identity, typref, syntype, path)
-			rf = Reflection.allocate(self.device, self.theme['empty'].inscribe(ord(' ')), source)
-		else:
+		if source is None:
 			try:
 				source = self.sources.select_resource(path)
 			except KeyError:
 				source = self.sources.create_resource(system.identity, typref, syntype, path)
 
+		if typref == 'reflection':
+			rf = Reflection.allocate(self.device, self.theme['empty'].inscribe(ord(' ')), source)
+		else:
 			rf = Refraction(source=source)
 			rf.monitor_images = self.monitor_images
 			rf.keyboard = self.keyboard
 
 		return rf
 
-	def refract(self, path, addressing=None):
+	def divide(self, path, addressing=None, system=None, location_lines=2, prompt_lines=0):
 		"""
-		# Construct a &Refraction for the resource identified by &path.
-		# A &Resource instance is created if the path has not been loaded.
+		# Construct a &Division for the resource identified by &path.
+
+		# An empty &Resource instance is created if the path has not been loaded.
 		"""
 
-		typref = self.lookup_type(path)
-		syntype = self.load_type(typref)
-		system = self.host
+		location_section = 2
+		prompt_section = 0
 
-		if typref == 'reflection':
-			source = self.sources.create_resource(system.identity, typref, syntype, path)
-			rf = Reflection.allocate(self.device, self.theme['empty'].inscribe(ord(' ')), source)
-			load = False
+		try:
+			self.sources.select_resource(path)
+		except KeyError:
+			load = True
 		else:
-			try:
-				source = self.sources.select_resource(path)
-				load = False
-			except KeyError:
-				source = self.sources.create_resource(system.identity, typref, syntype, path)
-				load = True
-
-			rf = Refraction(source=source)
-			rf.monitor_images = self.monitor_images
-			rf.keyboard = self.keyboard
+			load = False
 
 		if addressing is not None:
-			rf.restore(addressing[:-2])
-			location_section = addressing[-2]
-			prompt_section = addressing[-1]
-		else:
-			location_section = 2
-			prompt_section = 0
+			location_lines = addressing[-2]
+			prompt_lines = addressing[-1]
 
-		rl = self.allocate_location(source.origin, location_section)
-		pg = self.allocate_prompt(prompt_section)
+		dc = self.allocate_source_refraction(system or self.host, path)
+		rl = self.allocate_location(dc.source.origin, location_lines)
+		pg = self.allocate_prompt(prompt_lines)
 
-		if rf.reporting(self.prompting):
-			pg.control_mode = 'insert'
-
-		div = Division.allocate(rl, rf, pg)
+		div = Division.allocate(rl, dc, pg)
 		if load:
-			div.load_resource(self, system)
+			div.load_resource(self, system or self.host)
+
+		if dc.reporting(self.prompting):
+			pg.control_mode = 'insert'
+			div.focus = pg
+		else:
+			dc.control_mode = 'control'
+			div.focus = dc
 
 		return div
 
@@ -800,7 +797,7 @@ class Session(Core):
 			fi = self.allocate_frame(area, *layout, title=frame_id or None)
 			f = self.frames[fi]
 			f.align_stacks(stacks, divcount, null)
-			f.stack_views(vi, di, levels, (smap(self.refract, stack) for stack in stacks))
+			f.stack_views(vi, di, levels, (smap(self.divide, stack) for stack in stacks))
 			f.f_refresh()
 
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
@@ -878,7 +875,7 @@ class Session(Core):
 
 	def chresource(self, frame, path):
 		dpath = (frame.vertical, frame.division)
-		div = self.refract(path)
+		div = self.divide(path)
 		return frame.attach(dpath, div.content)
 
 	def error(self, context, exception):
@@ -1269,7 +1266,7 @@ class Session(Core):
 		f = self.frames[fi]
 
 		c = f.layout.total_divisions
-		stacks = [[self.refract(null)] for i in range(c)]
+		stacks = [[self.divide(null)] for i in range(c)]
 		f.stack_views(0, 0, [0] * c, stacks)
 
 		f.f_refresh()
@@ -1284,7 +1281,7 @@ class Session(Core):
 
 		c = len(frame.stacks)
 		stack_replicas = [
-			[self.refract(div.content.source.origin.ref_path) for div in stack]
+			[self.divide(div.content.source.origin.ref_path) for div in stack]
 			for stack in frame.stacks
 		]
 		f.stack_views(frame.vertical, frame.division, [0] * c, stack_replicas)
@@ -1590,7 +1587,7 @@ def main(inv:process.Invocation) -> process.Exit:
 		a = session.device.screen.area
 		fi = session.allocate_frame(a, [a.span - 2], [[a.lines - 2]])
 		f = session.frames[fi]
-		stacks = [[session.refract(wd@filepath)] for filepath in ['/dev/null']]
+		stacks = [[session.divide(wd@filepath)] for filepath in ['/dev/null']]
 		levels = [0] * len(stacks)
 		f.stack_views(0, 0, levels, stacks)
 		f.f_refresh()

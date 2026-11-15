@@ -770,6 +770,12 @@ class Layout(object):
 			for d in range(len(self.divisions[v])):
 				yield (v, d)
 
+	def find_path(self, divisions):
+		"""
+		# Identify the path for the division stack, &divisions.
+		"""
+		return list(self.division_paths())[divisions]
+
 	def resize_vertical_width(self, vertical, width):
 		"""
 		# Reconstruct the layout adjusting the &vertical's span to &width.

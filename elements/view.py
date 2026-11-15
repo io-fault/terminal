@@ -3025,7 +3025,7 @@ class Division(Core):
 		rl_syntax = self.location.forms.lf_fields.separation
 		system, fspath = rl_syntax.location_path()
 
-		new = session._refract(system, fspath)
+		new = session.allocate_source_refraction(system, fspath)
 		self.content_location_revision = rl_syntax.source.active
 		self.switch_content(frame, dpath, new)
 		if self.focus is new:
@@ -3799,7 +3799,7 @@ class Frame(Core):
 		# Insert new stack.
 		null = session.host.fs_pwd()@'/dev/null'
 		self.stacks[idx] = [
-			[session.refract(null)]
+			[session.divide(null)]
 			for i in range(divisions)
 		]
 		self.views[idx] = [x[0] for x in self.stacks[nri]]
@@ -3858,7 +3858,7 @@ class Frame(Core):
 
 		# Insert new refractions.
 		null = session.host.fs_pwd()@'/dev/null'
-		new = [session.refract(null) for x in range(divisions)]
+		new = [session.divide(null) for x in range(divisions)]
 		self.views[ins_offset] = new
 		self.stacks[ins_offset] = [[x] for x in new]
 
@@ -4372,16 +4372,16 @@ class Frame(Core):
 		self.refocus()
 
 	def push_division(self, session, division, system, path, *, addressing=None):
-		div = session.refract(path, addressing=addressing)
-		dstack = self.stacks[division]
+		div = session.divide(path, addressing=addressing, system=system)
 
-		la, ca, pa = dstack[0].areas()
-		div.location.configure(self.deltas, self.define, la)
-		div.content.configure(self.deltas, self.define, ca)
-		div.prompt.configure(self.deltas, self.define, pa)
+		v, d = self.layout.find_path(division)
+		div.location.configure(self.deltas, self.define, div.location.area)
+		div.content.configure(self.deltas, self.define, div.content.area)
+		div.prompt.configure(self.deltas, self.define, div.prompt.area)
+		div.repartition(self.layout.divisions[v][d])
 
-		dstack.append(div)
-		return len(dstack) - 1
+		self.stacks[division].append(div)
+		return len(self.stacks[division]) - 1
 
 	@comethod('frame', 'select/absolute')
 	def f_select_absolute(self, cellstatus):
