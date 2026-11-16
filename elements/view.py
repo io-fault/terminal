@@ -3205,7 +3205,7 @@ class Division(Core):
 
 	def pg_configure_command(self, system, path, command=(), space=chr(0x10fa01)):
 		"""
-		# Initialize the prompt for &dpath division to issue &command to the &system.
+		# Initialize the prompt to issue &command to the &system.
 		"""
 
 		prompt = self.prompt
@@ -3243,16 +3243,15 @@ class Division(Core):
 		proc_id = str(frame.prompting.pg_process_identity)
 		ppath = frame.process_path(dpath)
 		self.pg_configure_command(proc_id, ppath, command)
-		self.pg_open(frame, dpath)
-		self.pg_focus(frame)
+		self.pg_open(frame)
+		self.pg_focus()
 		prompt.keyboard.set(mode)
 
-	def pg_open(self, frame, dpath):
+	def pg_open(self, frame):
 		"""
 		# Make the prompt visible.
 		"""
 
-		assert frame.views[frames.paths[dpath]] is self
 		rl, rf, pg = self.refractions()
 
 		# Make footer visible if the view is empty.
@@ -3270,15 +3269,15 @@ class Division(Core):
 		else:
 			pg.deltas.extend(pg.refresh(0))
 
-	def pg_focus(self, frame):
+	def pg_focus(self):
 		"""
-		# Make the prompt the focus of the frame.
+		# Make the prompt the focus of the division.
 		"""
 
 		self.focus = self.prompt
 
 	@conceptual
-	def prompt_close(self, frame, dpath) -> int:
+	def prompt_close(self, frame) -> int:
 		"""
 		# Set the footer size of the division identified by &dpath to zero
 		# and refocus the division if the prompt was focused by the frame.
@@ -3297,24 +3296,23 @@ class Division(Core):
 
 			if self.focus is pg:
 				self.focus = content
-				if self is frame.select(dpath):
-					frame.refocus()
+				frame.refocus()
 		return d
 
 	@conceptual
-	def prompt_escape(self, frame, dpath):
+	def prompt_escape(self, frame):
 		"""
 		# Refocus content and close prompt if not reporting.
 		"""
 
 		if not self.content.reporting(frame.prompting):
-			self.prompt_close(frame, dpath)
+			self.prompt_close(frame)
 		else:
 			self.focus = self.content
 
 	def pg_execute(self, session, trim=1):
 		"""
-		# Execute the command present on the prompt of the &dpath division.
+		# Execute the command present on the prompt of the division.
 
 		# [ Returns ]
 		# The dispatched &Work or a count of instructions executed.
@@ -3412,15 +3410,15 @@ class Division(Core):
 		return work
 
 	@conceptual
-	def prompt_switch_revision_next(self, frame, dpath, quantity=1):
-		self.pg_open(frame, dpath)
+	def prompt_switch_revision_next(self, frame, quantity=1):
+		self.pg_open(frame)
 		src = self.prompt.source
 		src.r_switch_revision_next(quantity)
 		self.pg_select_last_field(self.prompt)
 
 	@conceptual
-	def prompt_switch_revision_previous(self, frame, dpath, quantity=1):
-		self.pg_open(frame, dpath)
+	def prompt_switch_revision_previous(self, frame, quantity=1):
+		self.pg_open(frame)
 		src = self.prompt.source
 		src.r_switch_revision_previous(quantity)
 		self.pg_select_last_field(self.prompt)
@@ -3437,7 +3435,7 @@ class Division(Core):
 				pass
 			else:
 				# Only when the prompt survived the command (close division).
-				self.prompt_close(frame, dpath)
+				self.prompt_close(frame)
 			session.keyboard.set('control')
 			return True
 		elif r is None:
@@ -3445,7 +3443,7 @@ class Division(Core):
 		return False
 
 	@conceptual
-	def prompt_execute_reset(self, frame, dpath, session, prompt):
+	def prompt_execute_reset(self, session, prompt):
 		r = self.pg_execute(session)
 		if r or r is None:
 			self.pg_log_command()
@@ -3453,11 +3451,11 @@ class Division(Core):
 		return False
 
 	@conceptual
-	def prompt_execute_repeat(self, frame, dpath, session):
+	def prompt_execute_repeat(self, session):
 		return bool(self.pg_execute(session))
 
 	@conceptual
-	def prompt_prepare_save(self, frame, resource, system, prompt, dpath):
+	def prompt_prepare_save(self, frame, resource, system, prompt):
 		# Ideally, the full path is present in the executed command.
 		# However, the command length with the qualified tool path
 		# is nearing excess, so trim the length by using a PWD relative
@@ -3474,8 +3472,8 @@ class Division(Core):
 			ref.ref_path.fs_path_string()[len(pwdstr)+1:],
 		]
 		self.pg_configure_command(system.identity, pwdstr, command)
-		self.pg_open(frame, dpath)
-		self.pg_focus(frame)
+		self.pg_open(frame)
+		self.pg_focus()
 
 		prompt.annotate(annotations.Directory('fs',
 			prompt.forms.lf_fields.separation.system_context,
@@ -3486,10 +3484,10 @@ class Division(Core):
 		prompt.keyboard.set('control')
 
 	@conceptual
-	def prompt_prepare_host(self, frame, prompt, host, dpath):
+	def prompt_prepare_host(self, frame, prompt, host):
 		self.pg_configure_command(host.identity, str(host.pwd()))
-		self.pg_open(frame, dpath)
-		self.pg_focus(frame)
+		self.pg_open(frame)
+		self.pg_focus()
 
 		if prompt.annotation is None:
 			prompt.annotate(annotations.Directory('fs',
