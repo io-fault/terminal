@@ -3217,8 +3217,10 @@ class Division(Core):
 		else:
 			cmdlines = [ln.ln_content for ln in src.select(1, ln_count)] or ['']
 
-		src.delete_lines(0, ln_count)
+		# Extend before delete to avoid a probable display bug.
+		# Refresh is necessary if delete is performed before extend.
 		src.extend_lines(map(src.forms.ln_interpret, [str(system)+str(path)] + cmdlines))
+		src.delete_lines(0, ln_count)
 		src.checkpoint()
 
 		if ln_count == 0:
@@ -3252,22 +3254,18 @@ class Division(Core):
 		# Make the prompt visible.
 		"""
 
-		rl, rf, pg = self.refractions()
+		pg = self.prompt
+		if pg.area.lines > 0:
+			return
 
-		# Make footer visible if the view is empty.
-		if pg.area.lines == 0:
-			pg_allocation = frame.prompting.pg_line_allocation
-
-			self.resize_footer(pg_allocation)
-			frame.deltas.extend(
-				frame.fill_areas(
-					frame.r_patch_footer(frame.symbols,
-						frame.intersections, self.prompt.area
-					)
+		self.resize_footer(frame.prompting.pg_line_allocation)
+		frame.deltas.extend(
+			frame.fill_areas(
+				frame.r_patch_footer(frame.symbols,
+					frame.intersections, self.prompt.area
 				)
 			)
-		else:
-			pg.deltas.extend(pg.refresh(0))
+		)
 
 	def pg_focus(self):
 		"""
