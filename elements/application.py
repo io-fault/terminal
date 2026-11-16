@@ -546,7 +546,7 @@ class Session(Core):
 			area=Area(0, 0, lines, 0),
 		)
 
-	def allocate_location(self, reference, lines=2):
+	def allocate_location(self, lines=2):
 		ref = Reference(
 			self.process.identity,
 			'location',
@@ -557,14 +557,12 @@ class Session(Core):
 		)
 
 		src = Resource.allocate(ref, self.load_type('location'))
-		Division.rl_update_path(src, reference)
-
 		return Refraction(
 			source=src,
 			define=self.device.define,
 			keyboard=self.keyboard,
 			monitor_images=self.monitor_images,
-			forms=self.rl_forms(src, reference.ref_context),
+			forms=self.rl_forms(src, ref.ref_context),
 			area=Area(0, 0, lines, 0),
 		)
 
@@ -641,10 +639,11 @@ class Session(Core):
 			if prompt_lines is None:
 				prompt_lines = 2 if dc.reporting(self.prompting) else 0
 
-		rl = self.allocate_location(dc.source.origin, location_lines)
+		rl = self.allocate_location(location_lines)
 		pg = self.allocate_prompt(prompt_lines or 0)
 
 		div = Division.allocate(rl, dc, pg)
+		div.location_update(dc.source.origin)
 		if load:
 			div.load_resource(self, system or self.host)
 
