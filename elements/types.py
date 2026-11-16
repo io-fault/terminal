@@ -2481,6 +2481,7 @@ class Work(object):
 	executing: Mapping[int, object] = _field(default_factory=dict)
 	log: Sequence[tuple[int, int]] = _field(default_factory=list)
 	cursor: Cursor = _field(default_factory=Cursor.allocate)
+	exits: Sequence[Callable] = _field(default_factory=list)
 
 	from os import kill as ProcessSignal
 	from signal import SIGKILL, SIGINT, SIGSTOP, SIGTSTP, SIGCONT, SIGTERM

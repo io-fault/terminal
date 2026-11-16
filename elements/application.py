@@ -585,7 +585,7 @@ class Session(Core):
 
 		return system.reference(path, type)
 
-	def allocate_source_refraction(self, system, path, source=None):
+	def allocate_source_refraction(self, system, path, source=None, addressing=None):
 		"""
 		# Construct a &Refraction for the resource identified by &path.
 
@@ -612,6 +612,7 @@ class Session(Core):
 				define=self.device.define,
 				keyboard=self.keyboard,
 				monitor_images=self.monitor_images,
+				addressing=(addressing or (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
 			)
 
 		return rf
@@ -625,15 +626,14 @@ class Session(Core):
 
 		location_section = 2
 		prompt_section = 0
+		load = False
 
 		try:
 			self.sources.select_resource(path)
 		except KeyError:
 			load = True
-		else:
-			load = False
 
-		dc = self.allocate_source_refraction(system or self.host, path)
+		dc = self.allocate_source_refraction(system or self.host, path, addressing=addressing)
 		if addressing is not None:
 			location_lines = addressing[-2]
 			prompt_lines = addressing[-1]

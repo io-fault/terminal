@@ -328,6 +328,8 @@ class Refraction(CellMatrix):
 		# A path identifying the ranges and targets of each dimension.
 	# /limits/
 		# Per dimension offsets used to trigger margin scrolls.
+	# /addressing/
+		# Cursor and view state.
 	"""
 
 	source: storage.Resource
@@ -343,6 +345,7 @@ class Refraction(CellMatrix):
 	monitor_images: object = None
 	forms: Reformulations = None
 	keyboard: object = None
+	addressing: tuple = None
 
 	def __post_init__(self):
 		self.system = self.source.origin.ref_system # Default execution context.
@@ -374,6 +377,7 @@ class Refraction(CellMatrix):
 		self.focus[1].restore((crstart, coffset, crstop))
 		self.image.line_offset = lo
 		self.image.cell_offset = co
+		return self
 
 	def current(self, depth):
 		d = self.source.elements
@@ -2805,6 +2809,9 @@ class Division(Core):
 		wk = self.jobs.pop(work)
 		work.monitor.clear()
 
+		for xcb in work.exits:
+			xcb(self, work)
+
 	def work_list(self):
 		return list(self.jobs)
 
@@ -2978,12 +2985,15 @@ class Division(Core):
 			ref.ref_path.fs_path_string()[len(pwdstr if pwdstr != '/' else '')+1:],
 		]
 		self.pg_configure_command(system.identity, pwdstr, command)
-		self.pg_execute(session, trim=(1 if exists else 1))
+		work = self.pg_execute(session, trim=(1 if exists else 1))
 		self.pg_log_command()
 
 		# Use Refraction.recursor's contraint to seek the first line,
 		# stopping scroll lock and discarding most display deltas during load.
 		rf.focus[0].restore((0, -1, 1))
+
+		# Call load finished when the work exits.
+		work.exits.append(lambda d, w: system.io.scheduler.enqueue(rf.source.load_finished))
 
 	def open_prompt_if_report(self, frame, dpath):
 		rf = self.content
