@@ -329,7 +329,7 @@ class Refraction(CellMatrix):
 	# /limits/
 		# Per dimension offsets used to trigger margin scrolls.
 	# /addressing/
-		# Cursor and view state.
+		# Stored cursor and view state.
 	"""
 
 	source: storage.Resource
@@ -2933,7 +2933,7 @@ class Division(Core):
 		frame.refocus()
 
 	@conceptual
-	def location_execute_operation(self, session, frame, dpath):
+	def location_execute_operation(self, session):
 		# Copy the current effective location. (source.origin)
 		rl_syntax = self.location.forms.lf_fields.separation
 		previous = self.content.source.origin
@@ -2960,7 +2960,7 @@ class Division(Core):
 
 		# Open the new location if it does not match current.
 		if rl_selection != current_origin:
-			self.rl_open(session, frame, dpath)
+			self.rl_open(session)
 
 		self.focus = self.content
 		self.focus.keyboard.set('control')
@@ -3008,36 +3008,40 @@ class Division(Core):
 		self.pg_configure_command(rf.system, rf.source.origin.ref_context)
 		self.pg_open(frame, dpath)
 
-	def switch_content(self, frame, dpath, rf):
+	def switch_content(self, rf):
 		"""
 		# Assign the &rf to the division identified by &dpath.
 		"""
 
+		focused = False
+
 		# Swap content. Update visibility and focus as needed.
-		src = rf.source
-		area = self.content.area
 		old = self.content
+		area = old.area
 		old.frame_visible = False
-		self.content = rf
+
 		rf.deltas = old.deltas
-		rf.reposition(area)
+		rf.reposition(old.area)
 		rf.frame_visible = True
+
+		self.content = rf
 		if old is self.focus:
 			self.focus = rf
+			focused = True
 
 		self.rl_update_path(self.location.source, rf.source.origin)
-		rf.deltas.extend(rf.refresh())
+		rf.deltas.extend(rf.refresh(0))
+		return focused
 
-	def rl_open(self, session, frame, dpath):
+	def rl_open(self, session):
 		# Construct reference and load dependencies.
 		rl_syntax = self.location.forms.lf_fields.separation
 		system, fspath = rl_syntax.location_path()
 
 		new = session.allocate_source_refraction(system, fspath)
 		self.content_location_revision = rl_syntax.source.active
-		self.switch_content(frame, dpath, new)
-		if self.focus is new:
-			self.focus.keyboard.set('control')
+		if self.switch_content(new):
+			new.keyboard.set('control')
 
 		src = new.source
 		lnc = src.ln_count()
@@ -3045,23 +3049,23 @@ class Division(Core):
 			self.load_resource(session, system)
 
 	@conceptual
-	def location_switch_previous(self, session, frame, dpath, quantity=1):
+	def location_switch_previous(self, session, quantity=1):
 		if self.location.source.r_switch_revision_previous(quantity=quantity):
-			self.rl_open(session, frame, dpath)
+			self.rl_open(session)
 
 	@conceptual
-	def location_switch_next(self, session, frame, dpath, quantity=1):
+	def location_switch_next(self, session, quantity=1):
 		if self.location.source.r_switch_revision_next(quantity=quantity):
-			self.rl_open(session, frame, dpath)
+			self.rl_open(session)
 
 	@conceptual
-	def location_switch_last(self, session, frame, dpath):
+	def location_switch_last(self, session):
 		if self.location.source.r_switch_revision_last():
-			self.rl_open(session, frame, dpath)
+			self.rl_open(session)
 
 	@comethod('resource', 'select')
 	@conceptual
-	def location_edit(self, frame, dpath, *, title='open'):
+	def location_edit(self, *, title='open'):
 		"""
 		# Shift the focus to the location view of the division identified by
 		# &dpath.
