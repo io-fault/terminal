@@ -69,6 +69,7 @@ class Resource(types.Core):
 		# Signal Refractions that the source has completed loading.
 		"""
 
+		self.checkpoint()
 		for rf in self.views:
 			rf.restore(rf.addressing)
 
