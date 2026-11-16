@@ -72,6 +72,10 @@ class Resource(types.Core):
 		self.checkpoint()
 		for rf in self.views:
 			rf.restore(rf.addressing)
+			if rf.frame_visible:
+				rf.deltas.extend(rf.refresh())
+			else:
+				rf.v_refresh()
 
 	@property
 	def latest(self) -> int:
