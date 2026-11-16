@@ -840,7 +840,7 @@ class Session(Core):
 	def sequence(self):
 		# Leading descriptor validating frame count and designating selection.
 		nframes = len(self.frames)
-		cframe = min(max(0, self.frame), nframes-1)
+		cframe = min(max(0, self.frame or 0), nframes-1)
 
 		# Width first for consistency with "verticalxdivision/..." frames.
 		screen_dims = 'x'.join((
@@ -879,10 +879,15 @@ class Session(Core):
 		self.reframe(fi)
 
 	def store(self):
+		if not self.frames:
+			self.origin.ref_path.fs_require(type='data').fs_void()
+			return None
+
 		session_str = ''.join(self.sequence())
 		# Open after fully materializing the session in case of errors.
 		with open(self.origin.ref_identity, 'w') as f:
 			f.write(session_str)
+		return self.origin
 
 	def chresource(self, frame, path):
 		dpath = (frame.vertical, frame.division)
