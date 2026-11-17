@@ -975,7 +975,7 @@ class Session(Core):
 		'view': (lambda s, f, k: f['view']),
 		'frame': (lambda s, f, k: f['frame']),
 		'dpath': (lambda s, f, k: f['frame'].focus_path),
-		'division': (lambda s, f, k: f['frame'].focus_division),
+		'stack': (lambda s, f, k: f['frame'].focus_stack),
 		'level': (lambda s, f, k: f['frame'].focus_level),
 		'quantity': (lambda s, f, k: f.get('quantity', s.device.quantity())),
 

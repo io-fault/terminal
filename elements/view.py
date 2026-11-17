@@ -2899,7 +2899,7 @@ class Division(Core):
 		self.focus = self.content
 
 	@conceptual
-	def location_open_level(self, session, frame, dpath, division):
+	def location_open_level(self, session, frame, stack):
 		# Get the system and path to open.
 		rl_syntax = self.location.forms.lf_fields.separation
 		rl_selection = rl_syntax.location_path()
@@ -2938,8 +2938,8 @@ class Division(Core):
 			self.focus.keyboard.set(self.focus.control_mode)
 
 		new = session.divide(rl_selection[1], system=rl_selection[0])
-		level = frame.stack_division(division, new)
-		frame.switch_level(division, level)
+		level = frame.stack_division(stack, new)
+		frame.switch_level(stack, level)
 		frame.refocus()
 
 	@conceptual
@@ -3646,12 +3646,12 @@ class Frame(Core):
 		return (self.vertical, self.division)
 
 	@property
-	def focus_division(self):
+	def focus_stack(self):
 		return self.paths[(self.vertical, self.division)]
 
 	@property
 	def focus_level(self):
-		d = self.focus_division
+		d = self.focus_stack
 		return self.stacks[d].index(self.views[d])
 
 	def process_path(self, dpath:tuple[int,int]) -> str:
@@ -3769,8 +3769,8 @@ class Frame(Core):
 		"""
 
 		areas = list(self.layout.map_areas(0, None))
-		for area, (division, stack) in zip(areas, enumerate(stacks)):
-			dstack = self.stacks[division]
+		for area, (stack_index, stack) in zip(areas, enumerate(stacks)):
+			dstack = self.stacks[stack_index]
 
 			for div in stack:
 				div.frame(self.deltas)
@@ -4148,24 +4148,24 @@ class Frame(Core):
 		self.keyboard.set(self.focus.focus.control_mode)
 		self.vertical, self.division = dpath
 
-	def switch_level(self, division, level):
+	def switch_level(self, stack, level):
 		"""
 		# Change the level of division associated with &dpath.
 		"""
 
-		cs = self.views[division]
-		div = self.stacks[division][level]
+		cs = self.views[stack]
+		div = self.stacks[stack][level]
 
 		if div is cs:
 			# Already selected.
 			return
 
 		cs.hidden()
-		self.views[division] = div
+		self.views[stack] = div
 
 		dpath = None
 		for dpath, v in self.paths.items():
-			if v == division:
+			if v == stack:
 				break
 
 		if div.prompt.area.lines != cs.prompt.area.lines:
@@ -4340,26 +4340,26 @@ class Frame(Core):
 		self.switch_division((dpath[0], dpath[1] - quantity))
 
 	@comethod('frame', 'switch/division/above')
-	def f_switch_view_above(self, division, quantity=1):
-		dstack = self.stacks[division]
-		level = dstack.index(self.views[division])
+	def f_switch_view_above(self, stack, quantity=1):
+		dstack = self.stacks[stack]
+		level = dstack.index(self.views[stack])
 
 		ci = level + quantity
 		if ci < len(dstack) and ci != level:
-			self.switch_level(division, ci)
+			self.switch_level(stack, ci)
 
 	@comethod('frame', 'switch/division/below')
-	def f_switch_view_below(self, division, quantity=1):
-		dstack = self.stacks[division]
-		level = dstack.index(self.views[division])
+	def f_switch_view_below(self, stack, quantity=1):
+		dstack = self.stacks[stack]
+		level = dstack.index(self.views[stack])
 
 		ci = level - quantity
 		if ci >= 0 and ci != level:
-			self.switch_level(division, ci)
+			self.switch_level(stack, ci)
 
 	@comethod('frame', 'close/division')
-	def f_close_view(self, session, dpath, division, level, quantity=1):
-		dstack = self.stacks[division]
+	def f_close_view(self, session, stack, level, quantity=1):
+		dstack = self.stacks[stack]
 		divs = dstack[level:level+quantity]
 		del dstack[level:level+quantity]
 
@@ -4375,10 +4375,10 @@ class Frame(Core):
 			# No divisions left. Force default.
 			default = (session.host.fs_pwd()@'/dev/null')
 			fallback = session.divide(default, system=session.host)
-			self.stack_division(division, fallback)
+			self.stack_division(stack, fallback)
 			nlevel = 0
 
-		self.switch_level(division, nlevel)
+		self.switch_level(stack, nlevel)
 		self.refocus()
 
 	def stack_division(self, stack, division):
