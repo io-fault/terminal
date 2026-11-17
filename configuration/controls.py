@@ -169,11 +169,11 @@ for mode in (control, insert):
 	a((0x21E5, km_shift), 'cursor/delete/indentation')
 
 	# Division levels and location histories.
-	a((0x21E5, km_meta), 'frame/switch/view/next')
-	a((0x21E5, km_shift, km_meta), 'frame/switch/view/previous')
-	a(('k', km_meta), 'frame/switch/view/above')
-	a(('j', km_meta), 'frame/switch/view/below')
-	a(('w', km_meta), 'frame/close/view')
+	a((0x21E5, km_meta), 'frame/switch/division/next')
+	a((0x21E5, km_shift, km_meta), 'frame/switch/division/previous')
+	a(('k', km_meta), 'frame/switch/division/above')
+	a(('j', km_meta), 'frame/switch/division/below')
+	a(('w', km_meta), 'frame/close/division')
 
 	a((0x21E5, km_void, km_d), 'cursor/insert/indentation/selected')
 	a((0x21E5, km_shift, km_d), 'cursor/delete/indentation/selected')

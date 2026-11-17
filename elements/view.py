@@ -4110,10 +4110,10 @@ class Frame(Core):
 		if not self.stacks:
 			self.stacks = [list() for x in range(self.layout.total_divisions)]
 
-	@comethod('frame', 'refresh/view/images')
+	@comethod('frame', 'refresh/division/images')
 	def f_refresh_views(self):
 		"""
-		# Refresh the view images.
+		# Refresh the division images.
 		"""
 
 		for div in self.views:
@@ -4330,15 +4330,15 @@ class Frame(Core):
 			picell = Glyph(textcolor=ccell.cellcolor, codepoint=ord(ic))
 			yield vstat.area.__class__(y, x, 1, 1), (picell,)
 
-	@comethod('frame', 'switch/view/next')
+	@comethod('frame', 'switch/division/next')
 	def f_switch_view_next(self, dpath, quantity=1):
 		self.switch_division((dpath[0], dpath[1] + quantity))
 
-	@comethod('frame', 'switch/view/previous')
+	@comethod('frame', 'switch/division/previous')
 	def f_switch_view_previous(self, dpath, quantity=1):
 		self.switch_division((dpath[0], dpath[1] - quantity))
 
-	@comethod('frame', 'switch/view/above')
+	@comethod('frame', 'switch/division/above')
 	def f_switch_view_above(self, division, quantity=1):
 		dstack = self.stacks[division]
 		level = dstack.index(self.views[division])
@@ -4347,7 +4347,7 @@ class Frame(Core):
 		if ci < len(dstack) and ci != level:
 			self.switch_level(division, ci)
 
-	@comethod('frame', 'switch/view/below')
+	@comethod('frame', 'switch/division/below')
 	def f_switch_view_below(self, division, quantity=1):
 		dstack = self.stacks[division]
 		level = dstack.index(self.views[division])
@@ -4356,7 +4356,7 @@ class Frame(Core):
 		if ci >= 0 and ci != level:
 			self.switch_level(division, ci)
 
-	@comethod('frame', 'close/view')
+	@comethod('frame', 'close/division')
 	def f_close_view(self, session, division, level, quantity=1):
 		dstack = self.stacks[division]
 		divs = dstack[level:level+quantity]
