@@ -2899,7 +2899,7 @@ class Division(Core):
 		self.focus = self.content
 
 	@conceptual
-	def location_open_level(self, session, frame, division):
+	def location_open_level(self, session, frame, dpath, division):
 		# Get the system and path to open.
 		rl_syntax = self.location.forms.lf_fields.separation
 		rl_selection = rl_syntax.location_path()
@@ -2937,7 +2937,8 @@ class Division(Core):
 			self.focus = self.content
 			self.focus.keyboard.set(self.focus.control_mode)
 
-		level = frame.push_division(session, division, *rl_selection)
+		new = session.divide(rl_selection[1], system=rl_selection[0])
+		level = frame.stack_division(division, new)
 		frame.switch_level(division, level)
 		frame.refocus()
 
@@ -4357,7 +4358,7 @@ class Frame(Core):
 			self.switch_level(division, ci)
 
 	@comethod('frame', 'close/division')
-	def f_close_view(self, session, division, level, quantity=1):
+	def f_close_view(self, session, dpath, division, level, quantity=1):
 		dstack = self.stacks[division]
 		divs = dstack[level:level+quantity]
 		del dstack[level:level+quantity]
@@ -4373,21 +4374,26 @@ class Frame(Core):
 		if nlevel < 0:
 			# No divisions left. Force default.
 			default = (session.host.fs_pwd()@'/dev/null')
-			self.push_division(session, division, session.host.identity, default)
+			fallback = session.divide(default, system=session.host)
+			self.stack_division(division, fallback)
 			nlevel = 0
 
 		self.switch_level(division, nlevel)
 		self.refocus()
 
-	def push_division(self, session, division, system, path, *, addressing=None):
-		div = session.divide(path, addressing=addressing, system=system)
+	def stack_division(self, stack, division):
+		"""
+		# Add the given &division to the &stack.
+		"""
 
-		v, d = self.layout.find_path(division)
-		div.frame(self.deltas)
-		div.repartition(self.layout.divisions[v][d])
+		dstack = self.stacks[stack]
+		area = self.layout.division_area(stack)
 
-		self.stacks[division].append(div)
-		return len(self.stacks[division]) - 1
+		division.frame(self.deltas)
+		division.repartition(area)
+		division.hidden()
+		dstack.append(division)
+		return len(dstack) - 1
 
 	@comethod('frame', 'select/absolute')
 	def f_select_absolute(self, cellstatus):

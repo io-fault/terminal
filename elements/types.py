@@ -776,6 +776,17 @@ class Layout(object):
 		"""
 		return list(self.division_paths())[divisions]
 
+	def division_area(self, index):
+		"""
+		# Retrieve the area of the division using the absolute index.
+		"""
+
+		for divs in self.divisions:
+			if index < len(divs):
+				return divs[index]
+			else:
+				index -= len(divs)
+
 	def resize_vertical_width(self, vertical, width):
 		"""
 		# Reconstruct the layout adjusting the &vertical's span to &width.
