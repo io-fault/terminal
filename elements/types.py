@@ -770,6 +770,23 @@ class Layout(object):
 			for d in range(len(self.divisions[v])):
 				yield (v, d)
 
+	def find_path(self, divisions):
+		"""
+		# Identify the path for the division stack, &divisions.
+		"""
+		return list(self.division_paths())[divisions]
+
+	def division_area(self, index):
+		"""
+		# Retrieve the area of the division using the absolute index.
+		"""
+
+		for divs in self.divisions:
+			if index < len(divs):
+				return divs[index]
+			else:
+				index -= len(divs)
+
 	def resize_vertical_width(self, vertical, width):
 		"""
 		# Reconstruct the layout adjusting the &vertical's span to &width.
@@ -2475,6 +2492,7 @@ class Work(object):
 	executing: Mapping[int, object] = _field(default_factory=dict)
 	log: Sequence[tuple[int, int]] = _field(default_factory=list)
 	cursor: Cursor = _field(default_factory=Cursor.allocate)
+	exits: Sequence[Callable] = _field(default_factory=list)
 
 	from os import kill as ProcessSignal
 	from signal import SIGKILL, SIGINT, SIGSTOP, SIGTSTP, SIGCONT, SIGTERM

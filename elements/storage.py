@@ -63,6 +63,20 @@ class Resource(types.Core):
 		self.active = self.revise()
 		self.switch_revision(0)
 
+	@instruction
+	def load_finished(self):
+		"""
+		# Signal Refractions that the source has completed loading.
+		"""
+
+		self.checkpoint()
+		for rf in self.views:
+			rf.restore(rf.addressing)
+			if rf.frame_visible:
+				rf.deltas.extend(rf.refresh())
+			else:
+				rf.v_refresh()
+
 	@property
 	def latest(self) -> int:
 		"""

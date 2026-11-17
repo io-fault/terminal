@@ -20,7 +20,7 @@ from . import annotations
 from . import types
 from . import retention
 
-from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax
+from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax, Area
 from .storage import Resource, Directory, delta
 from .view import Refraction, Reflection, Frame, Division
 from .system import Context as SystemContext, Host, Process, IOManager
@@ -537,16 +537,16 @@ class Session(Core):
 		)
 
 		src = Resource.allocate(ref, self.load_type('ivectors'))
+		return Refraction(
+			source=src,
+			define=self.device.define,
+			keyboard=self.keyboard,
+			monitor_images=self.monitor_images,
+			forms=self.pg_forms(src),
+			area=Area(0, 0, lines, 0),
+		)
 
-		rf = Refraction(source=src)
-		rf.area = rf.area.resize(lines, 0)
-		rf.forms = self.pg_forms(src)
-		rf.keyboard = self.keyboard
-		rf.monitor_images = self.monitor_images
-
-		return rf
-
-	def allocate_location(self, reference, lines=2):
+	def allocate_location(self, lines=2):
 		ref = Reference(
 			self.process.identity,
 			'location',
@@ -557,15 +557,14 @@ class Session(Core):
 		)
 
 		src = Resource.allocate(ref, self.load_type('location'))
-		Division.rl_update_path(src, reference)
-
-		rf = Refraction(source=src)
-		rf.area = rf.area.resize(lines, 0)
-		rf.forms = self.rl_forms(src, reference.ref_context)
-		rf.keyboard = self.keyboard
-		rf.monitor_images = self.monitor_images
-
-		return rf
+		return Refraction(
+			source=src,
+			define=self.device.define,
+			keyboard=self.keyboard,
+			monitor_images=self.monitor_images,
+			forms=self.rl_forms(src, ref.ref_context),
+			area=Area(0, 0, lines, 0),
+		)
 
 	def refer(self, system, path, type=None):
 		"""
@@ -584,68 +583,76 @@ class Session(Core):
 
 		return system.reference(path, type)
 
-	def _refract(self, system, path):
+	def allocate_source_refraction(self, system, path, source=None, addressing=None):
+		"""
+		# Construct a &Refraction for the resource identified by &path.
+
+		# An empty &Resource instance is created if the path has not been loaded.
+		"""
+
 		typref = self.lookup_type(path)
 		syntype = self.load_type(typref)
-
-		if typref == 'reflection':
-			source = self.sources.create_resource(system.identity, typref, syntype, path)
-			rf = Reflection.allocate(self.device, self.theme['empty'].inscribe(ord(' ')), source)
-		else:
+		if source is None:
 			try:
 				source = self.sources.select_resource(path)
 			except KeyError:
 				source = self.sources.create_resource(system.identity, typref, syntype, path)
 
-			rf = Refraction(source=source)
-			rf.monitor_images = self.monitor_images
-			rf.keyboard = self.keyboard
+		if typref == 'reflection':
+			rf = Reflection.allocate(
+				device=self.device,
+				empty=self.theme['empty'].inscribe(ord(' ')),
+				source=source,
+			)
+		else:
+			rf = Refraction(
+				source=source,
+				define=self.device.define,
+				keyboard=self.keyboard,
+				monitor_images=self.monitor_images,
+				addressing=(addressing or (0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+			)
 
 		return rf
 
-	def refract(self, path, addressing=None):
+	def divide(self, path, addressing=None, system=None, location_lines=2, prompt_lines=None):
 		"""
-		# Construct a &Refraction for the resource identified by &path.
-		# A &Resource instance is created if the path has not been loaded.
+		# Construct a &Division for the resource identified by &path.
+
+		# An empty &Resource instance is created if the path has not been loaded.
 		"""
 
-		typref = self.lookup_type(path)
-		syntype = self.load_type(typref)
-		system = self.host
+		location_section = 2
+		prompt_section = 0
+		load = False
 
-		if typref == 'reflection':
-			source = self.sources.create_resource(system.identity, typref, syntype, path)
-			rf = Reflection.allocate(self.device, self.theme['empty'].inscribe(ord(' ')), source)
-			load = False
-		else:
-			try:
-				source = self.sources.select_resource(path)
-				load = False
-			except KeyError:
-				source = self.sources.create_resource(system.identity, typref, syntype, path)
-				load = True
+		try:
+			self.sources.select_resource(path)
+		except KeyError:
+			load = True
 
-			rf = Refraction(source=source)
-			rf.monitor_images = self.monitor_images
-			rf.keyboard = self.keyboard
-
+		dc = self.allocate_source_refraction(system or self.host, path, addressing=addressing)
 		if addressing is not None:
-			rf.restore(addressing[:-2])
-			location_section = addressing[-2]
-			prompt_section = addressing[-1]
+			location_lines = addressing[-2]
+			prompt_lines = addressing[-1]
 		else:
-			location_section = 2
-			prompt_section = 0
+			if prompt_lines is None:
+				prompt_lines = 2 if dc.reporting(self.prompting) else 0
 
-		rl = self.allocate_location(source.origin, location_section)
-		pg = self.allocate_prompt(prompt_section)
+		rl = self.allocate_location(location_lines)
+		pg = self.allocate_prompt(prompt_lines or 0)
 
-		if rf.reporting(self.prompting):
-			pg.control_mode = 'insert'
-
-		div = Division.allocate(rl, rf, pg)
+		div = Division.allocate(rl, dc, pg)
+		div.location_update(dc.source.origin)
 		if load:
-			div.load_resource(self, system)
+			div.load_resource(self, system or self.host)
+
+		if dc.reporting(self.prompting):
+			pg.control_mode = 'insert'
+			div.focus = pg
+		else:
+			dc.control_mode = 'control'
+			div.focus = dc
 
 		return div
 
@@ -800,7 +807,7 @@ class Session(Core):
 			fi = self.allocate_frame(area, *layout, title=frame_id or None)
 			f = self.frames[fi]
 			f.align_stacks(stacks, divcount, null)
-			f.stack_views(vi, di, levels, (smap(self.refract, stack) for stack in stacks))
+			f.attach_divisions((vi, di), levels, (smap(self.divide, stack) for stack in stacks))
 			f.f_refresh()
 
 		self.device.update_frame_list(*[x.title or f"Frame {x.index+1}" for x in self.frames])
@@ -832,7 +839,7 @@ class Session(Core):
 	def sequence(self):
 		# Leading descriptor validating frame count and designating selection.
 		nframes = len(self.frames)
-		cframe = min(max(0, self.frame), nframes-1)
+		cframe = min(max(0, self.frame or 0), nframes-1)
 
 		# Width first for consistency with "verticalxdivision/..." frames.
 		screen_dims = 'x'.join((
@@ -871,14 +878,19 @@ class Session(Core):
 		self.reframe(fi)
 
 	def store(self):
+		if not self.frames:
+			self.origin.ref_path.fs_require(type='data').fs_void()
+			return None
+
 		session_str = ''.join(self.sequence())
 		# Open after fully materializing the session in case of errors.
 		with open(self.origin.ref_identity, 'w') as f:
 			f.write(session_str)
+		return self.origin
 
 	def chresource(self, frame, path):
 		dpath = (frame.vertical, frame.division)
-		div = self.refract(path)
+		div = self.divide(path)
 		return frame.attach(dpath, div.content)
 
 	def error(self, context, exception):
@@ -963,7 +975,7 @@ class Session(Core):
 		'view': (lambda s, f, k: f['view']),
 		'frame': (lambda s, f, k: f['frame']),
 		'dpath': (lambda s, f, k: f['frame'].focus_path),
-		'division': (lambda s, f, k: f['frame'].focus_division),
+		'stack': (lambda s, f, k: f['frame'].focus_stack),
 		'level': (lambda s, f, k: f['frame'].focus_level),
 		'quantity': (lambda s, f, k: f.get('quantity', s.device.quantity())),
 
@@ -1269,8 +1281,8 @@ class Session(Core):
 		f = self.frames[fi]
 
 		c = f.layout.total_divisions
-		stacks = [[self.refract(null)] for i in range(c)]
-		f.stack_views(0, 0, [0] * c, stacks)
+		stacks = [[self.divide(null)] for i in range(c)]
+		f.attach_divisions((0, 0), [0] * c, stacks)
 
 		f.f_refresh()
 		self.reframe(fi)
@@ -1284,10 +1296,10 @@ class Session(Core):
 
 		c = len(frame.stacks)
 		stack_replicas = [
-			[self.refract(div.content.source.origin.ref_path) for div in stack]
+			[self.divide(div.content.source.origin.ref_path) for div in stack]
 			for stack in frame.stacks
 		]
-		f.stack_views(frame.vertical, frame.division, [0] * c, stack_replicas)
+		f.attach_divisions((frame.vertical, frame.division), [0] * c, stack_replicas)
 
 		f.f_refresh()
 		self.reframe(fi)
@@ -1590,9 +1602,9 @@ def main(inv:process.Invocation) -> process.Exit:
 		a = session.device.screen.area
 		fi = session.allocate_frame(a, [a.span - 2], [[a.lines - 2]])
 		f = session.frames[fi]
-		stacks = [[session.refract(wd@filepath)] for filepath in ['/dev/null']]
+		stacks = [[session.divide(wd@filepath)] for filepath in ['/dev/null']]
 		levels = [0] * len(stacks)
-		f.stack_views(0, 0, levels, stacks)
+		f.attach_divisions((0, 0), levels, stacks)
 		f.f_refresh()
 		session.reframe(fi)
 		session.frames_restored = True
