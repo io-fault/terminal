@@ -2482,6 +2482,7 @@ class Work(object):
 	from dataclasses import field as _field
 
 	monitor: Monitor
+	session: object
 	control: object
 	target: object
 	source: Sequence[Line]
@@ -2500,8 +2501,8 @@ class Work(object):
 	__hash__ = object.__hash__
 
 	@classmethod
-	def allocate(Class, monitor, control, relation, lines, *args):
-		return Class(monitor, weakref.proxy(control), weakref.proxy(relation), lines, *args)
+	def allocate(Class, monitor, session, control, relation, lines, *args):
+		return Class(monitor, weakref.proxy(session), weakref.proxy(control), weakref.proxy(relation), lines, *args)
 
 	@property
 	def system(self):
@@ -2511,7 +2512,7 @@ class Work(object):
 
 		return System.structure(self.source[0].ln_content)
 
-	def spawn(self, system, path, proc, fdmap=()) -> int:
+	def spawn(self, control, system, path, proc, fdmap=()) -> int:
 		"""
 		# Add &proc to the sequence of procedures, allocate
 		# a cursor, and dispatch its first step.
@@ -2528,6 +2529,7 @@ class Work(object):
 		cursor = system.evaluate(weakref.proxy(self), index, path, proc, copy)
 		self.procedures.append(proc)
 		self.cursors.append(cursor)
+		control.work_dispatched(self)
 		self.proceed(index, None, None, system.io.Clock(), system.io.zero_usage)
 
 		return index

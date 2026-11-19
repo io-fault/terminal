@@ -104,13 +104,13 @@ class Reflection(CellMatrix):
 			return True
 		return False
 
-	def connect(self, transcript, system, work, path, proc):
+	def connect(self, control, transcript, system, work, path, proc):
 		self.work = work
 		self.procedure = proc
 		self.system_context = system
 
 		self.ctl_transmit, self.tx_link = system.reflect(
-			transcript, system, work, path, proc, self.queue
+			control, transcript, system, work, path, proc, self.queue
 		)
 
 	def transmit_events(self):
@@ -3398,20 +3398,18 @@ class Division(Core):
 		else:
 			monitor.usage = (lambda x: None)
 
-		work = Work.allocate(monitor, self, target, lines, ilevel, trim)
+		work = Work.allocate(monitor, session, self, target, lines, ilevel, trim)
 		lo, co = coordinates
 		work.cursor.lines.restore((lo, lo, lo+1))
 		work.cursor.codepoints.restore((co, co, co))
 
+		monitor.install()
 		if isinstance(target, Reflection):
-			target.connect(session.transcript, exectx, work, path, proc)
-			monitor.install()
+			target.connect(self, session.transcript, exectx, work, path, proc)
 		else:
 			tsrc.cursors.add(work.cursor)
-			monitor.install()
-			work.spawn(exectx, path, proc)
+			work.spawn(self, exectx, path, proc)
 
-		self.work_dispatched(work)
 		session.monitor_status()
 		return work
 

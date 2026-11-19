@@ -1571,6 +1571,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	)
 	host.export(os.environ.items())
 	host.chdir(str(wd))
+	host.rebuild([Division, Host, Process, Resource, Refraction, Reflection, Frame, Session])
 	host.rehash()
 	host.retool()
 
