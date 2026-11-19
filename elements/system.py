@@ -931,7 +931,6 @@ class Host(Context):
 	index: Mapping[str, list[files.Path]] = Field(default_factory=dict, repr=False)
 	tools: Mapping[str, list[files.Path]] = Field(default_factory=dict)
 
-	command_type: str = 'host-executable'
 	dispatching: bool = True
 
 	# Defaults are failsafes presuming a POSIX environment.
@@ -955,6 +954,25 @@ class Host(Context):
 
 	def __post_init__(self):
 		self.codec = Characters.from_codec(self.encoding, 'surrogateescape')
+
+	def command_type(self, context, command):
+		if command == '%' or command[1:] in self.builtins:
+			return 'application-instruction'
+		elif command in self.index:
+			return 'host-executable'
+
+		try:
+			pwd = self.fs_root + context
+		except AttributeError:
+			pass
+		else:
+			try:
+				if (pwd @ command).fs_status().executable:
+					return 'host-executable'
+			except (OSError, ValueError):
+				pass
+
+		return 'invalid-command'
 
 	from os import dup as _dup
 	from os import kill as _kill

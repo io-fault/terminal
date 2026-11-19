@@ -2779,26 +2779,10 @@ class Syntax(object):
 			return 'prompt-control'
 
 		sys, path = System.structure(self.source.sole(0).ln_content)
-		if sys in self.executions:
-			exe = self.executions[sys]
-			if command in exe.index:
-				return exe.command_type
-		else:
-			# No system.
+		if sys not in self.executions:
 			return invalid
 
-		try:
-			pwd = exe.fs_root + path
-		except AttributeError:
-			pass
-		else:
-			try:
-				if (pwd @ command).fs_status().executable:
-					return exe.command_type
-			except (OSError, ValueError):
-				pass
-
-		return invalid
+		return self.executions[sys].command_type(path, command)
 
 	@staticmethod
 	def typed_path_fields(root, extension, *, separator='/'):
