@@ -74,7 +74,6 @@ class Prompting(object):
 
 	from dataclasses import replace as _replace
 
-	pg_process_identity: object
 	pg_line_allocation: int
 	pg_syntax_type: str
 	pg_execution_types: Container[str]

@@ -3645,18 +3645,6 @@ class Frame(Core):
 		d = self.focus_stack
 		return self.stacks[d].index(self.views[d])
 
-	def process_path(self, dpath:tuple[int,int]) -> str:
-		"""
-		# Construct the string representation of a division path.
-		"""
-
-		if self.title:
-			s = self.title
-		else:
-			s = str(self.index + 1)
-
-		return '/' + s + '/' + '/'.join(str(x+1) for x in dpath)
-
 	def select_path(self, vertical:int, division:int, level:int=None, type=None):
 		"""
 		# Select the view triple identified by &vertical and &division along
