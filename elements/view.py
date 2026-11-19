@@ -3226,20 +3226,6 @@ class Division(Core):
 			ctxlen = len(cmdlines[0])
 			prompt.focus[1].restore((ctxlen, ctxlen, ctxlen))
 
-	def pg_process(self, frame, dpath, command, mode='insert'):
-		"""
-		# Configure the prompt, identified by &dpath, for executing
-		# the &command in &system.
-		"""
-
-		prompt = self.prompt
-		proc_id = str(frame.prompting.pg_process_identity)
-		ppath = frame.process_path(dpath)
-		self.prompt_update(proc_id, ppath, command)
-		self.prompt_open(frame)
-		self.prompt_focus()
-		prompt.keyboard.set(mode)
-
 	@conceptual
 	def prompt_open(self, frame):
 		"""
@@ -3458,6 +3444,18 @@ class Division(Core):
 	def prompt_execute_repeat(self, session):
 		return bool(self.execute_prompt(session))
 
+	def prompt_prepare_instruction(self, frame, command, path='/', mode='insert'):
+		"""
+		# Update the prompt's source to the given &command.
+		"""
+
+		context = self.prompt.source.sole(0)
+		command[0] = '%' + command[0]
+		self.prompt_update(context.ln_content, '', command)
+		self.prompt_open(frame)
+		self.prompt_focus()
+		self.prompt.keyboard.set(mode)
+
 	@conceptual
 	def prompt_prepare_save(self, frame, resource, system, prompt):
 		# Ideally, the full path is present in the executed command.
@@ -3488,36 +3486,32 @@ class Division(Core):
 		prompt.keyboard.set('control')
 
 	@conceptual
-	def prompt_prepare_host(self, frame, prompt, host):
+	def prompt_prepare_host(self, frame, host):
 		self.prompt_update(host.identity, str(host.pwd()))
 		self.prompt_open(frame)
 		self.prompt_focus()
 
-		if prompt.annotation is None:
-			prompt.annotate(annotations.Directory('fs',
-				prompt.forms.lf_fields.separation.system_context,
-				*prompt.focus
+		if self.prompt.annotation is None:
+			self.prompt.annotate(annotations.Directory('fs',
+				self.prompt.forms.lf_fields.separation.system_context,
+				*self.prompt.focus
 			))
-			prompt.annotation.configure(prompt.source)
+			self.prompt.annotation.configure(self.prompt.source)
 
-		prompt.keyboard.set('insert')
-
-	@conceptual
-	def prompt_prepare_process(self, frame, dpath):
-		self.pg_process(frame, dpath, [])
+		self.prompt.keyboard.set('insert')
 
 	@conceptual
-	def prompt_prepare_seek_absolute(self, frame, dpath):
+	def prompt_prepare_seek_absolute(self, frame):
 		cmd = ["cursor/seek/absolute/line", ""]
-		self.pg_process(frame, dpath, cmd)
+		self.prompt_prepare_instruction(frame, cmd)
 
 	@conceptual
-	def prompt_prepare_seek_relative(self, dpath):
+	def prompt_prepare_seek_relative(self, frame):
 		cmd = ["cursor/seek/relative/line", ""]
-		self.pg_process(frame, dpath, cmd)
+		self.prompt_prepare_instruction(frame, cmd)
 
 	@conceptual
-	def prompt_prepare_replace(self, frame, content, dpath):
+	def prompt_prepare_replace(self, frame, host, content):
 		# Identify the field for preparing the rewrite context.
 		areas, ef = content.fields(content.focus[0].get())
 		hs = content.focus[1].slice()
@@ -3525,14 +3519,13 @@ class Division(Core):
 		if areas[i] != hs:
 			i = content.field_index(areas, content.focus[1].get())
 
-		ppath = self.process_path(dpath)
 		cmd = ["cursor/replace/fields", str(i), ""]
-		self.pg_process(frame, dpath, cmd)
+		self.prompt_prepare_instruction(frame, cmd)
 
 	@conceptual
-	def prompt_prepare_pattern(self, frame, dpath):
+	def prompt_prepare_pattern(self, frame, host):
 		cmd = ["cursor/seek/pattern", ""]
-		self.pg_process(frame, dpath, cmd)
+		self.prompt_prepare_instruction(frame, cmd)
 
 	@comethod('work', 'list')
 	def list_work(self, control):
