@@ -3487,7 +3487,8 @@ class Division(Core):
 
 	@conceptual
 	def prompt_prepare_host(self, frame, host):
-		self.prompt_update(host.identity, str(host.pwd()))
+		if not self.prompt.source.sole(0).ln_content.startswith(str(host.identity) + '/'):
+			self.prompt_update(host.identity, str(host.pwd()))
 		self.prompt_open(frame)
 		self.prompt_focus()
 
