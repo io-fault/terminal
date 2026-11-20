@@ -3487,8 +3487,26 @@ class Division(Core):
 
 	@conceptual
 	def prompt_prepare_host(self, frame, host):
-		if not self.prompt.source.sole(0).ln_content.startswith(str(host.identity) + '/'):
-			self.prompt_update(host.identity, str(host.pwd()))
+		try:
+			ln_content = self.prompt.source.sole(0).ln_content
+		except IndexError:
+			reset = True
+		else:
+			# Not host system?
+			reset = ln_content.startswith(str(host.identity) + '/')
+			del ln_content
+
+		if reset:
+			# Default to location's context when available.
+			# Fallback on host when not available.
+			ref = self.location.source.origin
+			try:
+				ctx = self.location.source.sole(0).ln_content
+			except IndexError:
+				self.prompt_update(str(host.identity), str(host.pwd()))
+			else:
+				self.prompt_update(ctx, '')
+
 		self.prompt_open(frame)
 		self.prompt_focus()
 
