@@ -191,7 +191,6 @@ if 'controls':
 	a(('c', km_writing, km_control), 'annotation/interrupt')
 
 	a((k_space, km_control), 'prompt/prepare/host')
-	a((k_space, km_shift, km_control), 'prompt/prepare/process')
 
 	a(('a'), 'cursor/transition/insert/end-of-field')
 	a(('a', km_shift), 'cursor/transition/insert/end-of-line')
