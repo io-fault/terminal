@@ -852,16 +852,10 @@ class Context(Core):
 	# [ Elements ]
 	# /identity/
 		# The identifier that should be used to key an instance.
-	# /index/
-		# The index of instructions available for execution.
 	"""
 
 	identity: System
 	dispatching: bool
-	index: Mapping
-
-	def execute(self):
-		pass
 
 	def reference(self, path, type=None):
 		"""
@@ -875,22 +869,6 @@ class Context(Core):
 			path.context or path ** 1,
 			path,
 		)
-
-	def reflect(self, control, transcript, system, work, path, proc, queue):
-		ctl_transmit, tx_link, rxp = Relay.establish(work, self, queue)
-		dis_receive, txp = Display.establish(work, self)
-
-		# Connect stderr to transcript.
-		for v in transcript.views:
-			first = v
-			l, wfd = Insertion.establish(work, system, transcript.ln_count(), 0, target=first)
-			break
-		else:
-			# Or, if no views are available, send it to stderr.
-			wfd = os.dup(2)
-
-		work.spawn(control, self, path, proc, fdmap=[(rxp, 0), (txp, 1), (wfd, 2)])
-		return ctl_transmit, tx_link
 
 class Host(Context):
 	"""
@@ -1409,6 +1387,22 @@ class Host(Context):
 			os.close(rfd)
 			os.close(wfd)
 			raise
+
+	def reflect(self, control, transcript, system, work, path, proc, queue):
+		ctl_transmit, tx_link, rxp = Relay.establish(work, self, queue)
+		dis_receive, txp = Display.establish(work, self)
+
+		# Connect stderr to transcript.
+		for v in transcript.views:
+			first = v
+			l, wfd = Insertion.establish(work, system, transcript.ln_count(), 0, target=first)
+			break
+		else:
+			# Or, if no views are available, send it to stderr.
+			wfd = os.dup(2)
+
+		work.spawn(control, self, path, proc, fdmap=[(rxp, 0), (txp, 1), (wfd, 2)])
+		return ctl_transmit, tx_link
 
 	def transmit(self, workreference, lines):
 		"""
