@@ -852,16 +852,10 @@ class Context(Core):
 	# [ Elements ]
 	# /identity/
 		# The identifier that should be used to key an instance.
-	# /index/
-		# The index of instructions available for execution.
 	"""
 
 	identity: System
 	dispatching: bool
-	index: Mapping
-
-	def execute(self):
-		pass
 
 	def reference(self, path, type=None):
 		"""
@@ -875,155 +869,6 @@ class Context(Core):
 			path.context or path ** 1,
 			path,
 		)
-
-	def reflect(self, transcript, system, work, path, proc, queue):
-		ctl_transmit, tx_link, rxp = Relay.establish(work, self, queue)
-		dis_receive, txp = Display.establish(work, self)
-
-		# Connect stderr to transcript.
-		for v in transcript.views:
-			first = v
-			l, wfd = Insertion.establish(work, system, transcript.ln_count(), 0, target=first)
-			break
-		else:
-			# Or, if no views are available, send it to stderr.
-			wfd = os.dup(2)
-
-		work.spawn(self, path, proc, fdmap=[(rxp, 0), (txp, 1), (wfd, 2)])
-		return ctl_transmit, tx_link
-
-class Process(Context):
-	"""
-	# Application instruction interface and thread manager for user
-	# dispatched operations.
-	"""
-
-	session: object
-	dispatching: bool = False
-	command_type: str = 'application-instruction'
-	index: dict = Field(default_factory=dict)
-
-	@classmethod
-	def allocate(Class, sysid, session):
-		return Class(identity = sysid, session = weakref.proxy(session))
-
-	def rehash(self, types):
-		"""
-		# Construct a single index of comethods for resolution during execution
-		# and command validation during formatting.
-		"""
-
-		self.index = {}
-
-		for t in types:
-			for (etype, path), um in t.__comethods__.items():
-				sk = etype[:1] + ''.join(x[:1] for x in path.split('/'))
-				lk = '/'.join((etype, path))
-
-				# Bind shorthand and long name.
-				self.index[lk] = (t, um)
-				self.index[sk] = lk
-
-	def execute(self, work, index, path, ixn):
-		"""
-		# Execute the application instruction with respect to the focus identified by &path.
-		"""
-
-		# The target view is selected by the path for application instructions.
-		command = ixn.fields
-		rsession, frame, div, rf = self.session.select_path(path)
-		l, content, p = div.refractions()
-
-		if '/' in command[0]:
-			# Full path.
-			iname = command[0]
-			isrc = ''
-		else:
-			# Initials shorthand.
-			iname = self.index[command[0]]
-			isrc = command[0]
-
-		if iname not in self.index:
-			# No such command.
-			return False
-
-		itype, mpath = iname.split('/', 1)
-		args = ()
-		phypath = [rf.source, rf, div, frame, rsession]
-		phy, op, sels = rsession.lookup(phypath, itype, mpath)
-
-		# First argument is used as quantity if it is an integer string.
-		try:
-			q = int(command[1])
-		except (IndexError, ValueError):
-			q = 1
-			i = 1
-		else:
-			i = 2
-
-		text = ' '.join(command[i:])
-
-		focus = {
-			'frame': frame,
-			'view': rf,
-			'resource': rf.source,
-			'prompt': p,
-			'content': content,
-			'location': l,
-			'text': text,
-			'quantity': q,
-			'control': div,
-		}
-
-		rsession.trace(phy, isrc, itype, mpath, op)
-		r = op(*(x(rsession, focus, '') for x in sels), *args) # Prompt instruction.
-		if r not in {None, True, False}:
-			# Line insertion.
-			content.source.insert_lines(content.coordinates()[0], r)
-			content.source.checkpoint()
-
-		return True
-
-	def evaluate(self, workreference, index, path, procedure, fdmap=()):
-		"""
-		# Execute the steps of the &procecdure.
-
-		# Generator yielding &Completion instances for callback chains.
-		# Expects the exit code of the step to be sent back in for
-		# conditional execution.
-		"""
-
-		method = None
-		skip = False
-		check = (0).__ne__
-		exit_code = 0
-		count = 0
-
-		# The original path.
-		context_path = path
-
-		for step, check in procedure.iterate():
-			if skip:
-				# Update skip.
-				skip = check(exit_code)
-				continue
-
-			if isinstance(step, Composition):
-				count += self.compose(workreference, index, path, step)
-			elif isinstance(step, Procedure):
-				count += self.evaluate(workreference, index, path, step)
-			else:
-				if step.empty():
-					pass
-				elif step.invokes('cd'):
-					path = list((self.fs_root + path) @ step.fields[1])
-					count += 1
-				else:
-					self.execute(workreference, index, path, step)
-					count += 1
-
-			skip = check(exit_code)
-		return count
 
 class Host(Context):
 	"""
@@ -1054,17 +899,16 @@ class Host(Context):
 	"""
 
 	io: IOManager
-	encoding: str
 	executable: str
 	interface: Sequence[str]
 	fs_root: files.Path
 	path_separator: str = ':'
-	encoding = 'utf-8'
-	environment: Mapping[str, str] = Field(default_factory=dict)
-	index: Mapping[str, list[files.Path]] = Field(default_factory=dict)
+	encoding: str = 'utf-8'
+	environment: Mapping[str, str] = Field(default_factory=dict, repr=False)
+	builtins: Mapping[str, object] = Field(default_factory=dict, repr=False)
+	index: Mapping[str, list[files.Path]] = Field(default_factory=dict, repr=False)
 	tools: Mapping[str, list[files.Path]] = Field(default_factory=dict)
 
-	command_type: str = 'host-executable'
 	dispatching: bool = True
 
 	# Defaults are failsafes presuming a POSIX environment.
@@ -1088,6 +932,25 @@ class Host(Context):
 
 	def __post_init__(self):
 		self.codec = Characters.from_codec(self.encoding, 'surrogateescape')
+
+	def command_type(self, context, command):
+		if command == '%' or command[1:] in self.builtins:
+			return 'application-instruction'
+		elif command in self.index:
+			return 'host-executable'
+
+		try:
+			pwd = self.fs_root + context
+		except AttributeError:
+			pass
+		else:
+			try:
+				if (pwd @ command).fs_status().executable:
+					return 'host-executable'
+			except (OSError, ValueError):
+				pass
+
+		return 'invalid-command'
 
 	from os import dup as _dup
 	from os import kill as _kill
@@ -1236,6 +1099,24 @@ class Host(Context):
 				# Likely permission issue.
 				pass
 
+		self.index['%'] = None
+		self.index.update(('%'+k, None) for k in self.builtins)
+
+	def rebuild(self, types):
+		"""
+		# Construct a single index of comethods for resolution during execution
+		# and command validation during formatting.
+		"""
+
+		for t in types:
+			for (etype, path), um in t.__comethods__.items():
+				sk = etype[:1] + ''.join(x[:1] for x in path.split('/'))
+				lk = '/'.join((etype, path))
+
+				# Bind shorthand and long name.
+				self.builtins[lk] = (t, um)
+				self.builtins[sk] = lk
+
 	def retool(self):
 		"""
 		# Update the cache of tool locations for supporting execution using the
@@ -1331,6 +1212,75 @@ class Host(Context):
 		xp = self.prepare(workreference, self.fs_root + path, ixn)
 		return self.io.invoke(workreference, index, rx, tx, *xp, maps=fdmap)
 
+	def integrate(self, work, index, path, ixn):
+		"""
+		# Execute the application instruction.
+		"""
+
+		# The target view is selected by the path for application instructions.
+		if ixn.fields[0] == '%':
+			# @ command ...
+			command = []
+		else:
+			# @command ...
+			command = [ixn.fields[0][1:]]
+		command.extend(ixn.fields[1:])
+
+		rf = work.target
+		div = work.control
+		frame = work.session.focus
+
+		if '/' in command[0]:
+			# Full path.
+			iname = command[0]
+			isrc = ''
+		else:
+			# Initials shorthand.
+			iname = self.builtins[command[0]]
+			isrc = command[0]
+
+		if iname not in self.builtins:
+			# No such command.
+			return False
+
+		itype, mpath = iname.split('/', 1)
+		args = ()
+		phypath = [rf.source, rf, div, frame, work.session]
+		phy, op, sels = work.session.lookup(phypath, itype, mpath)
+
+		# First argument is used as quantity if it is an integer string.
+		try:
+			q = int(command[1])
+		except (IndexError, ValueError):
+			q = 1
+			i = 1
+		else:
+			i = 2
+
+		text = ' '.join(command[i:])
+
+		focus = {
+			'frame': frame,
+			'view': rf,
+			'resource': rf.source,
+			'prompt': div.prompt,
+			'content': div.content,
+			'location': div.location,
+			'text': text,
+			'quantity': q,
+			'control': div,
+			'division': div,
+		}
+
+		work.session.trace(phy, isrc, itype, mpath, op)
+		r = op(*(x(work.session, focus, '') for x in sels), *args) # Prompt instruction.
+		if r not in {None, True, False}:
+			# Line insertion.
+			div.content.source.insert_lines(content.coordinates()[0], r)
+			div.content.source.checkpoint()
+
+		return True
+
 	def evaluate(self, workreference, index, path, procedure, fdmap=(), exit_code=0):
 		"""
 		# Execute the steps of the &procecdure.
@@ -1367,6 +1317,11 @@ class Host(Context):
 					elif step.invokes('cd'):
 						path = list((self.fs_root + path) @ step.fields[1])
 						exit_code = 0
+					elif step.fields[0][:1] == '%':
+						if self.integrate(workreference, index, path, step):
+							exit_code = 0
+						else:
+							exit_code = 1
 					else:
 						# System command.
 						exit_code = (yield self.execute(workreference, index, path, step, self.replicate(fdmap)))
@@ -1432,6 +1387,22 @@ class Host(Context):
 			os.close(rfd)
 			os.close(wfd)
 			raise
+
+	def reflect(self, control, transcript, system, work, path, proc, queue):
+		ctl_transmit, tx_link, rxp = Relay.establish(work, self, queue)
+		dis_receive, txp = Display.establish(work, self)
+
+		# Connect stderr to transcript.
+		for v in transcript.views:
+			first = v
+			l, wfd = Insertion.establish(work, system, transcript.ln_count(), 0, target=first)
+			break
+		else:
+			# Or, if no views are available, send it to stderr.
+			wfd = os.dup(2)
+
+		work.spawn(control, self, path, proc, fdmap=[(rxp, 0), (txp, 1), (wfd, 2)])
+		return ctl_transmit, tx_link
 
 	def transmit(self, workreference, lines):
 		"""

@@ -23,7 +23,7 @@ from . import retention
 from .types import Core, Reference, Glyph, Device, System, Reformulations, Syntax, Area
 from .storage import Resource, Directory, delta
 from .view import Refraction, Reflection, Frame, Division
-from .system import Context as SystemContext, Host, Process, IOManager
+from .system import Context as SystemContext, Host, IOManager
 
 # Disable signal exits for multiple interpreter cases.
 process.__signal_exit__ = (lambda x: None)
@@ -174,9 +174,8 @@ class Session(Core):
 		}
 
 	@staticmethod
-	def integrate_prompts(cfgprompts, process_id:str) -> types.Prompting:
+	def integrate_prompts(cfgprompts) -> types.Prompting:
 		return types.Prompting(
-			process_id,
 			max(cfgprompts.line_allocation, 1) + 1,
 			cfgprompts.syntax_type,
 			cfgprompts.execution_types,
@@ -251,20 +250,8 @@ class Session(Core):
 
 		self.executable = executable
 
-		self.process = Process.allocate(
-			System(
-				'process',
-				system.identity.sys_credentials,
-				'',
-				self.host.identity.sys_identity,
-				self.title,
-			),
-			self,
-		)
-
 		self.systems = {
 			self.host.identity: self.host,
-			self.process.identity: self.process,
 		}
 
 		self.origin = Reference(
@@ -290,7 +277,7 @@ class Session(Core):
 		self.configuration = cfg
 		self.theme = self.integrate_theme(cfg.colors)
 		self.keyboard = self.integrate_controls(cfg.controls)
-		self.prompting = self.integrate_prompts(cfg.prompts, self.process.identity)
+		self.prompting = self.integrate_prompts(cfg.prompts)
 		self.symbols = self.integrate_symbols(cfg.symbols)
 
 		self.types = self.integrate_types(cfg.types, self.theme)
@@ -310,21 +297,9 @@ class Session(Core):
 
 		self.sources.insert_resource(self.transcript)
 
-		# Exclusively for the prompt.
-		self.process.rehash([Division, Host, Process, Resource, Refraction, Reflection, Frame, Session])
-
 	@comethod('session', 'retitle')
 	def retitle(self, title):
 		self.title = title
-
-		procid = self.process.identity
-		del self.systems[procid]
-
-		self.process.identity = procid._replace(sys_title=title)
-		self.systems[self.process.identity] = self.process
-		self.prompting = self.prompting._replace(pg_process_identity=self.process.identity)
-		for frame in self.frames:
-			frame.prompting = self.prompting
 
 	def configure_logfile(self, logfile):
 		"""
@@ -528,7 +503,7 @@ class Session(Core):
 
 	def allocate_prompt(self, lines=0):
 		ref = Reference(
-			self.process.identity,
+			self.host.identity,
 			'ivectors',
 			'.prompt',
 			# Point at a division path allowing use as a resource.
@@ -548,7 +523,7 @@ class Session(Core):
 
 	def allocate_location(self, lines=2):
 		ref = Reference(
-			self.process.identity,
+			self.host.identity,
 			'location',
 			'.location',
 			# Point at a division path allowing use as a resource.
@@ -1571,6 +1546,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	)
 	host.export(os.environ.items())
 	host.chdir(str(wd))
+	host.rebuild([Division, Host, Resource, Refraction, Reflection, Frame, Session])
 	host.rehash()
 	host.retool()
 
